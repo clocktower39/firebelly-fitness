@@ -1,0 +1,275 @@
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
+import queryString from "query-string";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+import Loading from "../../Components/Loading";
+import SelectedDate from "../../Components/SelectedDate";
+import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
+import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
+import WeeklyTrainingStatus from "../../Components/TrainingComponents/WeeklyTrainingStatus";
+import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL } from "../../Redux/actions";
+import { Avatar, Button, Grid, Paper, Stack, Typography } from '@mui/material';
+import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUnits";
+
+dayjs.extend(utc);
+dayjs.extend(customParseFormat);
+
+const EMPTY_WORKOUTS = [];
+const EMPTY_WORKOUT_USER = {};
+const EMPTY_DATES = [];
+const DATE_QUERY_FORMAT = "YYYYMMDD";
+const DATE_INPUT_FORMAT = "YYYY-MM-DD";
+
+const getTrailingWeekDates = (date) =>
+  Array.from({ length: 7 }, (_, index) =>
+    dayjs(date).subtract(6 - index, "day").format("YYYY-MM-DD")
+  );
+
+function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { date, client, } = queryString.parse(location.search);
+  const dispatch = useDispatch();
+  const user = useSelector((state) => state.user);
+  const [size = 900, setBorderHighlight] = useOutletContext();
+  const isPersonalWorkout = useCallback(
+    () => client ? user._id.toString() === client : true,
+    [user._id, client]
+  );
+  const workoutAccountId = isPersonalWorkout() ? user._id : client;
+  const workouts = useSelector((state) => {
+    return state.workouts?.[workoutAccountId]?.workouts ?? EMPTY_WORKOUTS;
+  });
+  const workoutsUser = useSelector((state) => {
+    return state.workouts?.[workoutAccountId]?.user ?? EMPTY_WORKOUT_USER;
+  });
+  const loadedWorkoutDates = useSelector((state) => {
+    return state.workouts?.[workoutAccountId]?.loadedDates ?? EMPTY_DATES;
+  });
+  const latestMetric = useSelector(
+    (state) => state.metrics.latestByUser[(client || user._id)] || null
+  );
+  const [loading, setLoading] = useState(true);
+  const activeWorkoutUser = !isPersonalWorkout() && workoutsUser?._id ? workoutsUser : user;
+
+  const isValidDate = (date) => {
+    return dayjs(date, DATE_QUERY_FORMAT, true).isValid();
+  };
+
+  const formatDate = (date) => {
+    return dayjs(date, DATE_QUERY_FORMAT, true).format(DATE_INPUT_FORMAT);
+  };
+
+  const today = dayjs().format(DATE_INPUT_FORMAT);
+  const initialDate = isValidDate(date) ? formatDate(date) : today;
+  const weightUnit = normalizeWeightUnit(user.workoutWeightUnit);
+
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [weeklyStatusDate, setWeeklyStatusDate] = useState(initialDate);
+  const [weeklyStatusDateLocked, setWeeklyStatusDateLocked] = useState(false);
+  const selectedDateKey = dayjs(selectedDate).format(DATE_INPUT_FORMAT);
+  const weeklyStatusDates = useMemo(() => getTrailingWeekDates(weeklyStatusDate), [weeklyStatusDate]);
+  const requiredWorkoutDates = useMemo(
+    () => [...new Set([...weeklyStatusDates, selectedDateKey])],
+    [selectedDateKey, weeklyStatusDates]
+  );
+  const missingWorkoutDates = useMemo(() => {
+    const loadedDateSet = new Set(loadedWorkoutDates);
+    return requiredWorkoutDates.filter((dateKey) => !loadedDateSet.has(dateKey));
+  }, [loadedWorkoutDates, requiredWorkoutDates]);
+
+  const [localWorkouts, setLocalWorkouts] = useState(() => {
+    return [];
+  });
+
+  const handleCancelEdit = () => {
+    const matchedDateWorkouts = workouts.filter((workout) =>
+      dayjs.utc(workout.date).isSame(dayjs.utc(selectedDate), "day")
+    );
+    setLocalWorkouts([...matchedDateWorkouts]);
+  };
+
+  const [openCreateWorkoutDialog, setOpenCreateWorkoutDialog] = useState(false);
+  const handleOpenCreateWorkoutDialog = () => setOpenCreateWorkoutDialog(true);
+  const handleCloseCreateWorkoutDialog = () => setOpenCreateWorkoutDialog(false);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const handleModalToggle = () => {
+    setModalOpen((prev) => !prev);
+    setModalActionType("");
+  };
+
+  const [modalActionType, setModalActionType] = useState("");
+  const handleSetModalAction = (actionType) => setModalActionType(actionType);
+
+  useEffect(() => {
+    const queryDate = isValidDate(date) ? formatDate(date) : today;
+
+    setSelectedDate((prev) => (prev === queryDate ? prev : queryDate));
+  }, [date, today]);
+
+  useEffect(() => {
+    if (!selectedDateKey) return;
+    if (weeklyStatusDateLocked) return;
+    setWeeklyStatusDate((prev) => (prev === selectedDateKey ? prev : selectedDateKey));
+  }, [selectedDateKey, weeklyStatusDateLocked]);
+
+  useEffect(() => {
+    const matchedDateWorkouts = workouts.filter((workout) =>
+      dayjs.utc(workout.date).isSame(dayjs.utc(selectedDate), "day")
+    );
+
+    const isDifferent =
+      matchedDateWorkouts.length !== localWorkouts.length ||
+      matchedDateWorkouts.some((w, i) => w !== localWorkouts[i]);
+
+    if (isDifferent) {
+      setLocalWorkouts(matchedDateWorkouts);
+    }
+  }, [workouts, selectedDate]);
+
+  useEffect(() => {
+    if (selectedDate) {
+      const newDate = dayjs(selectedDate).format(DATE_QUERY_FORMAT);
+      const currentQuery = queryString.parse(location.search);
+      const nextQuery = { ...currentQuery, date: newDate };
+      const nextSearch = queryString.stringify(nextQuery, {
+        skipNull: true,
+        skipEmptyString: true,
+      });
+      const currentSearch = location.search.replace(/^\?/, "");
+
+      if (nextSearch !== currentSearch) {
+        navigate(`/?${nextSearch}`, { replace: true });
+      }
+    }
+  }, [client, location.search, navigate, selectedDate]);
+
+  useEffect(() => {
+    if (!requiredWorkoutDates.length) return;
+    if (!missingWorkoutDates.length) {
+      setBorderHighlight(!isPersonalWorkout());
+      setLoading(false);
+      return;
+    }
+
+    if (missingWorkoutDates.includes(selectedDateKey)) {
+      setLoading(true);
+    }
+
+    dispatch(requestWorkoutsByDatesIfNeeded(missingWorkoutDates, client)).finally(() => {
+      setBorderHighlight(!isPersonalWorkout());
+      setLoading(false);
+    });
+  }, [requiredWorkoutDates, missingWorkoutDates, selectedDateKey, client, isPersonalWorkout]);
+
+  useEffect(() => {
+    dispatch(requestLatestMetric({ userId: isPersonalWorkout() ? undefined : client }));
+  }, [dispatch, isPersonalWorkout, client]);
+
+
+  return loading ? (
+    <Loading />
+  ) : (
+    <>
+      {!isPersonalWorkout() && workoutsUser.firstName && (
+        <Grid container size={12} sx={{ justifyContent: "center", alignItems: "center" }}>
+          <Avatar
+            src={
+              workoutsUser?.profilePicture &&
+              `${serverURL}/user/profilePicture/${workoutsUser.profilePicture}`
+            }
+            sx={{ maxHeight: "35px", maxWidth: "35px", margin: "0 15px" }}
+            alt={workoutsUser ? `${workoutsUser.firstName[0]} ${workoutsUser.lastName[0]}` : 'loading'}
+          />
+          <Typography variant="h5">
+            {workoutsUser.firstName} {workoutsUser.lastName}
+          </Typography>
+        </Grid>
+      )}
+      <SelectedDate selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
+      <WeeklyTrainingStatus
+        selectedDate={selectedDate}
+        setSelectedDate={setSelectedDate}
+        visibleDate={weeklyStatusDate}
+        setVisibleDate={setWeeklyStatusDate}
+        visibleDateLocked={weeklyStatusDateLocked}
+        setVisibleDateLocked={setWeeklyStatusDateLocked}
+        workouts={workouts}
+      />
+      {latestMetric && (
+        <Grid container size={12} sx={{ marginTop: "10px" }}>
+          <Paper elevation={5} sx={{ width: "100%", padding: "5px", margin: "5px" }}>
+            <Stack
+              direction="row"
+              sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
+            >
+              <Typography variant="h6" color="text.primary">Latest Body Metrics</Typography>
+              <Button
+                component={Link}
+                to={`/progress?${client ? `client=${client}&` : ""}tab=metrics`}
+                size="small"
+                variant="outlined"
+              >
+                View Body Metrics
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              {new Date(latestMetric.recordedAt).toLocaleDateString()}{" "}
+              {new Date(latestMetric.recordedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </Typography>
+            <Paper sx={{ padding: "4px 8px", marginTop: "6px" }}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                sx={{ "& p": { color: "text.primary" } }}
+              >
+                <Typography variant="body1">
+                  Weight: {formatWeightWithUnit(latestMetric.weight, weightUnit) || "—"}
+                </Typography>
+                <Typography variant="body1">Body Fat: {latestMetric.bodyFatPercent ?? "—"}%</Typography>
+                <Typography variant="body1">BMI: {latestMetric.bmi ?? "—"}</Typography>
+                <Typography variant="body1">RHR: {latestMetric.restingHeartRate ?? "—"} bpm</Typography>
+              </Stack>
+            </Paper>
+          </Paper>
+        </Grid>
+      )}
+      {localWorkouts && (
+        <WorkoutOverview
+          localWorkouts={localWorkouts}
+          setLocalWorkouts={setLocalWorkouts}
+          selectedDate={selectedDate}
+          handleCancelEdit={handleCancelEdit}
+          workoutOptionModalViewProps={{
+            modalOpen,
+            handleModalToggle,
+            handleSetModalAction,
+            modalActionType,
+            openCreateWorkoutDialog,
+            handleOpenCreateWorkoutDialog,
+            handleCloseCreateWorkoutDialog,
+            setSelectedDate,
+          }}
+          user={activeWorkoutUser}
+        />
+      )}
+      {user.isTrainer && !client && (
+        <WeeklyClientWorkoutTracker
+          selectedDate={selectedDate}
+          mode="day"
+          title="Daily Coverage"
+          description={`Quick view of clients expected on ${dayjs(selectedDate).format(
+            "dddd, MMM D"
+          )} and who still needs workouts entered.`}
+          showViewFullButton
+        />
+      )}
+    </>
+  );
+}
+
+export default Home;

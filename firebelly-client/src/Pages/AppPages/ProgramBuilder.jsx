@@ -1,0 +1,847 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { programApi } from "../../api/programApi";
+import { workoutApi } from "../../api/workoutApi";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useSelector } from "react-redux";
+import {
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  Grid,
+  InputAdornment,
+  InputLabel,
+  List,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
+  Select,
+  Snackbar,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { Search as SearchIcon } from "@mui/icons-material";
+import { Alert } from "@mui/material";
+
+const DEFAULT_WEEKS = 4;
+const DEFAULT_DAYS = 5;
+const AUTOSAVE_MS = 10000;
+
+const buildWeeks = (weeksCount, daysPerWeek, existingWeeks = []) => {
+  const weeks = [];
+  for (let weekIndex = 0; weekIndex < weeksCount; weekIndex += 1) {
+    const days = [];
+    for (let dayIndex = 0; dayIndex < daysPerWeek; dayIndex += 1) {
+      const existingDay = existingWeeks?.[weekIndex]?.[dayIndex];
+      days.push({
+        dayIndex: dayIndex + 1,
+        workoutId: existingDay?.workoutId || null,
+        notes: existingDay?.notes || "",
+      });
+    }
+    weeks.push(days);
+  }
+  return weeks;
+};
+
+const formatWorkoutSummary = (workout) => {
+  if (!workout) return "Workout";
+  const title = workout.title || "Workout";
+  const totalExercises =
+    workout?.training?.reduce((count, circuit) => count + circuit.length, 0) || 0;
+  const exerciseLabel = totalExercises === 1 ? "exercise" : "exercises";
+  return `${title} • ${totalExercises} ${exerciseLabel}`;
+};
+
+export default function ProgramBuilder() {
+  const user = useSelector((state) => state.user);
+  const { programId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [program, setProgram] = useState(null);
+  const [activeWeekIndex, setActiveWeekIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [workoutCache, setWorkoutCache] = useState({});
+  const [templates, setTemplates] = useState([]);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importTarget, setImportTarget] = useState({ weekIndex: null, dayIndex: null });
+  const [importSearch, setImportSearch] = useState("");
+  const [importSort, setImportSort] = useState("newest");
+  const [importCategory, setImportCategory] = useState("");
+  const [copyWeekDialogOpen, setCopyWeekDialogOpen] = useState(false);
+  const [copyWeekTarget, setCopyWeekTarget] = useState("");
+  const [isCopyingWeek, setIsCopyingWeek] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearTarget, setClearTarget] = useState({ weekIndex: null, dayIndex: null });
+
+  const saveTimerRef = useRef(null);
+  const inFlightRef = useRef(false);
+
+  const setSavedMessage = useCallback((message) => {
+    setSaveMessage(message);
+    setSaveError("");
+  }, []);
+
+  const setErrorMessage = useCallback((message) => {
+    setSaveError(message);
+    setSaveMessage("");
+  }, []);
+
+  const loadProgram = useCallback(
+    async (id) => {
+      setIsLoading(true);
+      try {
+        const data = await programApi.getProgram(id);
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        setProgram(data);
+        setActiveWeekIndex(0);
+        setDirty(false);
+      } catch (err) {
+        setErrorMessage(err.message || "Unable to load program.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [setErrorMessage]
+  );
+
+  const createProgram = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await programApi.createProgram({
+        title: "",
+        description: "",
+        weeksCount: DEFAULT_WEEKS,
+        daysPerWeek: DEFAULT_DAYS,
+      });
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      setProgram(data);
+      setActiveWeekIndex(0);
+      navigate(`/programs/${data._id}/edit`, { replace: true });
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to create program.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate, setErrorMessage]);
+
+  const saveDraft = useCallback(async () => {
+    if (!program?._id || inFlightRef.current) return;
+    inFlightRef.current = true;
+    setIsSaving(true);
+    try {
+      const data = await programApi.updateProgram(program._id, {
+        title: program.title,
+        description: program.description,
+        weeksCount: program.weeksCount,
+        daysPerWeek: program.daysPerWeek,
+      });
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      setProgram(data);
+      setDirty(false);
+      setSavedMessage("Draft saved.");
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to save draft.");
+    } finally {
+      inFlightRef.current = false;
+      setIsSaving(false);
+    }
+  }, [program, setErrorMessage, setSavedMessage]);
+
+  const publishProgram = useCallback(async () => {
+    if (!program?._id || inFlightRef.current) return;
+    inFlightRef.current = true;
+    setIsSaving(true);
+    try {
+      const data = await programApi.publishProgram(program._id);
+      if (data?.errors?.length) {
+        throw new Error(data.errors.join(" "));
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      setProgram(data);
+      setDirty(false);
+      setSavedMessage("Program published.");
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to publish program.");
+    } finally {
+      inFlightRef.current = false;
+      setIsSaving(false);
+    }
+  }, [program, setErrorMessage, setSavedMessage]);
+
+  const updateDaySlot = useCallback(
+    async (weekIndex, dayIndex, workoutId) => {
+      if (!program?._id) return;
+      try {
+        const data = await programApi.updateProgramDay({
+          programId: program._id,
+          week: weekIndex + 1,
+          day: dayIndex + 1,
+          workoutId,
+        });
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        setProgram((prev) => ({
+          ...prev,
+          weeks: data.weeks,
+          status: data.status,
+          publishedAt: data.publishedAt,
+        }));
+      } catch (err) {
+        setErrorMessage(err.message || "Unable to update day.");
+      }
+    },
+    [program, setErrorMessage]
+  );
+
+  const createWorkoutForDay = useCallback(
+    async (weekIndex, dayIndex) => {
+      if (!program?._id || !user?._id) return;
+      try {
+        const data = await workoutApi.createTraining({
+          userId: user._id,
+          title: `${program.title || "Program"} • Week ${weekIndex + 1} Day ${dayIndex + 1}`,
+          category: [],
+          training: [[]],
+          isTemplate: true,
+        });
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        const newWorkout = data.training;
+        setWorkoutCache((prev) => ({ ...prev, [newWorkout._id]: newWorkout }));
+        await updateDaySlot(weekIndex, dayIndex, newWorkout._id);
+        navigate(
+          `/workout/${newWorkout._id}?source=program&return=${encodeURIComponent(
+            location.pathname
+          )}`
+        );
+      } catch (err) {
+        setErrorMessage(err.message || "Unable to create workout.");
+      }
+    },
+    [location.pathname, navigate, program, updateDaySlot, user]
+  );
+
+  const handleEditDay = useCallback(
+    (weekIndex, dayIndex, workoutId) => {
+      if (workoutId) {
+        navigate(
+          `/workout/${workoutId}?source=program&return=${encodeURIComponent(
+            location.pathname
+          )}`
+        );
+        return;
+      }
+      createWorkoutForDay(weekIndex, dayIndex);
+    },
+    [createWorkoutForDay, location.pathname, navigate]
+  );
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const data = await workoutApi.getWorkoutTemplates();
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      setTemplates(Array.isArray(data.workouts) ? data.workouts : []);
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to load templates.");
+    }
+  }, [setErrorMessage]);
+
+  const handleOpenImportDialog = useCallback(
+    (weekIndex, dayIndex) => {
+      setImportTarget({ weekIndex, dayIndex });
+      if (templates.length === 0) {
+        loadTemplates();
+      }
+      setImportDialogOpen(true);
+    },
+    [loadTemplates, templates.length]
+  );
+
+  const handleImportTemplate = useCallback(
+    async (templateId) => {
+      const { weekIndex, dayIndex } = importTarget;
+      if (weekIndex === null || dayIndex === null) return;
+      setImportDialogOpen(false);
+      await updateDaySlot(weekIndex, dayIndex, templateId);
+      setWorkoutCache((prev) => {
+        const template = templates.find((t) => t._id === templateId);
+        if (template) {
+          return { ...prev, [templateId]: template };
+        }
+        return prev;
+      });
+    },
+    [importTarget, templates, updateDaySlot]
+  );
+
+  const importCategories = useMemo(() => {
+    const cats = new Set();
+    templates.forEach((t) => {
+      if (Array.isArray(t.category)) {
+        t.category.forEach((c) => cats.add(c));
+      }
+    });
+    return Array.from(cats).sort();
+  }, [templates]);
+
+  const filteredImportTemplates = useMemo(() => {
+    let result = [...templates];
+
+    if (importSearch.trim()) {
+      const query = importSearch.toLowerCase();
+      result = result.filter((t) =>
+        (t.title || "").toLowerCase().includes(query) ||
+        (t.category || []).some((c) => c.toLowerCase().includes(query))
+      );
+    }
+
+    if (importCategory) {
+      result = result.filter((t) =>
+        Array.isArray(t.category) && t.category.includes(importCategory)
+      );
+    }
+
+    switch (importSort) {
+      case "newest":
+        result.sort((a, b) => new Date(b.updatedAt || b.createdAt).valueOf() - new Date(a.updatedAt || a.createdAt).valueOf());
+        break;
+      case "oldest":
+        result.sort((a, b) => new Date(a.updatedAt || a.createdAt).valueOf() - new Date(b.updatedAt || b.createdAt).valueOf());
+        break;
+      case "title-asc":
+        result.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+        break;
+      case "title-desc":
+        result.sort((a, b) => (b.title || "").localeCompare(a.title || ""));
+        break;
+      default:
+        break;
+    }
+
+    return result;
+  }, [templates, importSearch, importCategory, importSort]);
+
+  const handleCopyWeekToNext = useCallback(async () => {
+    if (!program?._id || copyWeekTarget === "") return;
+    const programWeeks = program.weeks || [];
+    const programWeeksCount = Number(program.weeksCount) || DEFAULT_WEEKS;
+    const sourceWeek = programWeeks[activeWeekIndex];
+    const targetWeekIndex = Number(copyWeekTarget);
+    
+    if (!sourceWeek || targetWeekIndex < 0 || targetWeekIndex >= programWeeksCount) return;
+
+    setIsCopyingWeek(true);
+    try {
+      for (let dayIndex = 0; dayIndex < sourceWeek.length; dayIndex++) {
+        const day = sourceWeek[dayIndex];
+        if (day.workoutId) {
+          const sourceWorkout = workoutCache[day.workoutId];
+          const newTitle = sourceWorkout?.title
+            ? sourceWorkout.title.replace(/Week \d+/i, `Week ${targetWeekIndex + 1}`)
+            : `Week ${targetWeekIndex + 1} Day ${dayIndex + 1}`;
+
+          const data = await workoutApi.copyWorkoutById({
+            _id: day.workoutId,
+            newTitle,
+            option: "exact",
+          });
+          if (data?.error) {
+            throw new Error(data.error);
+          }
+          const newWorkoutId = data._id;
+          setWorkoutCache((prev) => ({ ...prev, [newWorkoutId]: data }));
+          await updateDaySlot(targetWeekIndex, dayIndex, newWorkoutId);
+        }
+      }
+      setCopyWeekDialogOpen(false);
+      setCopyWeekTarget("");
+      setSavedMessage(`Week ${activeWeekIndex + 1} copied to Week ${targetWeekIndex + 1}`);
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to copy week.");
+    } finally {
+      setIsCopyingWeek(false);
+    }
+  }, [
+    activeWeekIndex,
+    copyWeekTarget,
+    program,
+    setErrorMessage,
+    setSavedMessage,
+    updateDaySlot,
+    workoutCache,
+  ]);
+
+  useEffect(() => {
+    if (programId) {
+      loadProgram(programId);
+    } else {
+      createProgram();
+    }
+  }, [createProgram, loadProgram, programId]);
+
+  useEffect(() => {
+    if (!dirty || !program?._id) return;
+    clearInterval(saveTimerRef.current);
+    saveTimerRef.current = setInterval(() => {
+      saveDraft();
+    }, AUTOSAVE_MS);
+    return () => clearInterval(saveTimerRef.current);
+  }, [dirty, program, saveDraft]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!program?.weeks) return;
+    const assignedIds = new Set();
+    program.weeks.forEach((week) =>
+      week.forEach((day) => {
+        if (day.workoutId) assignedIds.add(day.workoutId);
+      })
+    );
+    const missingIds = Array.from(assignedIds).filter((id) => !workoutCache[id]);
+    if (missingIds.length === 0) return;
+
+    missingIds.forEach(async (id) => {
+      try {
+        const data = await workoutApi.getTraining({ _id: id });
+        if (data?._id) {
+          setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
+        }
+      } catch (err) {
+        setErrorMessage("Unable to load workout details.");
+      }
+    });
+  }, [program, setErrorMessage, workoutCache]);
+
+  if (isLoading || !program) {
+    return (
+      <Box sx={{ px: 2, py: 3 }}>
+        <Typography variant="body1">Loading Program Builder...</Typography>
+      </Box>
+    );
+  }
+
+  const weeksCount = Number(program.weeksCount) || DEFAULT_WEEKS;
+  const daysPerWeek = Number(program.daysPerWeek) || DEFAULT_DAYS;
+  const weeks = program.weeks?.length ? program.weeks : buildWeeks(weeksCount, daysPerWeek);
+  const activeWeek = weeks[activeWeekIndex] || [];
+
+  return (
+    <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
+      <Stack spacing={3}>
+        <Typography variant="h4">Program Builder</Typography>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }}>
+          <Stack spacing={1} sx={{ flex: 1 }}>
+            <TextField
+              label="Program Title"
+              value={program.title}
+              onChange={(event) => {
+                setProgram((prev) => ({ ...prev, title: event.target.value }));
+                setDirty(true);
+              }}
+              fullWidth
+            />
+            <TextField
+              label="Description (optional)"
+              value={program.description}
+              onChange={(event) => {
+                setProgram((prev) => ({ ...prev, description: event.target.value }));
+                setDirty(true);
+              }}
+              fullWidth
+              multiline
+              minRows={2}
+            />
+          </Stack>
+          <Stack spacing={1} alignItems={{ xs: "flex-start", md: "flex-end" }}>
+            <Chip
+              label={program.status === "PUBLISHED" ? "Published" : "Draft"}
+              color={program.status === "PUBLISHED" ? "success" : "default"}
+              variant={program.status === "PUBLISHED" ? "filled" : "outlined"}
+            />
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" onClick={saveDraft} disabled={isSaving}>
+                Save Draft
+              </Button>
+              <Button variant="contained" onClick={publishProgram} disabled={isSaving}>
+                Publish
+              </Button>
+            </Stack>
+          </Stack>
+        </Stack>
+
+        <Card>
+          <CardContent>
+            <Typography variant="h6">Settings</Typography>
+            <Divider sx={{ my: 2 }} />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  label="Weeks"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1, max: 52 } }}
+                  value={weeksCount}
+                  onFocus={(event) => event.target.select()}
+                  onChange={(event) => {
+                    const next = Math.max(1, Math.min(52, Number(event.target.value)));
+                    setProgram((prev) => ({
+                      ...prev,
+                      weeksCount: next,
+                      weeks: buildWeeks(next, prev.daysPerWeek, prev.weeks),
+                    }));
+                    setActiveWeekIndex(0);
+                    setDirty(true);
+                  }}
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  label="Days per week"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1, max: 7 } }}
+                  value={daysPerWeek}
+                  onFocus={(event) => event.target.select()}
+                  onChange={(event) => {
+                    const next = Math.max(1, Math.min(7, Number(event.target.value)));
+                    setProgram((prev) => ({
+                      ...prev,
+                      daysPerWeek: next,
+                      weeks: buildWeeks(prev.weeksCount, next, prev.weeks),
+                    }));
+                    setDirty(true);
+                  }}
+                  fullWidth
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="h6">Week Structure</Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setCopyWeekDialogOpen(true)}
+                  disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
+                >
+                  Copy Week
+                </Button>
+              </Stack>
+              <Tabs
+                value={activeWeekIndex}
+                onChange={(event, value) => setActiveWeekIndex(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                {Array.from({ length: weeksCount }, (_, index) => (
+                  <Tab key={`week-${index}`} label={`Week ${index + 1}`} />
+                ))}
+              </Tabs>
+              <Grid container spacing={2}>
+                {activeWeek.map((day, dayIndex) => {
+                  const workout = day.workoutId ? workoutCache[day.workoutId] : null;
+                  const summary = workout ? formatWorkoutSummary(workout) : "No workout assigned";
+                  return (
+                    <Grid key={`day-${dayIndex}`} size={{ xs: 12, sm: 6, md: 4 }}>
+                      <Card variant="outlined" sx={{ height: "100%" }}>
+                        <CardContent>
+                          <Typography variant="subtitle1">Day {dayIndex + 1}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {summary}
+                          </Typography>
+                        </CardContent>
+                        <CardActions sx={{ px: 2, pb: 2 }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => handleEditDay(activeWeekIndex, dayIndex, day.workoutId)}
+                          >
+                            {day.workoutId ? "Edit workout" : "Add workout"}
+                          </Button>
+                          {!day.workoutId && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleOpenImportDialog(activeWeekIndex, dayIndex)}
+                            >
+                              Import Workout
+                            </Button>
+                          )}
+                          {day.workoutId && (
+                            <Button
+                              size="small"
+                              variant="text"
+                              color="error"
+                              onClick={() => {
+                                setClearTarget({ weekIndex: activeWeekIndex, dayIndex });
+                                setClearConfirmOpen(true);
+                              }}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </CardActions>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Stack>
+
+      <Snackbar
+        open={Boolean(saveMessage)}
+        autoHideDuration={3000}
+        onClose={() => setSaveMessage("")}
+      >
+        <Alert severity="success" variant="filled">
+          {saveMessage}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={Boolean(saveError)}
+        autoHideDuration={6000}
+        onClose={() => setSaveError("")}
+      >
+        <Alert severity="error" variant="filled">
+          {saveError}
+        </Alert>
+      </Snackbar>
+
+      <Dialog
+        open={importDialogOpen}
+        onClose={() => {
+          setImportDialogOpen(false);
+          setImportSearch("");
+          setImportCategory("");
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Import Workout Template</DialogTitle>
+        <DialogContent>
+          {templates.length === 0 ? (
+            <Typography color="text.secondary">No workout templates available.</Typography>
+          ) : (
+            <Stack spacing={2}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ pt: 1 }}>
+                <TextField
+                  size="small"
+                  placeholder="Search..."
+                  value={importSearch}
+                  onChange={(e) => setImportSearch(e.target.value)}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{ flex: 1 }}
+                />
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    value={importCategory}
+                    label="Category"
+                    onChange={(e) => setImportCategory(e.target.value)}
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    {importCategories.map((cat) => (
+                      <MenuItem key={cat} value={cat}>
+                        {cat}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Sort</InputLabel>
+                  <Select
+                    value={importSort}
+                    label="Sort"
+                    onChange={(e) => setImportSort(e.target.value)}
+                  >
+                    <MenuItem value="newest">Newest</MenuItem>
+                    <MenuItem value="oldest">Oldest</MenuItem>
+                    <MenuItem value="title-asc">Title (A-Z)</MenuItem>
+                    <MenuItem value="title-desc">Title (Z-A)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
+              {filteredImportTemplates.length === 0 ? (
+                <Typography color="text.secondary">No templates match your filters.</Typography>
+              ) : (
+                <List sx={{ maxHeight: 300, overflow: "auto" }}>
+                  {filteredImportTemplates.map((template) => (
+                    <ListItemButton
+                      key={template._id}
+                      onClick={() => handleImportTemplate(template._id)}
+                    >
+                      <ListItemText
+                        primary={template.title || "Untitled Workout"}
+                        secondary={
+                          <>
+                            {`${template.training?.reduce((count, circuit) => count + circuit.length, 0) || 0} exercises`}
+                            {template.category?.length > 0 && ` • ${template.category.join(", ")}`}
+                          </>
+                        }
+                      />
+                    </ListItemButton>
+                  ))}
+                </List>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setImportDialogOpen(false);
+              setImportSearch("");
+              setImportCategory("");
+            }}
+          >
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={copyWeekDialogOpen}
+        onClose={() => {
+          setCopyWeekDialogOpen(false);
+          setCopyWeekTarget("");
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Copy Week {activeWeekIndex + 1}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This will copy all workouts from Week {activeWeekIndex + 1} to the selected week, creating new workout templates so modifications won't affect the originals.
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel id="copy-week-target-label">Copy to</InputLabel>
+            <Select
+              labelId="copy-week-target-label"
+              value={copyWeekTarget}
+              label="Copy to"
+              onChange={(e) => setCopyWeekTarget(e.target.value)}
+            >
+              {Array.from({ length: weeksCount }, (_, index) => (
+                <MenuItem
+                  key={index}
+                  value={index}
+                  disabled={index === activeWeekIndex}
+                >
+                  Week {index + 1}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setCopyWeekDialogOpen(false);
+              setCopyWeekTarget("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCopyWeekToNext}
+            disabled={copyWeekTarget === "" || isCopyingWeek}
+          >
+            {isCopyingWeek ? "Copying..." : "Copy Week"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={clearConfirmOpen}
+        onClose={() => {
+          setClearConfirmOpen(false);
+          setClearTarget({ weekIndex: null, dayIndex: null });
+        }}
+        maxWidth="xs"
+      >
+        <DialogTitle>Clear Workout</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to remove this workout from Day {clearTarget.dayIndex !== null ? clearTarget.dayIndex + 1 : ""}?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setClearConfirmOpen(false);
+              setClearTarget({ weekIndex: null, dayIndex: null });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              updateDaySlot(clearTarget.weekIndex, clearTarget.dayIndex, null);
+              setClearConfirmOpen(false);
+              setClearTarget({ weekIndex: null, dayIndex: null });
+            }}
+          >
+            Clear
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
