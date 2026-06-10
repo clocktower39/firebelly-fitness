@@ -1,0 +1,79 @@
+{
+  "features": [
+    {
+      "id": "secure-auth",
+      "priority": 1,
+      "area": "auth",
+      "title": "Secure access and refresh token flow",
+      "user_visible_behavior": "Users stay signed in through a secure refresh-cookie flow without storing access tokens in localStorage.",
+      "status": "passing",
+      "verification": [
+        "firebelly-server: yarn test",
+        "firebelly-client: yarn lint",
+        "firebelly-client: yarn build",
+        "Manual: login, refresh tab, open second tab, logout"
+      ],
+      "evidence": "Server auth/security tests exist; client API client centralizes refresh/retry behavior.",
+      "notes": "Keep delegated session flags separate from access token persistence."
+    },
+    {
+      "id": "route-validation",
+      "priority": 2,
+      "area": "backend",
+      "title": "Consistent validation for every write endpoint",
+      "user_visible_behavior": "Invalid or unsafe request bodies are rejected consistently before controller logic.",
+      "status": "in_progress",
+      "verification": [
+        "Add route-level Joi validation for write routes",
+        "Add negative supertest coverage",
+        "Run firebelly-server: yarn test"
+      ],
+      "evidence": "",
+      "notes": "Invoices, metrics, groups, products, and programs need a validation audit."
+    },
+    {
+      "id": "socket-authorization",
+      "priority": 3,
+      "area": "realtime",
+      "title": "Authorize Socket.IO relayed events",
+      "user_visible_behavior": "Only authorized users can join rooms or relay realtime workout/account updates.",
+      "status": "not_started",
+      "verification": [
+        "Add socket authorization checks before relaying events with client-provided IDs",
+        "Add tests or manual scripts for unauthorized socket attempts"
+      ],
+      "evidence": "",
+      "notes": "Room joins are checked; relayed event IDs need stronger server-side checks."
+    },
+    {
+      "id": "frontend-decomposition",
+      "priority": 4,
+      "area": "frontend",
+      "title": "Decompose remaining large route files",
+      "user_visible_behavior": "No user-visible behavior change; code becomes easier to modify safely.",
+      "status": "in_progress",
+      "verification": [
+        "firebelly-client: yarn lint",
+        "firebelly-client: yarn build",
+        "Manual route smoke tests for touched pages"
+      ],
+      "evidence": "Workout and schedule decomposition started.",
+      "notes": "Next targets: Progress.jsx, WorkoutOverview.jsx, GroupDetail.jsx, SchedulePage.jsx."
+    },
+    {
+      "id": "client-tests",
+      "priority": 5,
+      "area": "frontend",
+      "title": "Add client test foundation",
+      "user_visible_behavior": "Regression risk drops for auth, schedule, workout, and billing flows.",
+      "status": "not_started",
+      "verification": [
+        "Add client test script",
+        "Cover API client refresh retry",
+        "Cover critical utility hooks"
+      ],
+      "evidence": "",
+      "notes": "There is currently no client test script."
+    }
+  ]
+}
