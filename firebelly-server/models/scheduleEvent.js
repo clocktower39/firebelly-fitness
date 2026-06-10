@@ -1,0 +1,57 @@
+const mongoose = require("mongoose");
+
+const scheduleEventSchema = new mongoose.Schema(
+  {
+    trainerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    clientId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    startDateTime: { type: Date, required: true, index: true },
+    endDateTime: { type: Date, required: true, index: true },
+    eventType: {
+      type: String,
+      enum: ["APPOINTMENT", "INDEPENDENT", "AVAILABILITY"],
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["OPEN", "REQUESTED", "BOOKED", "COMPLETED", "CANCELLED"],
+      required: true,
+    },
+    workoutId: { type: mongoose.Schema.Types.ObjectId, ref: "Training", default: null },
+    customClientName: { type: String, default: "" },
+    customClientEmail: { type: String, default: "" },
+    customClientPhone: { type: String, default: "" },
+    publicLabel: { type: String, default: "" },
+    priceAmount: { type: Number, default: null },
+    priceCurrency: { type: String, default: "USD" },
+    payoutAmount: { type: Number, default: null },
+    payoutCurrency: { type: String, default: "USD" },
+    recurrenceRule: { type: String, default: null },
+    recurrenceGroupId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+    availabilitySource: {
+      type: String,
+      enum: ["NORMAL", "MANUAL"],
+      default: "MANUAL",
+    },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    billingStatus: {
+      type: String,
+      enum: ["UNBILLED", "CHARGED", "NO_CHARGE"],
+      default: "UNBILLED",
+    },
+    billingLedgerEntryId: { type: mongoose.Schema.Types.ObjectId, ref: "BillingLedgerEntry", default: null },
+    notes: { type: String, default: "" },
+    sessionTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "SessionType", default: null },
+    priceAmount: { type: Number, default: null, min: 0 },
+    priceCurrency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
+    payoutAmount: { type: Number, default: null, min: 0 },
+    payoutCurrency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
+  },
+  { timestamps: true }
+);
+
+scheduleEventSchema.index({ trainerId: 1, startDateTime: 1, endDateTime: 1 });
+scheduleEventSchema.index({ clientId: 1, startDateTime: 1 });
+
+const ScheduleEvent = mongoose.model("ScheduleEvent", scheduleEventSchema);
+module.exports = ScheduleEvent;

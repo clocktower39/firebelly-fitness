@@ -1,0 +1,54 @@
+const jwt = require("jsonwebtoken");
+
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+
+const hasOverride = (overrides, key) =>
+  Object.prototype.hasOwnProperty.call(overrides, key);
+
+const buildTokenPayload = (user, overrides = {}) => ({
+  _id: user._id,
+  email: user.email || null,
+  username: user.username || null,
+  firstName: user.firstName || "",
+  lastName: user.lastName || "",
+  phoneNumber: user.phoneNumber || null,
+  dateOfBirth: user.dateOfBirth || null,
+  height: user.height || null,
+  sex: user.sex || null,
+  gymBarcode: user.gymBarcode || null,
+  profilePicture: user.profilePicture || null,
+  themeMode: user.themeMode || "light",
+  workoutWeightUnit: user.workoutWeightUnit === "kg" ? "kg" : "lbs",
+  customThemes: user.customThemes || [],
+  weeklyFrequency: user.weeklyFrequency || null,
+  preferredWorkoutDays: user.preferredWorkoutDays || [],
+  isTrainer: hasOverride(overrides, "isTrainer")
+    ? Boolean(overrides.isTrainer)
+    : Boolean(user.isTrainer),
+  accountType: user.accountType || "adult",
+  ageBand: user.ageBand || null,
+  coppaStatus: user.coppaStatus || null,
+  consentScope: user.consentScope || null,
+  saleShareOptIn: Boolean(user.saleShareOptIn),
+  adPersonalizationAllowed: Boolean(user.adPersonalizationAllowed),
+  viewOnly: Boolean(overrides.viewOnly),
+  guardianId: overrides.guardianId || null,
+  trainerId: overrides.trainerId || null,
+  actingUserId: overrides.actingUserId || null,
+  actingUserRole: overrides.actingUserRole || null,
+  delegationMode: overrides.delegationMode || null,
+  canModifyViewedAccount: Boolean(overrides.canModifyViewedAccount),
+  viewedUserId: overrides.viewedUserId || null,
+});
+
+const createAccessToken = (user, overrides = {}, options = {}) => {
+  const payload = buildTokenPayload(user, overrides);
+  return jwt.sign(payload, ACCESS_TOKEN_SECRET, {
+    expiresIn: options.expiresIn || "60m",
+  });
+};
+
+module.exports = {
+  buildTokenPayload,
+  createAccessToken,
+};
