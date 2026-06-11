@@ -13,6 +13,8 @@
 - Root harness docs were added to reduce repeated project rediscovery.
 - Client/server READMEs document setup, commands, environment variables, structure, and verification.
 - Priority technical debt is tracked in `TODO.md` and `feature_list.json`.
+- Product write routes now have route-level Joi validation, negative integration coverage, and ownership tests.
+- Integration tests no longer assume `/usr/bin/mongod`; they use that binary only when present and guard MongoMemoryServer teardown.
 
 ## Known Risks
 

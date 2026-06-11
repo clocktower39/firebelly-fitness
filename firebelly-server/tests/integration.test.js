@@ -4,6 +4,7 @@ process.env.SALT_WORK_FACTOR = process.env.SALT_WORK_FACTOR || "4";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const mongoose = require("mongoose");
 const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
@@ -11,9 +12,11 @@ const { app } = require("../app");
 const Exercise = require("../models/exercise");
 const Group = require("../models/group");
 const GroupMembership = require("../models/groupMembership");
+const Product = require("../models/product");
 const RefreshToken = require("../models/refreshToken");
 const Relationship = require("../models/relationship");
 const ScheduleEvent = require("../models/scheduleEvent");
+const SessionType = require("../models/sessionType");
 const Training = require("../models/training");
 const User = require("../models/user");
 
@@ -40,15 +43,16 @@ const login = async (email, password = "password123") => {
 const auth = (accessToken) => `Bearer ${accessToken}`;
 
 test.before(async () => {
-  mongo = await MongoMemoryServer.create({
-    binary: { systemBinary: "/usr/bin/mongod" },
-  });
+  const mongoOptions = fs.existsSync("/usr/bin/mongod")
+    ? { binary: { systemBinary: "/usr/bin/mongod" } }
+    : {};
+  mongo = await MongoMemoryServer.create(mongoOptions);
   await mongoose.connect(mongo.getUri());
 });
 
 test.after(async () => {
   await mongoose.disconnect();
-  await mongo.stop();
+  await mongo?.stop();
 });
 
 test.beforeEach(async () => {
@@ -56,9 +60,11 @@ test.beforeEach(async () => {
     Exercise.deleteMany({}),
     Group.deleteMany({}),
     GroupMembership.deleteMany({}),
+    Product.deleteMany({}),
     RefreshToken.deleteMany({}),
     Relationship.deleteMany({}),
     ScheduleEvent.deleteMany({}),
+    SessionType.deleteMany({}),
     Training.deleteMany({}),
     User.deleteMany({}),
   ]);
@@ -179,4 +185,98 @@ test("billing adjustment writes require the authenticated trainer to own trainer
     .set("Authorization", auth(otherToken))
     .send({ trainerId: trainer._id.toString(), clientId: client._id.toString(), delta: 1 })
     .expect(403);
+});
+
+test("product writes reject invalid bodies before creating products", async () => {
+  const trainer = await createUser({ email: "trainer@example.com", isTrainer: true });
+  const { accessToken: trainerToken } = await login("trainer@example.com");
+  const sessionType = await SessionType.create({
+    trainerId: trainer._id,
+    name: "Personal Training",
+    creditsRequired: 1,
+    durationMinutes: 60,
+  });
+
+  await request(app)
+    .post("/products")
+    .set("Authorization", auth(trainerToken))
+    .send({ name: "", price: 25 })
+    .expect(400);
+
+  await request(app)
+    .post("/products")
+    .set("Authorization", auth(trainerToken))
+    .send({ name: "Bad price", price: -1 })
+    .expect(400);
+
+  await request(app)
+    .post("/products")
+    .set("Authorization", auth(trainerToken))
+    .send({ name: "Bad type", itemType: "ADMIN_ONLY" })
+    .expect(400);
+
+  await request(app)
+    .post("/products")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      name: "Session without type",
+      itemType: "SESSION",
+      price: 75,
+    })
+    .expect(400);
+
+  await request(app)
+    .post("/products")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      name: "Mass assignment",
+      trainerId: trainer._id.toString(),
+      price: 75,
+    })
+    .expect(400);
+
+  assert.equal(await Product.countDocuments(), 0);
+
+  const created = await request(app)
+    .post("/products")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      name: "Personal Training Session",
+      itemType: "SESSION",
+      sessionTypeId: sessionType._id.toString(),
+      price: 75,
+      currency: "USD",
+    })
+    .expect(200);
+
+  assert.equal(created.body.product.trainerId, trainer._id.toString());
+  assert.equal(created.body.product.itemType, "SESSION");
+  assert.equal(await Product.countDocuments(), 1);
+});
+
+test("product writes are scoped to the owning trainer", async () => {
+  const trainer = await createUser({ email: "trainer@example.com", isTrainer: true });
+  await createUser({ email: "other@example.com", isTrainer: true });
+  const product = await Product.create({
+    trainerId: trainer._id,
+    name: "Consultation",
+    itemType: "CUSTOM",
+    price: 50,
+  });
+
+  const { accessToken: otherToken } = await login("other@example.com");
+
+  await request(app)
+    .put(`/products/${product._id}`)
+    .set("Authorization", auth(otherToken))
+    .send({ name: "Hijacked" })
+    .expect(404);
+
+  await request(app)
+    .delete(`/products/${product._id}`)
+    .set("Authorization", auth(otherToken))
+    .expect(404);
+
+  const unchanged = await Product.findById(product._id).lean();
+  assert.equal(unchanged.name, "Consultation");
 });

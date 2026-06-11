@@ -23,7 +23,6 @@
 - [ ] Add schema/index audit for hot queries.
 - [ ] Change global goal title uniqueness to user-scoped uniqueness if uniqueness is still desired.
 - [ ] Replace raw console logging with structured production-safe logging.
-- [ ] Guard integration test teardown with `mongo?.stop()`.
 
 ## Database
 
