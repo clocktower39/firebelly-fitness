@@ -2,7 +2,6 @@ import React from "react";
 import { HashLink as Link } from "react-router-hash-link";
 import {
   AppBar,
-  Avatar,
   Box,
   Button,
   Divider,
@@ -13,7 +12,7 @@ import {
 } from "@mui/material";
 import { ArrowOutward, FitnessCenter, Home, Route, ViewQuilt } from "@mui/icons-material";
 import useWindowWidth from "../../Hooks/WindowWidth";
-import FireBellyLogo from "../../img/fireBellyLogo.jpg";
+import BrandLogo from "../../Components/BrandLogo";
 
 const APP_URL = "https://app.firebellyfitness.com";
 
@@ -80,14 +79,17 @@ export default function WebsiteNavbar() {
             color="inherit"
             component={Link}
             to="/#"
+            aria-label="Firebelly Fitness home"
             sx={{
               position: "relative",
               borderRadius: "8px",
-              backgroundColor: "rgba(15, 23, 42, 0.7)",
-              "&:hover": { backgroundColor: "rgba(15, 23, 42, 0.95)" },
+              width: 56,
+              height: 56,
+              p: 0.5,
+              "&:hover": { backgroundColor: "rgba(249, 115, 22, 0.12)" },
             }}
           >
-            <Avatar src={FireBellyLogo} alt="Logo" sx={{ width: 56, height: 56 }} />
+            <BrandLogo variant="mark" sx={{ width: "100%", height: "100%" }} />
           </IconButton>
           <Box sx={{ display: { xs: "none", sm: "block" } }}>
             <Typography

@@ -48,9 +48,9 @@ import {
   Login as LoginIcon,
   QrCodeScanner as QrCodeScannerIcon,
 } from "@mui/icons-material";
-import logo48 from "../../img/logo48.png";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
+import BrandLogo from "../../Components/BrandLogo";
 
 export default function NavDrawer() {
   const user = useSelector((state) => state.user);
@@ -232,11 +232,7 @@ export default function NavDrawer() {
           borderBottom: "1px solid rgba(148, 163, 184, 0.24)",
         }}
       >
-        <Avatar
-          src={logo48}
-          alt="Firebelly Fitness Logo"
-          sx={{ width: 32, height: 32, bgcolor: "primary.main" }}
-        />
+        <BrandLogo variant="mark" sx={{ width: 34, height: 34, flex: "0 0 auto" }} />
         <Box>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             Firebelly Fitness
@@ -355,11 +351,7 @@ export default function NavDrawer() {
                   color: 'inherit',
                 }}
               >
-                <Avatar
-                  src={logo48}
-                  alt="Firebelly Fitness Logo"
-                  sx={{ width: 32, height: 32 }}
-                />
+                <BrandLogo variant="mark" sx={{ width: 34, height: 34, flex: "0 0 auto" }} />
                 <Box sx={{ textAlign: "left" }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                     Firebelly
