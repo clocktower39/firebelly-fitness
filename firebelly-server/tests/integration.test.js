@@ -12,6 +12,7 @@ const { app } = require("../app");
 const Exercise = require("../models/exercise");
 const Group = require("../models/group");
 const GroupMembership = require("../models/groupMembership");
+const Invoice = require("../models/invoice");
 const Product = require("../models/product");
 const RefreshToken = require("../models/refreshToken");
 const Relationship = require("../models/relationship");
@@ -60,6 +61,7 @@ test.beforeEach(async () => {
     Exercise.deleteMany({}),
     Group.deleteMany({}),
     GroupMembership.deleteMany({}),
+    Invoice.deleteMany({}),
     Product.deleteMany({}),
     RefreshToken.deleteMany({}),
     Relationship.deleteMany({}),
@@ -279,4 +281,134 @@ test("product writes are scoped to the owning trainer", async () => {
 
   const unchanged = await Product.findById(product._id).lean();
   assert.equal(unchanged.name, "Consultation");
+});
+
+test("invoice writes reject invalid bodies before creating invoices", async () => {
+  const trainer = await createUser({ email: "trainer@example.com", isTrainer: true });
+  const client = await createUser({ email: "client@example.com" });
+  await Relationship.create({
+    trainer: trainer._id,
+    client: client._id,
+    accepted: true,
+    requestedBy: "client",
+  });
+  const { accessToken: trainerToken } = await login("trainer@example.com");
+
+  const validLineItems = [{ description: "Consultation", quantity: 1, unitPrice: 50 }];
+
+  await request(app)
+    .post("/invoices")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      billToType: "CLIENT",
+      clientId: client._id.toString(),
+      lineItems: validLineItems,
+      trainerId: trainer._id.toString(),
+    })
+    .expect(400);
+
+  await request(app)
+    .post("/invoices")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      billToType: "CLIENT",
+      clientId: client._id.toString(),
+      lineItems: [],
+    })
+    .expect(400);
+
+  await request(app)
+    .post("/invoices")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      billToType: "CLIENT",
+      clientId: client._id.toString(),
+      lineItems: [{ description: "Bad item", quantity: 1, unitPrice: -1 }],
+    })
+    .expect(400);
+
+  await request(app)
+    .post("/invoices")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      billToType: "CLIENT",
+      clientId: client._id.toString(),
+      lineItems: validLineItems,
+      tax: -1,
+    })
+    .expect(400);
+
+  await request(app)
+    .post("/invoices/payment")
+    .set("Authorization", auth(trainerToken))
+    .send({ invoiceId: trainer._id.toString(), amount: 0 })
+    .expect(400);
+
+  await request(app)
+    .post("/invoices/status")
+    .set("Authorization", auth(trainerToken))
+    .send({ invoiceId: trainer._id.toString(), status: "REFUNDED" })
+    .expect(400);
+
+  assert.equal(await Invoice.countDocuments(), 0);
+
+  const created = await request(app)
+    .post("/invoices")
+    .set("Authorization", auth(trainerToken))
+    .send({
+      billToType: "CLIENT",
+      clientId: client._id.toString(),
+      groupId: null,
+      status: "SENT",
+      currency: "USD",
+      lineItems: validLineItems,
+      tax: 0,
+      discount: 0,
+    })
+    .expect(200);
+
+  assert.equal(created.body.invoice.trainerId, trainer._id.toString());
+  assert.equal(created.body.invoice.clientId, client._id.toString());
+  assert.equal(created.body.invoice.total, 50);
+  assert.equal(await Invoice.countDocuments(), 1);
+});
+
+test("invoice writes are scoped to the owning trainer", async () => {
+  const trainer = await createUser({ email: "trainer@example.com", isTrainer: true });
+  await createUser({ email: "other@example.com", isTrainer: true });
+  const invoice = await Invoice.create({
+    trainerId: trainer._id,
+    billToType: "CLIENT",
+    billToName: "Client User",
+    invoiceNumber: "INV-TEST-001",
+    status: "SENT",
+    lineItems: [{ description: "Consultation", quantity: 1, unitPrice: 50, lineTotal: 50 }],
+    subtotal: 50,
+    total: 50,
+    balanceDue: 50,
+    createdBy: trainer._id,
+  });
+  const { accessToken: otherToken } = await login("other@example.com");
+
+  await request(app)
+    .post("/invoices/status")
+    .set("Authorization", auth(otherToken))
+    .send({ invoiceId: invoice._id.toString(), status: "VOID" })
+    .expect(403);
+
+  await request(app)
+    .post("/invoices/payment")
+    .set("Authorization", auth(otherToken))
+    .send({ invoiceId: invoice._id.toString(), amount: 50, method: "cash" })
+    .expect(403);
+
+  await request(app)
+    .post("/invoices/email")
+    .set("Authorization", auth(otherToken))
+    .send({ invoiceId: invoice._id.toString(), recipientEmail: "client@example.com" })
+    .expect(403);
+
+  const unchanged = await Invoice.findById(invoice._id).lean();
+  assert.equal(unchanged.status, "SENT");
+  assert.equal(unchanged.amountPaid, 0);
 });

@@ -28,8 +28,8 @@
         "Add negative supertest coverage",
         "Run firebelly-server: yarn test"
       ],
-      "evidence": "Product create/update/delete routes now have route-level Joi validation and negative integration coverage.",
-      "notes": "Invoices, metrics, groups, and programs still need a validation audit."
+      "evidence": "Product and invoice write routes now have route-level Joi validation and negative integration coverage.",
+      "notes": "Metrics, groups, and programs still need a validation audit."
     },
     {
       "id": "socket-authorization",
