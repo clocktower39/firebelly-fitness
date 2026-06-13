@@ -136,6 +136,10 @@ function App({ }) {
   }, [socket, workoutAccountIds]);
 
   const checkSubDomain = () => {
+    if (import.meta.env.VITE_SITE_MODE === "www") {
+      return true;
+    }
+
     let host = window.location.host;
     let parts = host.split(".");
     let subdomain = "";
