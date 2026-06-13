@@ -47,9 +47,10 @@ const classes = {
   },
   NavAccountContainer: {
     display: "flex",
-    flexDirection: "column",
-    minWidth: "32px",
-    padding: "0px 8px",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    minWidth: "fit-content",
+    pr: { xs: 0.5, sm: 1 },
     color: "white",
   },
   NavAccountOptions: {
@@ -139,28 +140,22 @@ export default function WebsiteNavbar() {
 
         <Box sx={classes.NavAccountContainer}>
           <Button
-            href={`${APP_URL}/login`}
-            sx={{
-              ...classes.NavAccountOptions,
-              color: "#f8fafc",
-              mb: 0.5,
-            }}
-          >
-            Login
-          </Button>
-          <Button
             href={APP_URL}
             endIcon={wide ? <ArrowOutward fontSize="small" /> : null}
+            aria-label="Open Firebelly Fitness app"
             sx={{
               ...classes.NavAccountOptions,
               color: "#111827",
               backgroundColor: "#f97316",
               borderRadius: "8px",
-              px: 1.5,
+              minHeight: 38,
+              minWidth: { xs: 44, sm: 116 },
+              px: { xs: 1, sm: 1.75 },
+              whiteSpace: "nowrap",
               "&:hover": { backgroundColor: "#fb923c" },
             }}
           >
-            Launch
+            {wide ? "Open App" : "App"}
           </Button>
         </Box>
       </Toolbar>
