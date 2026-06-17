@@ -57,6 +57,15 @@ If `mongodb-memory-server` fails in a sandbox with `listen EPERM`, note that as 
 - Preserve user changes in the working tree; do not revert unrelated edits.
 - Run the relevant verification command before claiming completion.
 
+## Design Context
+
+Frontend/UI work is governed by two root files (created via the `impeccable` design skill):
+
+- `PRODUCT.md`: strategic design context — register (the app is `product`, the marketing site is a co-equal `brand` surface), users, brand personality (professional, inviting, customizable; **not corporate**), anti-references, design principles, and the WCAG 2.1 AA target.
+- `DESIGN.md`: the visual system — North Star "The Coach's Fire", the emerald + flame palette on slate, Montserrat/Roboto type, tonal-first elevation, and component specs. `.impeccable/design.json` is its machine-readable sidecar.
+
+Read both before designing or restyling any screen. The app is MUI today and is migrating gradually to shadcn/Tailwind; new UI work should prefer shadcn+Tailwind while never visually regressing a working MUI flow.
+
 ## Topic Docs
 
 - `docs/PROJECT_CONTEXT.md`: product domain, roles, major workflows.

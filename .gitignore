@@ -1,0 +1,9 @@
+# Agent / harness tooling — local only, not for GitHub
+.agents/
+.claude/
+.codex/
+
+# Impeccable design skill — local working dir (config, live sessions, sidecar)
+# PRODUCT.md and DESIGN.md are committed: they're the design source of truth,
+# referenced by AGENTS.md alongside docs/.
+.impeccable/
