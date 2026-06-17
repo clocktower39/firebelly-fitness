@@ -121,7 +121,7 @@ const ownerPrinciples = [
 ];
 
 const sectionLabelStyles = {
-  color: "#f97316",
+  color: "#34d399",
   fontWeight: 800,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
@@ -182,9 +182,9 @@ function FeatureCard({ feature }) {
           borderRadius: "8px",
           display: "grid",
           placeItems: "center",
-          color: "#fed7aa",
-          backgroundColor: "rgba(249, 115, 22, 0.14)",
-          border: "1px solid rgba(249, 115, 22, 0.24)",
+          color: "#34d399",
+          backgroundColor: "rgba(16, 185, 129, 0.14)",
+          border: "1px solid rgba(16, 185, 129, 0.24)",
           mb: 2.5,
         }}
       >
@@ -237,7 +237,7 @@ function AudiencePanel({ title, description, benefits, icon }) {
       <Stack spacing={1.5}>
         {benefits.map((benefit) => (
           <Stack key={benefit} direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
-            <CheckCircle sx={{ color: "#f97316", fontSize: 20, mt: "2px" }} aria-hidden="true" />
+            <CheckCircle sx={{ color: "#34d399", fontSize: 20, mt: "2px" }} aria-hidden="true" />
             <Typography sx={{ color: "rgba(248, 250, 252, 0.9)" }}>{benefit}</Typography>
           </Stack>
         ))}
@@ -286,13 +286,13 @@ function AppPreview() {
               sx={{
                 p: 2.25,
                 borderRadius: "8px",
-                border: "1px solid rgba(249, 115, 22, 0.28)",
-                backgroundColor: "rgba(249, 115, 22, 0.1)",
+                border: "1px solid rgba(16, 185, 129, 0.28)",
+                backgroundColor: "rgba(16, 185, 129, 0.1)",
               }}
             >
               <Stack direction="row" spacing={2} sx={{ justifyContent: "space-between" }}>
                 <Box>
-                  <Typography sx={{ color: "#fed7aa", fontWeight: 800 }}>Workout Builder</Typography>
+                  <Typography sx={{ color: "#6ee7b7", fontWeight: 800 }}>Workout Builder</Typography>
                   <Typography sx={{ color: "rgba(255,255,255,0.76)", mt: 0.75 }}>
                     Structure today's training plan
                   </Typography>
@@ -300,7 +300,7 @@ function AppPreview() {
                 <Chip
                   label="Draft"
                   size="small"
-                  sx={{ color: "#ffedd5", backgroundColor: "rgba(249,115,22,0.18)" }}
+                  sx={{ color: "#d1fae5", backgroundColor: "rgba(16,185,129,0.18)" }}
                 />
               </Stack>
             </Box>
@@ -400,10 +400,10 @@ export default function Home() {
                 label="Workout software for trainers and athletes"
                 sx={{
                   mb: 3,
-                  color: "#ffedd5",
-                  backgroundColor: "rgba(249, 115, 22, 0.18)",
-                  border: "1px solid rgba(249, 115, 22, 0.35)",
-                  "& .MuiChip-icon": { color: "#fb923c" },
+                  color: "#d1fae5",
+                  backgroundColor: "rgba(16, 185, 129, 0.18)",
+                  border: "1px solid rgba(16, 185, 129, 0.35)",
+                  "& .MuiChip-icon": { color: "#34d399" },
                 }}
               />
               <Typography
@@ -439,9 +439,9 @@ export default function Home() {
                     px: 3.5,
                     py: 1.35,
                     borderRadius: "8px",
-                    background: "#f97316",
-                    color: "#111827",
-                    "&:hover": { background: "#fb923c" },
+                    background: "linear-gradient(45deg, #10b981 30%, #34d399 90%)",
+                    color: "#ffffff",
+                    "&:hover": { background: "linear-gradient(45deg, #047857 30%, #10b981 90%)" },
                   }}
                 >
                   Launch App
@@ -706,9 +706,9 @@ export default function Home() {
                     px: 3.5,
                     py: 1.35,
                     borderRadius: "8px",
-                    background: "#f97316",
-                    color: "#111827",
-                    "&:hover": { background: "#fb923c" },
+                    background: "linear-gradient(45deg, #10b981 30%, #34d399 90%)",
+                    color: "#ffffff",
+                    "&:hover": { background: "linear-gradient(45deg, #047857 30%, #10b981 90%)" },
                   }}
                 >
                   Launch App
