@@ -14,6 +14,23 @@ colors:
   abyss: "#020617"
   ink: "#f8fafc"
   ink-muted: "#94a3b8"
+  # Alternate built-in theme palettes — see "Theme Variants" in section 2.
+  # The default/brand theme (moor) is the emerald + slate set above.
+  forest-primary: "#2e7d32"
+  forest-secondary: "#ff9800"
+  forest-base: "#3a3a3a"
+  forest-raised: "#232323"
+  forest-card: "#282828"
+  ember-primary: "#ef4444"
+  ember-secondary: "#f87171"
+  ember-base: "#000000"
+  ember-raised: "#121212"
+  ember-card: "#1f1f1f"
+  light-base: "#f8fafc"
+  light-raised: "#ffffff"
+  light-accent-bg: "#f1f5f9"
+  light-ink: "#0f172a"
+  light-ink-muted: "#475569"
 typography:
   display:
     fontFamily: "Montserrat, system-ui, sans-serif"
@@ -44,6 +61,12 @@ typography:
     fontSize: "0.875rem"
     fontWeight: 600
     lineHeight: 1.4
+    letterSpacing: "normal"
+  mono:
+    fontFamily: "Source Code Pro, source-code-pro, ui-monospace, monospace"
+    fontSize: "0.875rem"
+    fontWeight: 500
+    lineHeight: 1.5
     letterSpacing: "normal"
 rounded:
   sm: "8px"
@@ -134,6 +157,18 @@ A dark slate foundation carrying a single working green and a tightly-rationed f
 **The Rationed Flame Rule.** Emerald does the work; flame (amber/orange/red) is the spark. Across any single screen, the warm flame accents occupy ≤10% of the colored surface. Their scarcity is what makes them mean "energy." A screen that's half-orange has lost the plot.
 
 **The Theme-Resilience Rule.** No component hard-codes a brand hex for meaning. Use the theme's semantic role (`primary`, `secondary`, `text.secondary`, `background.paper`). A component is only done when it stays legible and AA-contrast in dark, moor, ember, light, **and** an arbitrary user custom palette.
+
+### Theme Variants
+
+The palette above is the **moor** theme — the emerald-on-slate brand default. Firebelly ships four built-in themes plus user custom palettes (defined in `firebelly-client/src/theme.jsx`). All share the Montserrat/Roboto type, the 12–20px radii, and the tonal-first elevation; only the palette changes. Every variant must clear WCAG AA per the Theme-Resilience Rule.
+
+- **Moor** *(default, brand)* — Emerald `#10b981` + Amber `#f59e0b` on slate (`#0f172a` → `#1e293b` → `#334155`). The canonical palette documented above; the brand-aligned face of "The Coach's Fire."
+- **Dark (Forest)** — Forest green `#2e7d32` + Orange `#ff9800` on warm graphite (`#3a3a3a` base, `#232323` drawer, `#282828` cards). The original, earthier dark theme.
+- **Ember** — Red `#ef4444` (deep `#b91c1c`) + soft red `#f87171` on true black (`#000000` base, `#121212` paper, `#1f1f1f` cards). The hottest, highest-drama theme — pure flame on black.
+- **Light** — Emerald `#10b981` + Amber `#f59e0b` on near-white (`#f8fafc` base, `#ffffff` paper, `#f1f5f9` accent surfaces); ink `#0f172a`, muted ink `#475569`. The daytime face of the brand palette.
+- **Custom** — User-defined palettes built from primary, secondary, background, paper, and text colors via `buildCustomTheme`. The user owns contrast here; the app should still default to AA-safe seed values.
+
+**The Moor-Is-Canonical Rule.** When a new component or screen is designed, design it against **moor** first — it's the brand default and the reference these docs describe. The other themes are recolorings of the same structure, never different layouts.
 
 ## 3. Typography
 
