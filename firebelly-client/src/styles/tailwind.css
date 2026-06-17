@@ -1,0 +1,143 @@
+/*
+ * Tailwind v4 + shadcn/ui foundation for Firebelly.
+ *
+ * COEXISTENCE WITH MUI: we intentionally import only Tailwind's `theme` and
+ * `utilities` layers, NOT its `base` (Preflight) reset. Preflight would reset
+ * elements globally and could regress the existing MUI/emotion-styled screens.
+ * The small @layer base below restores only what shadcn components rely on
+ * (border defaults + box-sizing), scoped to be harmless to MUI.
+ *
+ * Tokens map to the moor/brand palette (see DESIGN.md). Dark (moor) is the
+ * default via `.dark` on <html>; `:root` carries the light theme.
+ */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Light theme (Firebelly "light") */
+:root {
+  --radius: 0.75rem; /* 12px — brand md radius */
+
+  --background: oklch(0.985 0.002 247);        /* #f8fafc slate-50  */
+  --foreground: oklch(0.21 0.041 265);         /* #0f172a slate-900 */
+  --card: oklch(1 0 0);                         /* #ffffff           */
+  --card-foreground: oklch(0.21 0.041 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.041 265);
+
+  --primary: oklch(0.696 0.151 162.5);         /* #10b981 emerald   */
+  --primary-foreground: oklch(1 0 0);          /* white (brand)     */
+  --secondary: oklch(0.968 0.007 247);         /* #f1f5f9 slate-100 */
+  --secondary-foreground: oklch(0.21 0.041 265);
+  --muted: oklch(0.968 0.007 247);
+  --muted-foreground: oklch(0.446 0.03 257);   /* #475569 slate-600 (AA on white) */
+  --accent: oklch(0.968 0.007 247);
+  --accent-foreground: oklch(0.21 0.041 265);
+  --destructive: oklch(0.577 0.245 27.3);      /* desaturated red, NOT brand flame-red */
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.929 0.013 255);            /* #e2e8f0 slate-200 */
+  --input: oklch(0.929 0.013 255);
+  --ring: oklch(0.696 0.151 162.5);            /* emerald focus ring */
+
+  /* Brand flame accent — deliberate emphasis only (Rationed Flame Rule). */
+  --brand-flame: oklch(0.769 0.16 70.7);       /* #f59e0b amber */
+  --brand-flame-foreground: oklch(0.21 0.041 265); /* dark ink (AA on amber) */
+
+  --chart-1: oklch(0.696 0.151 162.5);         /* emerald */
+  --chart-2: oklch(0.769 0.16 70.7);           /* amber   */
+  --chart-3: oklch(0.6 0.12 220);              /* sky     */
+  --chart-4: oklch(0.55 0.2 300);              /* violet  */
+  --chart-5: oklch(0.637 0.237 25.3);          /* rose    */
+}
+
+/* Dark theme (Firebelly "moor" — brand default) */
+.dark {
+  --background: oklch(0.21 0.041 265);         /* #0f172a slate-900 */
+  --foreground: oklch(0.985 0.002 247);        /* #f8fafc slate-50  */
+  --card: oklch(0.279 0.037 260);              /* #1e293b slate-800 */
+  --card-foreground: oklch(0.985 0.002 247);
+  --popover: oklch(0.279 0.037 260);
+  --popover-foreground: oklch(0.985 0.002 247);
+
+  --primary: oklch(0.696 0.151 162.5);         /* #10b981 emerald   */
+  --primary-foreground: oklch(1 0 0);          /* white (brand)     */
+  --secondary: oklch(0.372 0.039 257);         /* #334155 slate-700 */
+  --secondary-foreground: oklch(0.985 0.002 247);
+  --muted: oklch(0.372 0.039 257);             /* #334155 slate-700 */
+  --muted-foreground: oklch(0.837 0.022 252);  /* #cbd5e1 slate-300 (AA on cards) */
+  --accent: oklch(0.372 0.039 257);
+  --accent-foreground: oklch(0.985 0.002 247);
+  --destructive: oklch(0.637 0.237 25.3);
+  --destructive-foreground: oklch(0.985 0.002 247);
+
+  --border: oklch(1 0 0 / 8%);                 /* hairline, matches MUI card border */
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.696 0.151 162.5);            /* emerald focus ring */
+
+  --brand-flame: oklch(0.769 0.16 70.7);       /* #f59e0b amber */
+  --brand-flame-foreground: oklch(0.21 0.041 265);
+
+  --chart-1: oklch(0.696 0.151 162.5);
+  --chart-2: oklch(0.769 0.16 70.7);
+  --chart-3: oklch(0.65 0.12 220);
+  --chart-4: oklch(0.62 0.2 300);
+  --chart-5: oklch(0.7 0.18 25.3);
+}
+
+/* Map the CSS variables above to Tailwind color/radius tokens so utilities
+ * like `bg-primary`, `text-muted-foreground`, `rounded-lg` resolve correctly. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand-flame: var(--brand-flame);
+  --color-brand-flame-foreground: var(--brand-flame-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: "Roboto", "Inter", system-ui, sans-serif;
+  --font-display: "Montserrat", system-ui, sans-serif;
+  --font-mono: "Source Code Pro", source-code-pro, ui-monospace, monospace;
+}
+
+/* Minimal base shadcn needs, kept narrow to avoid touching MUI globally.
+ * Preflight is intentionally excluded (see header comment). */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-style: solid;
+    border-width: 0;
+    box-sizing: border-box;
+  }
+}
