@@ -8,9 +8,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   InputLabel,
   MenuItem,
+  Popover,
   Select,
   Stack,
   TextField,
@@ -136,6 +138,8 @@ export default function EventActionDialogs({
   openEventActionDialog,
   setOpenEventActionDialog,
   eventActionTarget,
+  eventActionAnchor,
+  onQuickStatus,
   getEventDisplayName,
   getSessionTypeLabel,
   openTrainerBookForEvent,
@@ -853,93 +857,113 @@ export default function EventActionDialogs({
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={openEventActionDialog}
+      <Popover
+        open={openEventActionDialog && Boolean(eventActionAnchor)}
+        anchorEl={eventActionAnchor}
         onClose={() => setOpenEventActionDialog(false)}
-        maxWidth="xs"
-        fullWidth
+        anchorOrigin={{ vertical: "center", horizontal: "right" }}
+        transformOrigin={{ vertical: "center", horizontal: "left" }}
+        slotProps={{ paper: { sx: { width: 280, maxWidth: "92vw" } } }}
       >
-        <DialogTitle>Session Actions</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          {eventActionTarget && (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Stack spacing={0.5}>
-                <Typography variant="subtitle1">
-                  {eventActionTarget.eventType === "AVAILABILITY" ? "Open slot" : "Booked session"}
+        {eventActionTarget && (
+          <Stack spacing={1.5} sx={{ p: 2 }}>
+            <Stack spacing={0.5}>
+              <Typography variant="subtitle1">
+                {eventActionTarget.eventType === "AVAILABILITY" ? "Open slot" : "Booked session"}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {formatRange(eventActionTarget)}
+              </Typography>
+              {eventActionTarget.eventType !== "AVAILABILITY" && (
+                <Typography variant="caption" color="text.secondary">
+                  {getEventDisplayName(eventActionTarget)}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {formatRange(eventActionTarget)}
+              )}
+              {isTrainerView && getSessionTypeLabel(eventActionTarget) && (
+                <Typography variant="caption" color="text.secondary">
+                  Session type: {getSessionTypeLabel(eventActionTarget)}
                 </Typography>
-                {eventActionTarget.eventType !== "AVAILABILITY" && (
-                  <Typography variant="caption" color="text.secondary">
-                    {getEventDisplayName(eventActionTarget)}
-                  </Typography>
-                )}
-                {isTrainerView && getSessionTypeLabel(eventActionTarget) && (
-                  <Typography variant="caption" color="text.secondary">
-                    Session type: {getSessionTypeLabel(eventActionTarget)}
-                  </Typography>
-                )}
-              </Stack>
-              <Stack spacing={1}>
-                {eventActionTarget.eventType === "AVAILABILITY" &&
-                  eventActionTarget.status === "OPEN" && (
-                    <Button
-                      variant="contained"
-                      onClick={() => openTrainerBookForEvent(eventActionTarget)}
-                    >
-                      Book
-                    </Button>
-                  )}
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setOpenEventActionDialog(false);
-                    openEditForEvent(eventActionTarget);
-                  }}
-                >
-                  Edit details
-                </Button>
-                {eventActionTarget.status !== "CANCELLED" && (
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setOpenEventActionDialog(false);
-                      openCopyForEvent(eventActionTarget);
-                    }}
-                  >
-                    Copy
-                  </Button>
-                )}
-                {eventActionTarget.status === "OPEN" && (
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setOpenEventActionDialog(false);
-                      handleCancelEvent(eventActionTarget._id);
-                    }}
-                  >
-                    Close slot
-                  </Button>
-                )}
-                <Button
-                  color="error"
-                  variant="outlined"
-                  onClick={() => {
-                    setOpenEventActionDialog(false);
-                    openDeleteConfirm(eventActionTarget);
-                  }}
-                >
-                  Delete
-                </Button>
-              </Stack>
+              )}
             </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenEventActionDialog(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+
+            {isTrainerView &&
+              eventActionTarget.eventType !== "AVAILABILITY" &&
+              onQuickStatus && (
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    label="Status"
+                    value={eventActionTarget.status || ""}
+                    onChange={(selectEvent) =>
+                      onQuickStatus(eventActionTarget, selectEvent.target.value)
+                    }
+                  >
+                    {["REQUESTED", "BOOKED", "COMPLETED", "CANCELLED"].map((status) => (
+                      <MenuItem key={status} value={status}>
+                        {status.charAt(0) + status.slice(1).toLowerCase()}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
+            <Divider />
+
+            <Stack spacing={1}>
+              {eventActionTarget.eventType === "AVAILABILITY" &&
+                eventActionTarget.status === "OPEN" && (
+                  <Button
+                    variant="contained"
+                    onClick={() => openTrainerBookForEvent(eventActionTarget)}
+                  >
+                    Book
+                  </Button>
+                )}
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setOpenEventActionDialog(false);
+                  openEditForEvent(eventActionTarget);
+                }}
+              >
+                Edit details
+              </Button>
+              {eventActionTarget.status !== "CANCELLED" && (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setOpenEventActionDialog(false);
+                    openCopyForEvent(eventActionTarget);
+                  }}
+                >
+                  Copy
+                </Button>
+              )}
+              {eventActionTarget.status === "OPEN" && (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setOpenEventActionDialog(false);
+                    handleCancelEvent(eventActionTarget._id);
+                  }}
+                >
+                  Close slot
+                </Button>
+              )}
+              <Button
+                color="error"
+                variant="outlined"
+                onClick={() => {
+                  setOpenEventActionDialog(false);
+                  openDeleteConfirm(eventActionTarget);
+                }}
+              >
+                Delete
+              </Button>
+            </Stack>
+          </Stack>
+        )}
+      </Popover>
 
       <Dialog
         open={openTrainerBookDialog}
