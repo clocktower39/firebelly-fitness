@@ -505,6 +505,18 @@ export default function Schedule() {
     refreshSchedule();
   };
 
+  // Drag-to-reschedule on the calendar (preserves duration; same-day time change).
+  const handleRescheduleEvent = async (event, newStartISO, newEndISO) => {
+    if (!event?._id) return;
+    await dispatch(
+      updateScheduleEvent(event._id, {
+        startDateTime: newStartISO,
+        endDateTime: newEndISO,
+      })
+    );
+    refreshSchedule();
+  };
+
   const openRequestForEvent = (event) => {
     setActiveRequestEvent(event);
     setBookingType("one-time");
@@ -1396,6 +1408,7 @@ export default function Schedule() {
           weekEvents={weekEvents}
           getEventStyle={getEventStyle}
           openActionForEvent={openActionForEvent}
+          onRescheduleEvent={handleRescheduleEvent}
           openRequestForEvent={openRequestForEvent}
           shareHideDetails={shareHideDetails}
           shareHighlightShown={shareHighlightShown}
