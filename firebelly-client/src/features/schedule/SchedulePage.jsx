@@ -102,6 +102,8 @@ export default function Schedule() {
   const [attachEvent, setAttachEvent] = useState(null);
   const [editEvent, setEditEvent] = useState(null);
   const [deleteEvent, setDeleteEvent] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
 
   const [startTime, setStartTime] = useState("09:00");
@@ -474,10 +476,15 @@ export default function Schedule() {
 
   const handleDeleteEvent = async (eventId) => {
     if (!eventId) return;
-    await dispatch(deleteScheduleEvent(eventId));
-    setOpenDeleteDialog(false);
-    setDeleteEvent(null);
-    refreshSchedule();
+    setDeleting(true);
+    try {
+      await dispatch(deleteScheduleEvent(eventId));
+      setOpenDeleteDialog(false);
+      setDeleteEvent(null);
+      refreshSchedule();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const openDeleteConfirm = (event) => {
@@ -766,14 +773,19 @@ export default function Schedule() {
       editPayoutAmount === "" ? null : Number.parseFloat(editPayoutAmount);
     updates.payoutCurrency = editPayoutCurrency || "USD";
     updates.sessionTypeId = editSessionTypeId || null;
-    await dispatch(
-      updateScheduleEvent(editEvent._id, {
-        ...updates,
-      })
-    );
-    setOpenEditDialog(false);
-    setEditEvent(null);
-    refreshSchedule();
+    setSavingEdit(true);
+    try {
+      await dispatch(
+        updateScheduleEvent(editEvent._id, {
+          ...updates,
+        })
+      );
+      setOpenEditDialog(false);
+      setEditEvent(null);
+      refreshSchedule();
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleCreateWorkoutForEdit = async () => {
@@ -1262,6 +1274,8 @@ export default function Schedule() {
     toggleColumnVisibility,
     showAllColumns,
     isTableFilterActive,
+    activeFilterKeys,
+    clearTableFilters,
     tableColumnCount,
   } = useScheduleTableFilters({
     weekEventRows,
@@ -1468,6 +1482,8 @@ export default function Schedule() {
               sortedWeekRows={sortedWeekRows}
               tableColumnCount={tableColumnCount}
               isTableFilterActive={isTableFilterActive}
+              activeFilterKeys={activeFilterKeys}
+              onClearFilters={clearTableFilters}
               isColumnHidden={isColumnHidden}
               openTableFilter={openTableFilter}
               toggleTableSort={toggleTableSort}
@@ -1617,6 +1633,7 @@ export default function Schedule() {
         handleReopenEvent={handleReopenEvent}
         openDeleteConfirm={openDeleteConfirm}
         handleSaveEdit={handleSaveEdit}
+        savingEdit={savingEdit}
         openEventActionDialog={openEventActionDialog}
         setOpenEventActionDialog={setOpenEventActionDialog}
         eventActionTarget={eventActionTarget}
@@ -1768,6 +1785,7 @@ export default function Schedule() {
         onClose={() => setOpenDeleteDialog(false)}
         deleteEvent={deleteEvent}
         onDelete={handleDeleteEvent}
+        deleting={deleting}
         dayjs={dayjs}
       />
     </>

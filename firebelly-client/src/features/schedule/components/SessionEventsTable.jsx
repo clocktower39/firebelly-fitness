@@ -14,7 +14,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { ArrowDownward, ArrowUpward } from "@mui/icons-material";
+import { ArrowDownward, ArrowUpward, FilterAlt, FilterListOff } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import { scheduleColors, statusColors } from "../constants";
@@ -39,14 +39,20 @@ function HeaderCell({
   tableSortDirection,
   openTableFilter,
   toggleTableSort,
+  activeFilterKeys,
 }) {
+  const active = Boolean(activeFilterKeys?.has?.(filterKey));
   return (
     <TableCell>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <Button
           size="small"
           variant="text"
+          color={active ? "primary" : "inherit"}
           onClick={(event) => openTableFilter(event, filterKey, label)}
+          endIcon={active ? <FilterAlt fontSize="inherit" /> : null}
+          sx={{ fontWeight: active ? 700 : 500 }}
+          aria-label={active ? `${label} (filtered)` : label}
         >
           {label}
         </Button>
@@ -65,6 +71,8 @@ export default function SessionEventsTable({
   sortedWeekRows,
   tableColumnCount,
   isTableFilterActive,
+  activeFilterKeys,
+  onClearFilters,
   isColumnHidden,
   openTableFilter,
   toggleTableSort,
@@ -85,7 +93,17 @@ export default function SessionEventsTable({
     <Card>
       <CardContent>
         <Stack spacing={2} sx={{ minWidth: 0 }}>
-          <Typography variant="h6">Session Events (Week)</Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            <Typography variant="h6">Session Events (Week)</Typography>
+            {isTableFilterActive && (
+              <>
+                <Chip size="small" color="primary" variant="outlined" icon={<FilterAlt />} label="Filters active" />
+                <Button size="small" color="inherit" startIcon={<FilterListOff />} onClick={onClearFilters}>
+                  Clear filters
+                </Button>
+              </>
+            )}
+          </Stack>
           <Box sx={{ maxWidth: "100%", overflowX: "auto" }}>
             <Table size="small" sx={{ minWidth: 720 }}>
               <TableHead>
@@ -98,6 +116,7 @@ export default function SessionEventsTable({
                       tableSortDirection={tableSortDirection}
                       openTableFilter={openTableFilter}
                       toggleTableSort={toggleTableSort}
+                      activeFilterKeys={activeFilterKeys}
                     />
                   )}
                   {!isColumnHidden("time") && (
@@ -108,6 +127,7 @@ export default function SessionEventsTable({
                       tableSortDirection={tableSortDirection}
                       openTableFilter={openTableFilter}
                       toggleTableSort={toggleTableSort}
+                      activeFilterKeys={activeFilterKeys}
                     />
                   )}
                   {!isColumnHidden("type") && (
@@ -118,6 +138,7 @@ export default function SessionEventsTable({
                       tableSortDirection={tableSortDirection}
                       openTableFilter={openTableFilter}
                       toggleTableSort={toggleTableSort}
+                      activeFilterKeys={activeFilterKeys}
                     />
                   )}
                   {!isColumnHidden("status") && (
@@ -128,6 +149,7 @@ export default function SessionEventsTable({
                       tableSortDirection={tableSortDirection}
                       openTableFilter={openTableFilter}
                       toggleTableSort={toggleTableSort}
+                      activeFilterKeys={activeFilterKeys}
                     />
                   )}
                   {!isColumnHidden("client") && (
@@ -138,6 +160,7 @@ export default function SessionEventsTable({
                       tableSortDirection={tableSortDirection}
                       openTableFilter={openTableFilter}
                       toggleTableSort={toggleTableSort}
+                      activeFilterKeys={activeFilterKeys}
                     />
                   )}
                   {isTrainerView &&
@@ -150,6 +173,7 @@ export default function SessionEventsTable({
                         tableSortDirection={tableSortDirection}
                         openTableFilter={openTableFilter}
                         toggleTableSort={toggleTableSort}
+                        activeFilterKeys={activeFilterKeys}
                       />
                     )}
                   <TableCell>Actions</TableCell>
