@@ -150,6 +150,41 @@ test("schedule writes are scoped to the owning trainer", async () => {
     .expect(403);
 });
 
+test("calendar feed returns only the user's events and rejects bad tokens", async () => {
+  const trainer = await createUser({ email: "trainer@example.com", isTrainer: true });
+  const client = await createUser({ email: "client@example.com" });
+  const otherTrainer = await createUser({ email: "other@example.com", isTrainer: true });
+  await Relationship.create({ trainer: trainer._id, client: client._id, accepted: true, requestedBy: "client" });
+
+  const soon = new Date(Date.now() + 60 * 60 * 1000);
+  const later = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  const mine = await ScheduleEvent.create({
+    trainerId: trainer._id, clientId: client._id, eventType: "APPOINTMENT",
+    status: "BOOKED", startDateTime: soon, endDateTime: later,
+  });
+  const theirs = await ScheduleEvent.create({
+    trainerId: otherTrainer._id, eventType: "APPOINTMENT",
+    status: "BOOKED", startDateTime: soon, endDateTime: later,
+  });
+
+  const { accessToken: trainerToken } = await login("trainer@example.com");
+
+  const tokenRes = await request(app)
+    .post("/calendar/feed/token")
+    .set("Authorization", auth(trainerToken))
+    .send({})
+    .expect(200);
+  assert.ok(tokenRes.body.token && tokenRes.body.token.length >= 32);
+  assert.match(tokenRes.body.feedPath, /^\/calendar\/feed\/.+\.ics$/);
+
+  const feedRes = await request(app).get(tokenRes.body.feedPath).expect(200);
+  assert.match(feedRes.headers["content-type"], /text\/calendar/);
+  assert.ok(feedRes.text.includes(`UID:${mine._id}@firebellyfitness.com`));
+  assert.ok(!feedRes.text.includes(`UID:${theirs._id}@firebellyfitness.com`));
+
+  await request(app).get("/calendar/feed/not-a-real-feed-token-000000.ics").expect(404);
+});
+
 test("group writes require group trainer membership", async () => {
   await createUser({ email: "trainer@example.com", isTrainer: true });
   await createUser({ email: "other@example.com", isTrainer: true });

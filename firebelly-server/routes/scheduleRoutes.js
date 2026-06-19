@@ -60,4 +60,9 @@ router.post("/schedule/book/request", verifyAccessToken, ensureWriteAccess, sche
 router.post("/schedule/book/trainer", verifyAccessToken, ensureWriteAccess, scheduleController.trainer_book_availability);
 router.post("/schedule/book/respond", verifyAccessToken, ensureWriteAccess, scheduleController.respond_booking);
 
+// iCalendar (.ics) subscribe feed. Public + token-authed (calendar apps can't send JWT).
+router.get("/calendar/feed/:filename", scheduleController.get_calendar_feed_ics);
+// Authed: get/create/rotate the caller's secret feed token.
+router.post("/calendar/feed/token", verifyAccessToken, scheduleController.get_or_create_calendar_feed);
+
 module.exports = router;
