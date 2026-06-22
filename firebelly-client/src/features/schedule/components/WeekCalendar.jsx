@@ -491,13 +491,13 @@ export default function WeekCalendar({
                                   onMouseDown={(mouseEvent) =>
                                     handleEventMouseDown(mouseEvent, event, day, dayIndex)
                                   }
-                                  onClick={() => {
+                                  onClick={(clickEvent) => {
                                     if (justDraggedRef.current) {
                                       justDraggedRef.current = false;
                                       return;
                                     }
                                     if (isTrainerView) {
-                                      openActionForEvent(event);
+                                      openActionForEvent(event, clickEvent.currentTarget);
                                       return;
                                     }
                                     if (

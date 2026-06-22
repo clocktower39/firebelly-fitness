@@ -247,7 +247,7 @@ export default function SessionEventsTable({
                           <Button
                             size="small"
                             variant="outlined"
-                            onClick={() => openActionForEvent(event)}
+                            onClick={(clickEvent) => openActionForEvent(event, clickEvent.currentTarget)}
                           >
                             Details
                           </Button>
