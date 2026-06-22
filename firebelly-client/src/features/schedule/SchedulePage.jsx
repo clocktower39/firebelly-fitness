@@ -90,6 +90,7 @@ export default function Schedule() {
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openEventActionDialog, setOpenEventActionDialog] = useState(false);
   const [eventActionTarget, setEventActionTarget] = useState(null);
+  const [eventActionAnchor, setEventActionAnchor] = useState(null);
   const [openTrainerBookDialog, setOpenTrainerBookDialog] = useState(false);
   const [trainerBookSlot, setTrainerBookSlot] = useState("");
   const [trainerBookEndSlot, setTrainerBookEndSlot] = useState("");
@@ -623,9 +624,18 @@ export default function Schedule() {
     setOpenEditDialog(true);
   };
 
-  const openActionForEvent = (event) => {
+  const openActionForEvent = (event, anchor = null) => {
     setEventActionTarget(event);
+    setEventActionAnchor(anchor);
     setOpenEventActionDialog(true);
+  };
+
+  // Quick status change from the event popover, no full edit form.
+  const handleQuickStatus = async (event, status) => {
+    if (!event?._id || !status || status === event.status) return;
+    await dispatch(updateScheduleEvent(event._id, { status }));
+    setOpenEventActionDialog(false);
+    refreshSchedule();
   };
 
   const openTrainerBookForEvent = (event) => {
@@ -1650,6 +1660,8 @@ export default function Schedule() {
         openEventActionDialog={openEventActionDialog}
         setOpenEventActionDialog={setOpenEventActionDialog}
         eventActionTarget={eventActionTarget}
+        eventActionAnchor={eventActionAnchor}
+        onQuickStatus={handleQuickStatus}
         getEventDisplayName={getEventDisplayName}
         getSessionTypeLabel={getSessionTypeLabel}
         openTrainerBookForEvent={openTrainerBookForEvent}
