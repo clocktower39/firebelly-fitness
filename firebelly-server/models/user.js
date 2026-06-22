@@ -74,7 +74,10 @@ const UserSchema = new mongoose.Schema({
         verificationToken: { type: String, default: null },
         verificationTokenExpires: { type: Date, default: null },
       },
-      
+    // Secret token for the read-only iCalendar (.ics) subscribe feed. Unguessable,
+    // revocable, excluded from default queries.
+    calendarFeedToken: { type: String, default: null, index: true, sparse: true, select: false },
+    calendarFeedTokenCreatedAt: { type: Date, default: null },
 }, { minimize: false })
 
 UserSchema.pre('save', async function() {

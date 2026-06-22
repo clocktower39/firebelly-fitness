@@ -73,6 +73,13 @@ export const scheduleApi = {
       auth: false,
     }),
 
+  // Get/create/rotate the caller's secret iCalendar feed token.
+  getCalendarFeedToken: (rotate = false) =>
+    apiFetch("/calendar/feed/token", {
+      method: "POST",
+      body: { rotate },
+    }),
+
   getPublicTrainer: (trainerId) =>
     apiFetch(`/public/trainer/${encodeURIComponent(trainerId)}`, {
       auth: false,
