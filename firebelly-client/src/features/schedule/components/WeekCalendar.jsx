@@ -60,6 +60,7 @@ export default function WeekCalendar({
   getEventStyle,
   openActionForEvent,
   openRequestForEvent,
+  onRescheduleEvent,
   shareHideDetails,
   shareHighlightShown,
   shareShownKeys,
@@ -78,6 +79,63 @@ export default function WeekCalendar({
   weekCancelledTotals,
   weekEventCount,
 }) {
+  // Drag-to-reschedule (v1): mouse drag an event vertically within its day to
+  // change its time. Snaps to slots, previews live, preserves duration, and a
+  // movement threshold keeps a plain click opening the details dialog.
+  const eventDragRef = React.useRef(null);
+  const justDraggedRef = React.useRef(false);
+  const [eventDrag, setEventDrag] = React.useState(null); // { eventId, offsetSlots }
+
+  const handleEventMouseDown = (mouseEvent, event, day, dayIndex) => {
+    if (!isTrainerView || isShareMode || !onRescheduleEvent) return;
+    if (mouseEvent.button !== 0) return;
+    const style = getEventStyle(event, day);
+    if (!style) return;
+    mouseEvent.stopPropagation();
+    const startTopSlots = Math.round(style.top / SLOT_HEIGHT);
+    const eventSlots = Math.max(1, Math.round(style.height / SLOT_HEIGHT));
+    eventDragRef.current = {
+      event,
+      dayIndex,
+      startClientY: mouseEvent.clientY,
+      startTopSlots,
+      eventSlots,
+      offsetSlots: 0,
+      moved: false,
+    };
+
+    const handleMove = (moveEvent) => {
+      const drag = eventDragRef.current;
+      if (!drag) return;
+      const dy = moveEvent.clientY - drag.startClientY;
+      let offsetSlots = Math.round(dy / SLOT_HEIGHT);
+      const minOffset = -drag.startTopSlots;
+      const maxOffset = totalSlots - drag.eventSlots - drag.startTopSlots;
+      offsetSlots = Math.max(minOffset, Math.min(maxOffset, offsetSlots));
+      if (offsetSlots === drag.offsetSlots) return;
+      drag.offsetSlots = offsetSlots;
+      if (offsetSlots !== 0) drag.moved = true;
+      setEventDrag({ eventId: drag.event._id, offsetSlots });
+    };
+
+    const handleUp = () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      const drag = eventDragRef.current;
+      eventDragRef.current = null;
+      setEventDrag(null);
+      if (!drag || !drag.moved || drag.offsetSlots === 0) return;
+      justDraggedRef.current = true; // suppress the click that follows mouseup
+      const offsetMinutes = drag.offsetSlots * SLOT_MINUTES;
+      const newStart = dayjs(drag.event.startDateTime).add(offsetMinutes, "minute");
+      const newEnd = dayjs(drag.event.endDateTime).add(offsetMinutes, "minute");
+      onRescheduleEvent(drag.event, newStart.toISOString(), newEnd.toISOString());
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  };
+
   return (
     <Grid container size={12}>
       <Box
@@ -368,6 +426,12 @@ export default function WeekCalendar({
                             .map((event) => {
                               const style = getEventStyle(event, day);
                               if (!style) return null;
+                              const draggable =
+                                isTrainerView && !isShareMode && Boolean(onRescheduleEvent);
+                              const isBeingDragged = eventDrag?.eventId === event._id;
+                              const dragOffsetPx = isBeingDragged
+                                ? eventDrag.offsetSlots * SLOT_HEIGHT
+                                : 0;
                               return (
                                 <Box
                                   key={event._id}
@@ -407,13 +471,31 @@ export default function WeekCalendar({
                                     py: 0.25,
                                     overflow: "hidden",
                                     opacity: event.status === "CANCELLED" ? 0.75 : 1,
-                                    cursor:
-                                      isTrainerView ||
-                                      (isClientView && event.eventType === "AVAILABILITY")
+                                    cursor: draggable
+                                      ? isBeingDragged
+                                        ? "grabbing"
+                                        : "grab"
+                                      : isClientView && event.eventType === "AVAILABILITY"
                                         ? "pointer"
                                         : "default",
+                                    transform: dragOffsetPx
+                                      ? `translateY(${dragOffsetPx}px)`
+                                      : "none",
+                                    zIndex: isBeingDragged ? 5 : 1,
+                                    boxShadow: isBeingDragged ? 4 : "none",
+                                    transition: isBeingDragged
+                                      ? "none"
+                                      : "transform 120ms ease-out",
+                                    userSelect: "none",
                                   }}
+                                  onMouseDown={(mouseEvent) =>
+                                    handleEventMouseDown(mouseEvent, event, day, dayIndex)
+                                  }
                                   onClick={() => {
+                                    if (justDraggedRef.current) {
+                                      justDraggedRef.current = false;
+                                      return;
+                                    }
                                     if (isTrainerView) {
                                       openActionForEvent(event);
                                       return;
