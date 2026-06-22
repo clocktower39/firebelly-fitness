@@ -3,6 +3,7 @@ import {
   Avatar,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -131,6 +132,7 @@ export default function EventActionDialogs({
   handleReopenEvent,
   openDeleteConfirm,
   handleSaveEdit,
+  savingEdit = false,
   openEventActionDialog,
   setOpenEventActionDialog,
   eventActionTarget,
@@ -840,8 +842,13 @@ export default function EventActionDialogs({
               Delete
             </Button>
           )}
-          <Button variant="contained" onClick={handleSaveEdit}>
-            Save changes
+          <Button
+            variant="contained"
+            onClick={handleSaveEdit}
+            disabled={savingEdit}
+            startIcon={savingEdit ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            {savingEdit ? "Saving…" : "Save changes"}
           </Button>
         </DialogActions>
       </Dialog>
