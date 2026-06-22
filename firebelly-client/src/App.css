@@ -4,11 +4,3 @@ html, body, #root {
     background-color: #0f172a;
     min-height: 100vh;
 }
-
-/* Local Fonts if needed, otherwise rely on Google Fonts imported in index.css */
-/* 
-@font-face {
-    font-family: 'Rockwell';
-    src: url('./fonts/ROCK.TTF') format('truetype');
-}
-*/

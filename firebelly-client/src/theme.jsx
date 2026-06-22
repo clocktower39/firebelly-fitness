@@ -95,7 +95,10 @@ const moor = {
     },
     text: {
       primary: "#f8fafc", // Slate 50
-      secondary: "#94a3b8", // Slate 400
+      // Slate 300, not Slate 400: secondary text sits on the lightest surface
+      // (DashboardCard #334155), where Slate 400 only reaches 4.04:1. Slate 300
+      // hits 6.97:1 there and >=9.8:1 on darker surfaces, clearing WCAG AA.
+      secondary: "#cbd5e1", // Slate 300
     },
     divider: "rgba(148, 163, 184, 0.12)",
   },
