@@ -1,6 +1,6 @@
 import React from "react";
-import { Button, Container, Divider, Grid, TextField } from "@mui/material";
-import { ArrowBack, ArrowForward } from "@mui/icons-material";
+import { Button, Container, Divider, Grid, InputAdornment, TextField } from "@mui/material";
+import { ArrowBack, ArrowForward, CalendarMonth } from "@mui/icons-material";
 
 export default function WeekNavigator({
   selectedDate,
@@ -9,11 +9,20 @@ export default function WeekNavigator({
   weekRangeDisplay,
   dayjs,
 }) {
+  const openWeekPicker = () => {
+    if (weekPickerRef.current?.showPicker) {
+      weekPickerRef.current.showPicker();
+    } else if (weekPickerRef.current) {
+      weekPickerRef.current.click();
+      weekPickerRef.current.focus();
+    }
+  };
+
   return (
     <Grid container size={12}>
       <Container maxWidth="md" sx={{ height: "100%", paddingTop: "25px", maxWidth: "100%" }}>
         <Grid size={12} container sx={{ justifyContent: "center", flexWrap: "nowrap" }}>
-          <Button onClick={() => setSelectedDate(selectedDate.subtract(1, "week"))}>
+          <Button onClick={() => setSelectedDate(selectedDate.subtract(1, "week"))} aria-label="Previous week">
             <ArrowBack sx={{ color: "primary.dark" }} />
           </Button>
           <TextField
@@ -22,15 +31,26 @@ export default function WeekNavigator({
             type="text"
             color="primary"
             value={weekRangeDisplay}
-            onClick={() => {
-              if (weekPickerRef.current?.showPicker) {
-                weekPickerRef.current.showPicker();
-              } else if (weekPickerRef.current) {
-                weekPickerRef.current.click();
-                weekPickerRef.current.focus();
+            onClick={openWeekPicker}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openWeekPicker();
               }
             }}
-            slotProps={{ input: { readOnly: true } }}
+            aria-label="Pick a week"
+            slotProps={{
+              input: {
+                readOnly: true,
+                sx: { cursor: "pointer" },
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <CalendarMonth fontSize="small" color="primary" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ "& .MuiInputBase-input": { cursor: "pointer" } }}
           />
           <Button onClick={() => setSelectedDate(selectedDate.add(1, "week"))}>
             <ArrowForward sx={{ color: "primary.dark" }} />

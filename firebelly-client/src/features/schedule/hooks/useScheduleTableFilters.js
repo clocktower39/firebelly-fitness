@@ -185,6 +185,42 @@ export default function useScheduleTableFilters({
     ]
   );
 
+  const activeFilterKeys = useMemo(() => {
+    const keys = new Set();
+    if (tableFilterDates.length) keys.add("date");
+    if (tableFilterTimes.length) keys.add("time");
+    if (tableFilterTypes.length) keys.add("type");
+    if (tableFilterStatuses.length) keys.add("status");
+    if (tableFilterClients.length) keys.add("client");
+    if (tableFilterPrices.length) keys.add("price");
+    return keys;
+  }, [
+    tableFilterClients,
+    tableFilterDates,
+    tableFilterPrices,
+    tableFilterStatuses,
+    tableFilterTimes,
+    tableFilterTypes,
+  ]);
+
+  const clearTableFilters = useCallback(() => {
+    setTableFilterTypes([]);
+    setTableFilterStatuses([]);
+    setTableFilterPrices([]);
+    setTableFilterDates([]);
+    setTableFilterTimes([]);
+    setTableFilterClients([]);
+    setTableFilterClientQuery("");
+  }, [
+    setTableFilterClientQuery,
+    setTableFilterClients,
+    setTableFilterDates,
+    setTableFilterPrices,
+    setTableFilterStatuses,
+    setTableFilterTimes,
+    setTableFilterTypes,
+  ]);
+
   const tableColumnCount = useMemo(() => {
     let count = 0;
     if (!isColumnHidden("date")) count += 1;
@@ -233,6 +269,8 @@ export default function useScheduleTableFilters({
     toggleColumnVisibility,
     showAllColumns,
     isTableFilterActive,
+    activeFilterKeys,
+    clearTableFilters,
     tableColumnCount,
   };
 }

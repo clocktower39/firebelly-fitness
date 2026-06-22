@@ -2,6 +2,7 @@ import React from "react";
 import {
   Avatar,
   Box,
+  Button,
   Card,
   CardContent,
   Grid,
@@ -13,7 +14,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { Settings } from "@mui/icons-material";
+import { IosShare, Settings } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { HEADER_HEIGHT, SLOT_HEIGHT, SLOT_MINUTES } from "../constants";
 
@@ -143,6 +144,14 @@ export default function WeekCalendar({
                     <ToggleButton value={0.85}>Compact</ToggleButton>
                     <ToggleButton value={1}>Normal</ToggleButton>
                   </ToggleButtonGroup>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<IosShare fontSize="small" />}
+                    onClick={(event) => setCalendarMenuAnchor(event.currentTarget)}
+                  >
+                    Copy / Share
+                  </Button>
                 </Stack>
               )}
               <Menu
