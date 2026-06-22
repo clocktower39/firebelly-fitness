@@ -7,6 +7,8 @@ import {
   CardContent,
   Grid,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import dayjs from "dayjs";
@@ -22,6 +24,8 @@ import SchedulePageHeader from "./components/SchedulePageHeader";
 import ScheduleTableFilterMenu from "./components/ScheduleTableFilterMenu";
 import UnassignedWorkoutsPanel from "./components/UnassignedWorkoutsPanel";
 import WeekCalendar from "./components/WeekCalendar";
+import AgendaView from "./components/AgendaView";
+import CalendarSubscribeDialog from "./components/CalendarSubscribeDialog";
 import WeekNavigator from "./components/WeekNavigator";
 import usePersistentSchedulePreference from "./hooks/usePersistentSchedulePreference";
 import useScheduleClipboardShare from "./hooks/useScheduleClipboardShare";
@@ -170,6 +174,11 @@ export default function Schedule() {
     "schedule.calendarScale",
     1
   );
+  const [viewMode, setViewMode] = usePersistentSchedulePreference(
+    "schedule.viewMode",
+    typeof window !== "undefined" && window.innerWidth < 768 ? "agenda" : "calendar"
+  );
+  const [openSubscribe, setOpenSubscribe] = useState(false);
   const [trainerBookSessionTypeId, setTrainerBookSessionTypeId] = useState("");
 
   const weekCaptureRef = useRef(null);
@@ -1377,6 +1386,40 @@ export default function Schedule() {
           dayjs={dayjs}
         />
 
+        {!isShareMode && (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}
+          >
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={viewMode}
+              onChange={(_, value) => value && setViewMode(value)}
+            >
+              <ToggleButton value="calendar">Calendar</ToggleButton>
+              <ToggleButton value="agenda">Agenda</ToggleButton>
+            </ToggleButtonGroup>
+            <Button size="small" variant="outlined" onClick={() => setOpenSubscribe(true)}>
+              Subscribe to calendar
+            </Button>
+          </Stack>
+        )}
+
+        {viewMode === "agenda" && !isShareMode ? (
+          <AgendaView
+            events={weekEventRows}
+            weekDays={weekDays}
+            isTrainerView={isTrainerView}
+            isClientView={isClientView}
+            selectedDate={selectedDate}
+            getEventDisplayName={getEventDisplayName}
+            getSessionTypeLabel={getSessionTypeLabel}
+            openActionForEvent={openActionForEvent}
+            openRequestForEvent={openRequestForEvent}
+          />
+        ) : (
         <WeekCalendar
           weekCaptureRef={weekCaptureRef}
           weekScrollRef={weekScrollRef}
@@ -1438,6 +1481,7 @@ export default function Schedule() {
           weekCancelledTotals={weekCancelledTotals}
           weekEventCount={weekEventCount}
         />
+        )}
 
         <ScheduleControlsCard
           user={user}
@@ -1813,6 +1857,8 @@ export default function Schedule() {
         deleting={deleting}
         dayjs={dayjs}
       />
+
+      <CalendarSubscribeDialog open={openSubscribe} onClose={() => setOpenSubscribe(false)} />
     </>
   );
 }

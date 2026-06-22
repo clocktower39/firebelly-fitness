@@ -1,6 +1,8 @@
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const ScheduleEvent = require("../models/scheduleEvent");
 const User = require("../models/user");
+const GuardianLink = require("../models/guardianLink");
 const Relationship = require("../models/relationship");
 const SessionType = require("../models/sessionType");
 const { createEventDebitEntry, reverseEventDebitEntry } = require("../services/billingLedgerService");
@@ -816,7 +818,135 @@ const delete_schedule_event = async (req, res, next) => {
   }
 };
 
+// ---- iCalendar (.ics) subscribe feed ---------------------------------------
+
+const ICS_WINDOW_PAST_DAYS = 7;
+const ICS_WINDOW_FUTURE_DAYS = 180;
+
+const icsStamp = (value) =>
+  new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+
+const icsEscape = (value) =>
+  String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+
+const buildCalendarFeed = (events, sessionTypeNames, calendarName) => {
+  const now = icsStamp(new Date());
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Firebelly Fitness//Scheduler//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${icsEscape(calendarName)}`,
+    "X-WR-CALDESC:Firebelly Fitness schedule",
+  ];
+  events.forEach((event) => {
+    const label =
+      event.publicLabel ||
+      event.customClientName ||
+      sessionTypeNames.get(String(event.sessionTypeId)) ||
+      "Training session";
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${event._id}@firebellyfitness.com`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${icsStamp(event.startDateTime)}`,
+      `DTEND:${icsStamp(event.endDateTime)}`,
+      `SUMMARY:${icsEscape(`Firebelly · ${label}`)}`,
+      event.notes ? `DESCRIPTION:${icsEscape(event.notes)}` : null,
+      "STATUS:CONFIRMED",
+      "END:VEVENT"
+    );
+  });
+  lines.push("END:VCALENDAR");
+  return lines.filter(Boolean).join("\r\n");
+};
+
+// Public, token-authed read feed. Calendar apps fetch this — no JWT possible.
+const get_calendar_feed_ics = async (req, res, next) => {
+  try {
+    const token = String(req.params.filename || "").replace(/\.ics$/i, "");
+    if (!token || token.length < 16) {
+      return res.status(404).send("Not found");
+    }
+    const user = await User.findOne({ calendarFeedToken: token })
+      .select("_id firstName")
+      .lean();
+    if (!user) {
+      return res.status(404).send("Not found");
+    }
+
+    const childLinks = await GuardianLink.find({ guardianId: user._id, status: "active" })
+      .select("childId")
+      .lean();
+    const clientIds = [user._id, ...childLinks.map((link) => link.childId)];
+
+    const windowStart = new Date(Date.now() - ICS_WINDOW_PAST_DAYS * 86400000);
+    const windowEnd = new Date(Date.now() + ICS_WINDOW_FUTURE_DAYS * 86400000);
+
+    const events = await ScheduleEvent.find({
+      status: { $nin: ["CANCELLED"] },
+      eventType: { $ne: "AVAILABILITY" },
+      startDateTime: { $gte: windowStart, $lte: windowEnd },
+      $or: [{ trainerId: user._id }, { clientId: { $in: clientIds } }],
+    })
+      .sort({ startDateTime: 1 })
+      .lean();
+
+    const sessionTypeIds = [
+      ...new Set(events.map((e) => e.sessionTypeId).filter(Boolean).map(String)),
+    ];
+    const sessionTypeNames = new Map();
+    if (sessionTypeIds.length) {
+      const types = await SessionType.find({ _id: { $in: sessionTypeIds } })
+        .select("name")
+        .lean();
+      types.forEach((type) => sessionTypeNames.set(String(type._id), type.name));
+    }
+
+    const calendarName = `Firebelly — ${user.firstName || "My"} schedule`;
+    const ics = buildCalendarFeed(events, sessionTypeNames, calendarName);
+
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", 'inline; filename="firebelly.ics"');
+    res.setHeader("Cache-Control", "private, max-age=300");
+    return res.status(200).send(ics);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Authed: return the caller's feed token, creating one (or rotating) as needed.
+const get_or_create_calendar_feed = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const rotate = Boolean(req.body && req.body.rotate);
+    const user = await User.findById(userId).select("+calendarFeedToken");
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+    if (!user.calendarFeedToken || rotate) {
+      user.calendarFeedToken = crypto.randomBytes(32).toString("hex");
+      user.calendarFeedTokenCreatedAt = new Date();
+      await user.save();
+    }
+    return res.json({
+      token: user.calendarFeedToken,
+      feedPath: `/calendar/feed/${user.calendarFeedToken}.ics`,
+      createdAt: user.calendarFeedTokenCreatedAt,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
+  get_calendar_feed_ics,
+  get_or_create_calendar_feed,
   get_schedule_range,
   create_schedule_event,
   update_schedule_event,
