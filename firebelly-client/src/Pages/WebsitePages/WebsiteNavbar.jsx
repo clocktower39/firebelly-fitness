@@ -42,7 +42,7 @@ const classes = {
     px: 1.5,
     minWidth: "44px",
     "&:hover": {
-      backgroundColor: "rgba(249, 115, 22, 0.12)",
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
     },
   },
   NavAccountContainer: {
@@ -87,7 +87,7 @@ export default function WebsiteNavbar() {
               width: 56,
               height: 56,
               p: 0.5,
-              "&:hover": { backgroundColor: "rgba(249, 115, 22, 0.12)" },
+              "&:hover": { backgroundColor: "rgba(16, 185, 129, 0.12)" },
             }}
           >
             <BrandLogo variant="mark" sx={{ width: "100%", height: "100%" }} />
@@ -145,14 +145,14 @@ export default function WebsiteNavbar() {
             aria-label="Open Firebelly Fitness app"
             sx={{
               ...classes.NavAccountOptions,
-              color: "#111827",
-              backgroundColor: "#f97316",
+              color: "#ffffff",
+              background: "linear-gradient(45deg, #10b981 30%, #34d399 90%)",
               borderRadius: "8px",
               minHeight: 38,
               minWidth: { xs: 44, sm: 116 },
               px: { xs: 1, sm: 1.75 },
               whiteSpace: "nowrap",
-              "&:hover": { backgroundColor: "#fb923c" },
+              "&:hover": { background: "linear-gradient(45deg, #047857 30%, #10b981 90%)" },
             }}
           >
             {wide ? "Open App" : "App"}
