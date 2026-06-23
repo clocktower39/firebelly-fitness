@@ -54,6 +54,7 @@ import {
 dayjs.extend(utc);
 
 import {
+  DEFAULT_BOOKING_MINUTES,
   EMPTY_SCHEDULE_DATA,
   EMPTY_WORKOUT_QUEUE_BY_ACCOUNT,
   EMPTY_WORKOUTS,
@@ -189,6 +190,7 @@ export default function Schedule() {
 
   const isTrainerView = user.isTrainer && !bookingAsClient;
   const isClientView = !isTrainerView;
+  const defaultSessionLength = user?.defaultSessionLengthMinutes || DEFAULT_BOOKING_MINUTES;
   const {
     sessionTypes,
     sessionTypesStatus,
@@ -430,6 +432,10 @@ export default function Schedule() {
   const handleOpenAvailability = () => {
     setAvailabilityType("MANUAL");
     setAvailabilityRecurrence("none");
+    // Pre-fill the end time to start + the trainer's default session length.
+    setEndTime(
+      dayjs(`2000-01-01T${startTime}`).add(defaultSessionLength, "minute").format("HH:mm")
+    );
     setOpenAvailabilityDialog(true);
   };
 
@@ -982,18 +988,23 @@ export default function Schedule() {
     }
   }, [openTrainerBookDialog, trainerBookingStartOptions]);
 
+  // Session type duration wins when one is selected; otherwise the trainer's default length.
+  const trainerBookDuration =
+    sessionTypes.find((type) => type._id === trainerBookSessionTypeId)?.durationMinutes ||
+    defaultSessionLength;
+
   useEffect(() => {
     if (!openTrainerBookDialog) return;
     if (trainerBookingEndOptions.length > 0) {
-      setTrainerBookEndSlot((prev) =>
-        trainerBookingEndOptions.some((option) => option.value === prev)
-          ? prev
-          : pickDefaultBookingEnd(trainerBookSlot, trainerBookingEndOptions)
+      // Re-default whenever the start or effective duration changes (incl. switching
+      // session type). Manual end-slot edits don't alter these deps, so they persist.
+      setTrainerBookEndSlot(
+        pickDefaultBookingEnd(trainerBookSlot, trainerBookingEndOptions, trainerBookDuration)
       );
     } else {
       setTrainerBookEndSlot("");
     }
-  }, [openTrainerBookDialog, trainerBookSlot, trainerBookingEndOptions]);
+  }, [openTrainerBookDialog, trainerBookSlot, trainerBookingEndOptions, trainerBookDuration]);
 
   const handleAttachQueuedWorkout = async (workoutId) => {
     const targetEvent = attachableEvents.find((event) => event._id === queueTargetEventId);

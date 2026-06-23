@@ -24,6 +24,7 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "gymBarcode",
   "themeMode",
   "workoutWeightUnit",
+  "defaultSessionLengthMinutes",
   "customThemes",
   "weeklyFrequency",
   "preferredWorkoutDays",

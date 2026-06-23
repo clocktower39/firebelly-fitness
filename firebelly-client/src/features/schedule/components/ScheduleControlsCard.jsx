@@ -15,6 +15,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
+import DefaultSessionLengthField from "../../../Components/AccountComponents/DefaultSessionLengthField";
 
 export default function ScheduleControlsCard({
   user,
@@ -65,6 +66,7 @@ export default function ScheduleControlsCard({
                 >
                   Manage session types
                 </Button>
+                <DefaultSessionLengthField size="small" sx={{ minWidth: 0 }} />
               </Stack>
             )}
 

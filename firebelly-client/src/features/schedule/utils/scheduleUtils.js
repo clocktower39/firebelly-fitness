@@ -88,11 +88,15 @@ export const buildBookingEndOptions = (event, startValue) => {
   return options;
 };
 
-export const pickDefaultBookingEnd = (startValue, endOptions) => {
+export const pickDefaultBookingEnd = (
+  startValue,
+  endOptions,
+  durationMinutes = DEFAULT_BOOKING_MINUTES
+) => {
   if (!startValue || endOptions.length === 0) return "";
   const selectedStart = dayjs(startValue);
   const preferred = endOptions.find(
-    (option) => option.time.diff(selectedStart, "minute") >= DEFAULT_BOOKING_MINUTES
+    (option) => option.time.diff(selectedStart, "minute") >= durationMinutes
   );
   return (preferred || endOptions[endOptions.length - 1]).value;
 };

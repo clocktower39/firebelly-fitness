@@ -50,6 +50,7 @@ const UserSchema = new mongoose.Schema({
     },
     themeMode: { type: String, required: true, default: 'light', },
     workoutWeightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
+    defaultSessionLengthMinutes: { type: Number, default: 60, min: 5, max: 480 },
     customThemes: {
         type: [
             {
