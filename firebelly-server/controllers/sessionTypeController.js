@@ -1,9 +1,20 @@
 const SessionType = require("../models/sessionType");
 const SessionTypeEntitlement = require("../models/sessionTypeEntitlement");
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
+const ScheduleEvent = require("../models/scheduleEvent");
 const Relationship = require("../models/relationship");
 
 const ensureTrainer = (user) => user && user.isTrainer;
+
+// A type with any booking or ledger reference is "used" — its price/duration are
+// frozen (change via reprice/clone) and it can't be hard-deleted (archive instead).
+const typeHasHistory = async (sessionTypeId) => {
+  const [ledger, event] = await Promise.all([
+    BillingLedgerEntry.exists({ sessionTypeId }),
+    ScheduleEvent.exists({ sessionTypeId }),
+  ]);
+  return Boolean(ledger || event);
+};
 
 const ensureRelationship = async (trainerId, clientId) =>
   Relationship.findOne({ trainer: trainerId, client: clientId, accepted: true });
@@ -36,55 +47,27 @@ const DEFAULT_SESSION_TYPES = [
   { name: "30 Min Session", durationMinutes: 30, creditsRequired: 0.5 },
 ];
 
+// Seed starter session types only for a brand-new trainer (no types at all).
+// After that the trainer manages their own — we never resurrect or force-edit
+// (that would fight archiving and re-priced clones).
 const ensureDefaultSessionTypes = async (trainerId) => {
-  const names = DEFAULT_SESSION_TYPES.map((type) => type.name);
-  const existing = await SessionType.find({ trainerId, name: { $in: names } }).lean();
-  const existingMap = new Map(existing.map((type) => [type.name, type]));
-
-  const creates = [];
-  const updates = [];
-
-  DEFAULT_SESSION_TYPES.forEach((spec) => {
-    const found = existingMap.get(spec.name);
-    if (!found) {
-      creates.push(
-        new SessionType({
-          trainerId,
-          name: spec.name,
-          description: "",
-          durationMinutes: spec.durationMinutes,
-          creditsRequired: spec.creditsRequired,
-          defaultPrice: null,
-          currency: "USD",
-          defaultPayout: null,
-          payoutCurrency: "USD",
-          active: true,
-          isDefault: true,
-        }).save()
-      );
-    } else if (
-      found.isDefault !== true ||
-      Number(found.durationMinutes) !== Number(spec.durationMinutes) ||
-      Number(found.creditsRequired) !== Number(spec.creditsRequired)
-    ) {
-      updates.push(
-        SessionType.updateOne(
-          { _id: found._id },
-          {
-            $set: {
-              isDefault: true,
-              durationMinutes: spec.durationMinutes,
-              creditsRequired: spec.creditsRequired,
-            },
-          }
-        )
-      );
-    }
-  });
-
-  if (creates.length || updates.length) {
-    await Promise.all([...creates, ...updates]);
-  }
+  const count = await SessionType.countDocuments({ trainerId });
+  if (count > 0) return;
+  await SessionType.insertMany(
+    DEFAULT_SESSION_TYPES.map((spec) => ({
+      trainerId,
+      name: spec.name,
+      description: "",
+      durationMinutes: spec.durationMinutes,
+      creditsRequired: spec.creditsRequired,
+      defaultPrice: null,
+      currency: "USD",
+      defaultPayout: null,
+      payoutCurrency: "USD",
+      active: true,
+      isDefault: true,
+    }))
+  );
 };
 
 const list_session_types = async (req, res, next) => {
@@ -204,13 +187,12 @@ const update_session_type = async (req, res, next) => {
       ...(active !== undefined ? { active: Boolean(active) } : {}),
     };
 
-    if (existing.isDefault) {
-      const spec = DEFAULT_SESSION_TYPES.find((entry) => entry.name === existing.name);
-      updates.name = existing.name;
-      if (spec) {
-        updates.durationMinutes = spec.durationMinutes;
-        updates.creditsRequired = spec.creditsRequired;
-      }
+    // Once a type has history, its rate/duration/credits are frozen — those
+    // changes must go through reprice (archive + clone) to protect past purchases.
+    if (await typeHasHistory(id)) {
+      ["durationMinutes", "creditsRequired", "defaultPrice", "defaultPayout", "currency", "payoutCurrency"].forEach(
+        (field) => delete updates[field]
+      );
     }
     const updated = await SessionType.findByIdAndUpdate(id, updates, { returnDocument: "after" });
     return res.json({ sessionType: updated });
@@ -230,11 +212,81 @@ const delete_session_type = async (req, res, next) => {
     if (!existing || String(existing.trainerId) !== String(user._id)) {
       return res.status(404).json({ error: "Session type not found." });
     }
-    if (existing.isDefault) {
-      return res.status(400).json({ error: "Default session types cannot be deleted." });
+    if (await typeHasHistory(id)) {
+      return res
+        .status(400)
+        .json({ error: "This session type has bookings or purchases — archive it instead." });
     }
     await SessionType.deleteOne({ _id: id });
     return res.json({ success: true });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const archive_session_type = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!ensureTrainer(user)) {
+      return res.status(403).json({ error: "Trainer access required." });
+    }
+    const existing = await SessionType.findById(req.params.id);
+    if (!existing || String(existing.trainerId) !== String(user._id)) {
+      return res.status(404).json({ error: "Session type not found." });
+    }
+    existing.archivedAt = existing.archivedAt || new Date();
+    existing.active = false;
+    await existing.save();
+    return res.json({ sessionType: existing });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Change a type's rate: archive the current version and create a clone at the new
+// rate (same name/identity). Clients with history/entitlement keep the old rate.
+const reprice_session_type = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!ensureTrainer(user)) {
+      return res.status(403).json({ error: "Trainer access required." });
+    }
+    const existing = await SessionType.findById(req.params.id);
+    if (!existing || String(existing.trainerId) !== String(user._id)) {
+      return res.status(404).json({ error: "Session type not found." });
+    }
+    const { defaultPrice, defaultPayout, currency, payoutCurrency, durationMinutes, creditsRequired } =
+      req.body;
+    const num = (v, fallback) =>
+      v === "" || v === null ? null : Number.isFinite(Number(v)) ? Number(v) : fallback;
+
+    const clone = new SessionType({
+      trainerId: user._id,
+      name: existing.name,
+      description: existing.description,
+      durationMinutes:
+        durationMinutes !== undefined && Number.isFinite(Number(durationMinutes))
+          ? Number(durationMinutes)
+          : existing.durationMinutes,
+      creditsRequired:
+        creditsRequired !== undefined && Number.isFinite(Number(creditsRequired))
+          ? Number(creditsRequired)
+          : existing.creditsRequired,
+      defaultPrice: defaultPrice !== undefined ? num(defaultPrice, existing.defaultPrice) : existing.defaultPrice,
+      currency: currency || existing.currency,
+      defaultPayout: defaultPayout !== undefined ? num(defaultPayout, existing.defaultPayout) : existing.defaultPayout,
+      payoutCurrency: payoutCurrency || existing.payoutCurrency,
+      active: true,
+      isDefault: false,
+      previousVersionId: existing._id,
+    });
+
+    // Archive the old version FIRST so the "unique name among active" index holds.
+    existing.archivedAt = existing.archivedAt || new Date();
+    existing.active = false;
+    await existing.save();
+    const saved = await clone.save();
+    return res.json({ sessionType: saved, archivedId: existing._id });
   } catch (err) {
     return next(err);
   }
@@ -332,6 +384,8 @@ module.exports = {
   create_session_type,
   update_session_type,
   delete_session_type,
+  archive_session_type,
+  reprice_session_type,
   list_purchasable_types,
   grant_entitlement,
   revoke_entitlement,

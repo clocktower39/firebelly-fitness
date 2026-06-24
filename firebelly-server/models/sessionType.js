@@ -22,7 +22,12 @@ const sessionTypeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-sessionTypeSchema.index({ trainerId: 1, name: 1 }, { unique: true });
+// Names must be unique only among *active* (non-archived) types, so a re-priced
+// clone can reuse the same name while the old version is archived.
+sessionTypeSchema.index(
+  { trainerId: 1, name: 1 },
+  { unique: true, partialFilterExpression: { archivedAt: null } }
+);
 
 const SessionType = mongoose.model("SessionType", sessionTypeSchema);
 module.exports = SessionType;
