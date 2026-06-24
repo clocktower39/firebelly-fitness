@@ -5,32 +5,39 @@ import { scheduleApi } from "../../api/scheduleApi";
 import { useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
+  Box,
   Button,
   Card,
   CardContent,
   Divider,
   Grid,
+  IconButton,
   Stack,
   TextField,
   Typography,
   Chip,
   Select,
+  Menu,
   MenuItem,
   InputLabel,
   FormControl,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
 } from "@mui/material";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
+import { formatPrice } from "../../utils/currency";
+
+const STATUS_CHIP = {
+  DRAFT: { label: "Draft", color: "default" },
+  SENT: { label: "Sent", color: "info" },
+  PAID: { label: "Paid", color: "success" },
+  PAST_DUE: { label: "Past due", color: "warning" },
+  VOID: { label: "Void", color: "error" },
+};
 
 const defaultLineItem = () => ({
   itemType: "SESSION",
@@ -78,6 +85,9 @@ export default function Invoices() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidInvoice, setVoidInvoice] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("ALL");
+  const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
+  const [rowMenuInvoice, setRowMenuInvoice] = useState(null);
 
   useEffect(() => {
     if (user.isTrainer) {
@@ -343,6 +353,24 @@ export default function Invoices() {
       setError(err.message || "Unable to update invoice.");
     }
   };
+
+  const openRowMenu = (event, invoice) => {
+    setRowMenuAnchor(event.currentTarget);
+    setRowMenuInvoice(invoice);
+  };
+  const closeRowMenu = () => {
+    setRowMenuAnchor(null);
+    setRowMenuInvoice(null);
+  };
+  const startCreate = () => {
+    resetForm();
+    setError("");
+    setCreateOpen(true);
+  };
+
+  const filteredInvoices = invoiceList.filter(
+    (inv) => historyFilter === "ALL" || inv.status === historyFilter
+  );
 
   const handleDownloadPdf = async (invoice) => {
     try {
@@ -739,119 +767,175 @@ export default function Invoices() {
       {targetId && (
         <Grid container size={12}>
           <Card sx={{ width: "100%" }}>
-            <CardContent sx={{ overflowX: "auto" }}>
+            <CardContent>
               <Stack
-                direction="row"
-                sx={{ alignItems: "center", justifyContent: "space-between" }}
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1.5 }}
               >
-                <Typography variant="h6">Invoice History</Typography>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => {
-                    resetForm();
-                    setError("");
-                    setCreateOpen(true);
-                  }}
-                >
-                  New invoice
-                </Button>
+                <Typography variant="h6">Invoices</Typography>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <FormControl size="small" sx={{ minWidth: 130 }}>
+                    <InputLabel>Filter</InputLabel>
+                    <Select
+                      label="Filter"
+                      value={historyFilter}
+                      onChange={(event) => setHistoryFilter(event.target.value)}
+                    >
+                      <MenuItem value="ALL">All</MenuItem>
+                      <MenuItem value="DRAFT">Draft</MenuItem>
+                      <MenuItem value="SENT">Sent / requested</MenuItem>
+                      <MenuItem value="PAID">Paid</MenuItem>
+                      <MenuItem value="PAST_DUE">Past due</MenuItem>
+                      <MenuItem value="VOID">Void</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Button variant="contained" size="small" onClick={startCreate}>
+                    New invoice
+                  </Button>
+                </Stack>
               </Stack>
-              <Divider sx={{ my: 1 }} />
+
               {loadingInvoices ? (
-                <Typography color="text.secondary">Loading invoices...</Typography>
-              ) : invoiceList.length === 0 ? (
-                <Typography color="text.secondary">No invoices yet.</Typography>
+                <Typography color="text.secondary">Loading invoices…</Typography>
+              ) : filteredInvoices.length === 0 ? (
+                <Stack spacing={1} sx={{ alignItems: "center", py: 4 }}>
+                  <Typography color="text.secondary">
+                    {invoiceList.length === 0
+                      ? "No invoices yet."
+                      : "No invoices match this filter."}
+                  </Typography>
+                  {invoiceList.length === 0 && (
+                    <Button variant="outlined" size="small" onClick={startCreate}>
+                      Create the first one
+                    </Button>
+                  )}
+                </Stack>
               ) : (
-                <TableContainer sx={{ overflowX: "auto" }}>
-                  <Table size="small" sx={{ minWidth: 920 }}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Invoice #</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Issued</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Balance</TableCell>
-                      <TableCell align="right">Credits</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                    <TableBody>
-                      {invoiceList.map((invoice) => (
-                        <TableRow key={invoice._id}>
-                          <TableCell>{invoice.invoiceNumber}</TableCell>
-                          <TableCell>{invoice.status}</TableCell>
-                          <TableCell>
-                            {invoice.issuedAt ? dayjs(invoice.issuedAt).format("MMM D, YYYY") : "—"}
-                          </TableCell>
-                          <TableCell align="right">
-                            {Number(invoice.total || 0).toFixed(2)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {Number(invoice.balanceDue || 0).toFixed(2)}
-                          </TableCell>
-                        <TableCell align="right">{invoice.sessionCreditsTotal || 0}</TableCell>
-                        <TableCell align="right">
-                            <Stack direction="row" spacing={1} justifyContent="flex-end">
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => handleDownloadPdf(invoice)}
-                              >
-                                PDF
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => openEmailDialog(invoice)}
-                              >
-                                Email
-                              </Button>
-                            {invoice.status !== "PAID" && invoice.status !== "VOID" && (
+                <Stack spacing={1.5}>
+                  {filteredInvoices.map((invoice) => {
+                    const chip = STATUS_CHIP[invoice.status] || {
+                      label: invoice.status,
+                      color: "default",
+                    };
+                    const total = Number(invoice.total || 0);
+                    const balance = Number(invoice.balanceDue || 0);
+                    const canPay = invoice.status !== "PAID" && invoice.status !== "VOID";
+                    return (
+                      <Card key={invoice._id} variant="outlined">
+                        <CardContent sx={{ pb: 1.5, "&:last-child": { pb: 1.5 } }}>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
+                          >
+                            <Stack spacing={0.5}>
+                              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                  {invoice.invoiceNumber}
+                                </Typography>
+                                <Chip size="small" label={chip.label} color={chip.color} />
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary">
+                                {invoice.billToName || ""}
+                                {invoice.issuedAt
+                                  ? `${invoice.billToName ? " · " : ""}${dayjs(
+                                      invoice.issuedAt
+                                    ).format("MMM D, YYYY")}`
+                                  : ""}
+                              </Typography>
+                            </Stack>
+                            <Stack sx={{ textAlign: "right" }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                {formatPrice(total, invoice.currency)}
+                              </Typography>
+                              {balance > 0 ? (
+                                <Typography variant="caption" color="warning.main">
+                                  Balance {formatPrice(balance, invoice.currency)}
+                                </Typography>
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  Paid in full
+                                </Typography>
+                              )}
+                              {invoice.sessionCreditsTotal ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  +{invoice.sessionCreditsTotal} sessions
+                                </Typography>
+                              ) : null}
+                            </Stack>
+                          </Stack>
+
+                          <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: "center" }}>
+                            {canPay && (
                               <Button
                                 size="small"
                                 variant="contained"
                                 onClick={() => handleStatusUpdate(invoice._id, "PAID")}
                               >
-                                Mark Paid
+                                Mark paid
                               </Button>
                             )}
                             {invoice.status === "VOID" && (
                               <Button
                                 size="small"
-                                variant="contained"
+                                variant="outlined"
                                 onClick={() =>
-                                  handleStatusUpdate(
-                                    invoice._id,
-                                    Number(invoice.balanceDue || 0) <= 0 ? "PAID" : "SENT"
-                                  )
+                                  handleStatusUpdate(invoice._id, balance <= 0 ? "PAID" : "SENT")
                                 }
                               >
                                 Unvoid
                               </Button>
                             )}
-                            {invoice.status !== "VOID" && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="error"
-                                onClick={() => openVoidDialog(invoice)}
-                              >
-                                Void
-                              </Button>
-                            )}
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                            <Box sx={{ flexGrow: 1 }} />
+                            <IconButton
+                              size="small"
+                              aria-label="more actions"
+                              onClick={(event) => openRowMenu(event, invoice)}
+                            >
+                              <MoreVertIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </Stack>
               )}
             </CardContent>
           </Card>
         </Grid>
       )}
+
+      <Menu anchorEl={rowMenuAnchor} open={Boolean(rowMenuAnchor)} onClose={closeRowMenu}>
+        <MenuItem
+          onClick={() => {
+            handleDownloadPdf(rowMenuInvoice);
+            closeRowMenu();
+          }}
+        >
+          Download PDF
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            openEmailDialog(rowMenuInvoice);
+            closeRowMenu();
+          }}
+        >
+          Email
+        </MenuItem>
+        {rowMenuInvoice?.status !== "VOID" && (
+          <MenuItem
+            sx={{ color: "error.main" }}
+            onClick={() => {
+              openVoidDialog(rowMenuInvoice);
+              closeRowMenu();
+            }}
+          >
+            Void
+          </MenuItem>
+        )}
+      </Menu>
 
       {error && (
         <Grid container size={12}>
