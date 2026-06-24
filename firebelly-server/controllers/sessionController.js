@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Relationship = require("../models/relationship");
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
 
@@ -25,8 +26,20 @@ const get_session_summary = async (req, res, next) => {
       }
     }
 
+    // Aggregation $match does not auto-cast strings to ObjectId — cast explicitly.
+    if (
+      !mongoose.Types.ObjectId.isValid(trainerId) ||
+      !mongoose.Types.ObjectId.isValid(clientId)
+    ) {
+      return res.status(400).json({ error: "Invalid trainerId or clientId." });
+    }
+    const matchIds = {
+      trainerId: new mongoose.Types.ObjectId(trainerId),
+      clientId: new mongoose.Types.ObjectId(clientId),
+    };
+
     const ledgerSummary = await BillingLedgerEntry.aggregate([
-      { $match: { trainerId, clientId } },
+      { $match: matchIds },
       {
         $group: {
           _id: null,
@@ -48,7 +61,7 @@ const get_session_summary = async (req, res, next) => {
     const summary = ledgerSummary[0] || { balance: 0, credits: 0, debits: 0 };
 
     const byType = await BillingLedgerEntry.aggregate([
-      { $match: { trainerId, clientId } },
+      { $match: matchIds },
       {
         $group: {
           _id: "$sessionTypeId",

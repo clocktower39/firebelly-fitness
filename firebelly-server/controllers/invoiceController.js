@@ -8,7 +8,7 @@ const Group = require("../models/group");
 const User = require("../models/user");
 const Product = require("../models/product");
 const SessionType = require("../models/sessionType");
-const { getPurchasableTypes } = require("./sessionTypeController");
+const { areTypesPurchasable } = require("./sessionTypeController");
 const { createNotification } = require("../services/notificationService");
 const { sendEmail } = require("../services/emailService");
 const { buildInvoicePdf } = require("../services/invoicePdf");
@@ -334,15 +334,11 @@ const create_invoice = async (req, res, next) => {
       const sessionTypeIds = normalizedLineItems
         .filter((item) => item.itemType === "SESSION" && item.sessionTypeId)
         .map((item) => String(item.sessionTypeId));
-      if (sessionTypeIds.length) {
-        const purchasable = await getPurchasableTypes(userId, clientId);
-        const allowed = new Set(purchasable.map((t) => String(t._id)));
-        if (sessionTypeIds.some((id) => !allowed.has(id))) {
-          return res.status(400).json({
-            error:
-              "This client isn't eligible to buy one of these session types (archived or not entitled).",
-          });
-        }
+      if (!(await areTypesPurchasable(userId, clientId, sessionTypeIds))) {
+        return res.status(400).json({
+          error:
+            "This client isn't eligible to buy one of these session types (archived or not entitled).",
+        });
       }
     }
 
@@ -481,14 +477,10 @@ const request_invoice = async (req, res, next) => {
     const requestedSessionTypeIds = normalizedLineItems
       .filter((item) => item.itemType === "SESSION" && item.sessionTypeId)
       .map((item) => String(item.sessionTypeId));
-    if (requestedSessionTypeIds.length) {
-      const purchasable = await getPurchasableTypes(trainerId, userId);
-      const allowed = new Set(purchasable.map((t) => String(t._id)));
-      if (requestedSessionTypeIds.some((id) => !allowed.has(id))) {
-        return res
-          .status(400)
-          .json({ error: "You're not eligible to buy one of these session types." });
-      }
+    if (!(await areTypesPurchasable(trainerId, userId, requestedSessionTypeIds))) {
+      return res
+        .status(400)
+        .json({ error: "You're not eligible to buy one of these session types." });
     }
 
     const totals = calculateTotals({ lineItems: normalizedLineItems, tax, discount });

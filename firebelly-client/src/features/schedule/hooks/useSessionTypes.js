@@ -12,6 +12,7 @@ const defaultSessionTypeForm = {
   payoutCurrency: "USD",
   active: true,
   isDefault: false,
+  hasHistory: false,
 };
 
 const emptyRepriceForm = {
@@ -115,6 +116,7 @@ export default function useSessionTypes({ isTrainer }) {
       payoutCurrency: type.payoutCurrency || "USD",
       active: type.active !== false,
       isDefault: type.isDefault === true,
+      hasHistory: type.hasHistory === true,
     });
     setOpenSessionTypeFormDialog(true);
   };

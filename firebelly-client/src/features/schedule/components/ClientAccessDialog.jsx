@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import { scheduleApi } from "../api/scheduleApi";
+import { formatPrice } from "../../../utils/currency";
 
 // Grandfathering UI: explicitly grant a (usually brand-new) client access to buy an
 // ARCHIVED session type at its old rate, or revoke that access. Clients who already
@@ -135,8 +136,10 @@ export default function ClientAccessDialog({ open, onClose, clients, sessionType
                       {entitled && <Chip size="small" color="success" label="Granted" />}
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
-                      {type.defaultPrice != null ? `$${type.defaultPrice}` : "Price not set"} ·{" "}
-                      {type.durationMinutes || 60} min
+                      {type.defaultPrice != null
+                        ? formatPrice(type.defaultPrice, type.currency)
+                        : "Price not set"}{" "}
+                      · {type.durationMinutes || 60} min
                     </Typography>
                   </Stack>
                   <Button

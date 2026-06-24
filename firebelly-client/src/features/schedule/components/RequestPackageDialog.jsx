@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { scheduleApi } from "../api/scheduleApi";
 import { billingApi } from "../../../api/billingApi";
+import { formatPrice } from "../../../utils/currency";
 
 // Level 1.5: a client requests a session package from their trainer. This creates a
 // SENT invoice the trainer then confirms (marks paid) to release the credits.
@@ -111,7 +112,9 @@ export default function RequestPackageDialog({ open, onClose, trainerId, clientI
                 {types.map((t) => (
                   <MenuItem key={t._id} value={t._id}>
                     {t.name}
-                    {t.defaultPrice != null ? ` · $${t.defaultPrice} each` : ""}
+                    {t.defaultPrice != null
+                      ? ` · ${formatPrice(t.defaultPrice, t.currency)} each`
+                      : ""}
                   </MenuItem>
                 ))}
               </Select>
@@ -124,7 +127,9 @@ export default function RequestPackageDialog({ open, onClose, trainerId, clientI
               fullWidth
             />
             {selectedType && (
-              <Typography variant="subtitle2">Estimated total: ${total.toFixed(2)}</Typography>
+              <Typography variant="subtitle2">
+                Estimated total: {formatPrice(total, selectedType.currency)}
+              </Typography>
             )}
             <Typography variant="caption" color="text.secondary">
               This sends a request to your trainer. Sessions are added once they confirm

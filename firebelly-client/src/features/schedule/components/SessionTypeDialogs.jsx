@@ -50,6 +50,9 @@ export default function SessionTypeDialogs({
 
   const activeTypes = sessionTypes.filter((t) => !t.archivedAt);
   const archivedTypes = sessionTypes.filter((t) => t.archivedAt);
+  // Once a type has bookings/purchases the server freezes its rate/duration/credits,
+  // so disable those fields when editing such a type (rate changes go via "Change price").
+  const rateLocked = Boolean(editingSessionTypeId && sessionTypeForm.hasHistory);
 
   const priceLabel = (type) =>
     type.defaultPrice === null || type.defaultPrice === undefined
@@ -201,6 +204,13 @@ export default function SessionTypeDialogs({
               minRows={3}
               fullWidth
             />
+            {rateLocked && (
+              <Typography variant="caption" color="warning.main">
+                This type has bookings or purchases, so its rate, duration, and credits are
+                locked. Use “Change price” to set a new rate (it keeps the old one for
+                existing clients).
+              </Typography>
+            )}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <TextField
                 label="Duration (minutes)"
@@ -213,7 +223,7 @@ export default function SessionTypeDialogs({
                   }))
                 }
                 slotProps={{ htmlInput: { min: 1, step: "1" } }}
-                disabled={sessionTypeForm.isDefault}
+                disabled={sessionTypeForm.isDefault || rateLocked}
                 fullWidth
               />
               <TextField
@@ -227,7 +237,7 @@ export default function SessionTypeDialogs({
                   }))
                 }
                 slotProps={{ htmlInput: { min: 0, step: "0.5" } }}
-                disabled={sessionTypeForm.isDefault}
+                disabled={sessionTypeForm.isDefault || rateLocked}
                 fullWidth
               />
             </Stack>
@@ -240,9 +250,10 @@ export default function SessionTypeDialogs({
                   setSessionTypeForm((prev) => ({ ...prev, defaultPrice: event.target.value }))
                 }
                 slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                disabled={rateLocked}
                 fullWidth
               />
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={rateLocked}>
                 <InputLabel>Currency</InputLabel>
                 <Select
                   label="Currency"
@@ -266,9 +277,10 @@ export default function SessionTypeDialogs({
                   setSessionTypeForm((prev) => ({ ...prev, defaultPayout: event.target.value }))
                 }
                 slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                disabled={rateLocked}
                 fullWidth
               />
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={rateLocked}>
                 <InputLabel>Payout currency</InputLabel>
                 <Select
                   label="Payout currency"

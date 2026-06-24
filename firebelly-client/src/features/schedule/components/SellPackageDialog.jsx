@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import { scheduleApi } from "../api/scheduleApi";
 import { billingApi } from "../../../api/billingApi";
+import { formatPrice } from "../../../utils/currency";
 
 // Level 1 "sell a package": trainer records a sale -> creates a PAID invoice with a
 // SESSION line item, which lands credits on the client's ledger balance.
@@ -75,6 +76,8 @@ export default function SellPackageDialog({ open, onClose, clients, trainerId, o
   const priceNum = Number(unitPrice) || 0;
   const total = qtyNum * priceNum;
   const selectedType = types.find((t) => t._id === sessionTypeId);
+  const currency = selectedType?.currency || "USD";
+  const credits = qtyNum * (selectedType?.creditsRequired ?? 1);
 
   const handleConfirm = async () => {
     if (!clientId || !sessionTypeId || qtyNum < 1) return;
@@ -165,7 +168,8 @@ export default function SellPackageDialog({ open, onClose, clients, trainerId, o
           </Stack>
 
           <Typography variant="subtitle2">
-            Total: ${total.toFixed(2)} · {qtyNum} session{qtyNum === 1 ? "" : "s"} credited
+            Total: {formatPrice(total, currency)} · {credits} session{credits === 1 ? "" : "s"}{" "}
+            credited
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Records a paid invoice and adds the credits to the client&apos;s balance.

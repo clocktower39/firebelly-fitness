@@ -3,8 +3,42 @@ const SessionTypeEntitlement = require("../models/sessionTypeEntitlement");
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
 const ScheduleEvent = require("../models/scheduleEvent");
 const Relationship = require("../models/relationship");
+const Invoice = require("../models/invoice");
 
 const ensureTrainer = (user) => user && user.isTrainer;
+
+// Session types a client has genuinely purchased (implicit grandfathering) — credits
+// whose source invoice was VOIDed don't count, so a reversed purchase doesn't keep a
+// client eligible for a retired rate forever.
+const purchasedTypeIds = async (trainerId, clientId) => {
+  const credits = await BillingLedgerEntry.find({
+    trainerId,
+    clientId,
+    entryType: "CREDIT",
+    delta: { $gt: 0 },
+  })
+    .select("sessionTypeId sourceInvoiceId")
+    .lean();
+  if (!credits.length) return [];
+
+  const invoiceIds = [
+    ...new Set(credits.filter((c) => c.sourceInvoiceId).map((c) => String(c.sourceInvoiceId))),
+  ];
+  let voided = new Set();
+  if (invoiceIds.length) {
+    const voidedInvoices = await Invoice.find({ _id: { $in: invoiceIds }, status: "VOID" }).distinct(
+      "_id"
+    );
+    voided = new Set(voidedInvoices.map(String));
+  }
+
+  const ids = new Set();
+  credits.forEach((c) => {
+    if (c.sourceInvoiceId && voided.has(String(c.sourceInvoiceId))) return;
+    if (c.sessionTypeId) ids.add(String(c.sessionTypeId));
+  });
+  return [...ids];
+};
 
 // A type with any booking or ledger reference is "used" — its price/duration are
 // frozen (change via reprice/clone) and it can't be hard-deleted (archive instead).
@@ -25,7 +59,7 @@ const ensureRelationship = async (trainerId, clientId) =>
 const getPurchasableTypes = async (trainerId, clientId) => {
   const [active, historyTypeIds, entitlements] = await Promise.all([
     SessionType.find({ trainerId, active: true, archivedAt: null }).lean(),
-    BillingLedgerEntry.distinct("sessionTypeId", { trainerId, clientId, delta: { $gt: 0 } }),
+    purchasedTypeIds(trainerId, clientId),
     SessionTypeEntitlement.find({ trainerId, clientId }).lean(),
   ]);
 
@@ -40,6 +74,32 @@ const getPurchasableTypes = async (trainerId, clientId) => {
     extra.forEach((t) => byId.set(String(t._id), t));
   }
   return Array.from(byId.values());
+};
+
+// Lightweight eligibility check for the invoice/request hot paths: only queries the
+// specific submitted ids instead of building the client's whole purchasable set.
+const areTypesPurchasable = async (trainerId, clientId, sessionTypeIds) => {
+  const ids = [...new Set((sessionTypeIds || []).map(String))].filter(Boolean);
+  if (!ids.length) return true;
+  const activeIds = await SessionType.find({
+    trainerId,
+    _id: { $in: ids },
+    active: true,
+    archivedAt: null,
+  }).distinct("_id");
+  const allowed = new Set(activeIds.map(String));
+  const remaining = ids.filter((id) => !allowed.has(id));
+  if (!remaining.length) return true;
+  const [history, entitled] = await Promise.all([
+    purchasedTypeIds(trainerId, clientId),
+    SessionTypeEntitlement.find({
+      trainerId,
+      clientId,
+      sessionTypeId: { $in: remaining },
+    }).distinct("sessionTypeId"),
+  ]);
+  const ok = new Set([...history.map(String), ...entitled.map(String)]);
+  return remaining.every((id) => ok.has(id));
 };
 
 const DEFAULT_SESSION_TYPES = [
@@ -78,7 +138,15 @@ const list_session_types = async (req, res, next) => {
     }
     await ensureDefaultSessionTypes(user._id);
     const types = await SessionType.find({ trainerId: user._id }).sort({ name: 1 }).lean();
-    return res.json({ sessionTypes: types });
+    // Flag which types have bookings/purchases so the UI knows their rate is frozen
+    // (edits to rate must go through "Change price").
+    const [ledgerIds, eventIds] = await Promise.all([
+      BillingLedgerEntry.distinct("sessionTypeId", { trainerId: user._id }),
+      ScheduleEvent.distinct("sessionTypeId", { trainerId: user._id }),
+    ]);
+    const used = new Set([...ledgerIds, ...eventIds].filter(Boolean).map(String));
+    const withFlags = types.map((t) => ({ ...t, hasHistory: used.has(String(t._id)) }));
+    return res.json({ sessionTypes: withFlags });
   } catch (err) {
     return next(err);
   }
@@ -127,6 +195,9 @@ const create_session_type = async (req, res, next) => {
     const saved = await sessionType.save();
     return res.json({ sessionType: saved });
   } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: "A session type with that name already exists." });
+    }
     return next(err);
   }
 };
@@ -197,6 +268,9 @@ const update_session_type = async (req, res, next) => {
     const updated = await SessionType.findByIdAndUpdate(id, updates, { returnDocument: "after" });
     return res.json({ sessionType: updated });
   } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: "A session type with that name already exists." });
+    }
     return next(err);
   }
 };
@@ -211,6 +285,11 @@ const delete_session_type = async (req, res, next) => {
     const existing = await SessionType.findById(id);
     if (!existing || String(existing.trainerId) !== String(user._id)) {
       return res.status(404).json({ error: "Session type not found." });
+    }
+    if (existing.isDefault) {
+      return res
+        .status(400)
+        .json({ error: "Default session types can be archived but not deleted." });
     }
     if (await typeHasHistory(id)) {
       return res
@@ -288,8 +367,10 @@ const reprice_session_type = async (req, res, next) => {
     if (!existing || String(existing.trainerId) !== String(user._id)) {
       return res.status(404).json({ error: "Session type not found." });
     }
-    const { defaultPrice, defaultPayout, currency, payoutCurrency, durationMinutes, creditsRequired } =
-      req.body;
+    // Reprice changes the RATE only (price/payout). Duration and credits define the
+    // type's identity and carry over unchanged, so a re-priced clone is the "same"
+    // session just at a new rate — no ambiguous duplicates in the buy dropdowns.
+    const { defaultPrice, defaultPayout, currency, payoutCurrency } = req.body;
     const num = (v, fallback) =>
       v === "" || v === null ? null : Number.isFinite(Number(v)) ? Number(v) : fallback;
 
@@ -297,14 +378,8 @@ const reprice_session_type = async (req, res, next) => {
       trainerId: user._id,
       name: existing.name,
       description: existing.description,
-      durationMinutes:
-        durationMinutes !== undefined && Number.isFinite(Number(durationMinutes))
-          ? Number(durationMinutes)
-          : existing.durationMinutes,
-      creditsRequired:
-        creditsRequired !== undefined && Number.isFinite(Number(creditsRequired))
-          ? Number(creditsRequired)
-          : existing.creditsRequired,
+      durationMinutes: existing.durationMinutes,
+      creditsRequired: existing.creditsRequired,
       defaultPrice: defaultPrice !== undefined ? num(defaultPrice, existing.defaultPrice) : existing.defaultPrice,
       currency: currency || existing.currency,
       defaultPayout: defaultPayout !== undefined ? num(defaultPayout, existing.defaultPayout) : existing.defaultPayout,
@@ -321,6 +396,9 @@ const reprice_session_type = async (req, res, next) => {
     const saved = await clone.save();
     return res.json({ sessionType: saved, archivedId: existing._id });
   } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: "A session type with that name already exists." });
+    }
     return next(err);
   }
 };
@@ -362,6 +440,10 @@ const grant_entitlement = async (req, res, next) => {
     const { clientId, sessionTypeId, note } = req.body;
     if (!clientId || !sessionTypeId) {
       return res.status(400).json({ error: "clientId and sessionTypeId are required." });
+    }
+    const relationship = await ensureRelationship(user._id, clientId);
+    if (!relationship) {
+      return res.status(403).json({ error: "No accepted relationship with this client." });
     }
     const sessionType = await SessionType.findOne({ _id: sessionTypeId, trainerId: user._id });
     if (!sessionType) {
@@ -413,6 +495,7 @@ const list_entitlements = async (req, res, next) => {
 module.exports = {
   ensureDefaultSessionTypes,
   getPurchasableTypes,
+  areTypesPurchasable,
   list_session_types,
   create_session_type,
   update_session_type,
