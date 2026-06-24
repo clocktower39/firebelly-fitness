@@ -1,24 +1,32 @@
 import React from "react";
 import {
+  Autocomplete,
   Avatar,
   Box,
   Button,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  Drawer,
   FormControl,
+  FormControlLabel,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Popover,
   Select,
   Stack,
+  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
@@ -40,7 +48,19 @@ export default function EventActionDialogs({
   quickBookWorkouts,
   quickBookQueuedWorkouts,
   quickBookSessionTypeId,
-  setQuickBookSessionTypeId,
+  handleSelectQuickBookSessionType,
+  quickBookPrice,
+  setQuickBookPrice,
+  quickBookPriceCurrency,
+  setQuickBookPriceCurrency,
+  quickBookPayout,
+  setQuickBookPayout,
+  quickBookPayoutCurrency,
+  setQuickBookPayoutCurrency,
+  quickBookRecurring,
+  setQuickBookRecurring,
+  quickBookRecurUntil,
+  setQuickBookRecurUntil,
   sessionTypes,
   handleQuickBookClient,
   handleQuickBookCreateWorkout,
@@ -165,162 +185,279 @@ export default function EventActionDialogs({
   setTrainerBookCustomPhone,
   handleTrainerBookSlot,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [showMoreOptions, setShowMoreOptions] = React.useState(false);
+
+  const moneyAdornment = {
+    input: { startAdornment: <InputAdornment position="start">$</InputAdornment> },
+  };
+
+  const selectionContent = selectionRange ? (
+    <Stack spacing={2} sx={{ mt: 1 }}>
+      {/* Time summary + editable times */}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: "center", justifyContent: "space-between" }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {selectionRangeAdjusted ? selectionRangeAdjusted.start.format("ddd, MMM D") : ""}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {selectionRangeAdjusted
+            ? `${selectionRangeAdjusted.start.format("h:mm A")} – ${selectionRangeAdjusted.end.format("h:mm A")}`
+            : ""}
+        </Typography>
+      </Stack>
+
+      {/* Client search */}
+      <Autocomplete
+        options={clients.filter((clientRel) => clientRel.accepted)}
+        getOptionLabel={(option) =>
+          `${option.client.firstName} ${option.client.lastName}`
+        }
+        isOptionEqualToValue={(option, value) => option.client._id === value.client._id}
+        value={clients.find((clientRel) => clientRel.client._id === quickBookClientId) || null}
+        onChange={(_, value) => setQuickBookClientId(value ? value.client._id : "")}
+        renderInput={(params) => (
+          <TextField {...params} label="Client" placeholder="Search clients…" />
+        )}
+        fullWidth
+      />
+
+      {/* Session type (auto-fills price/payout/duration) */}
+      <FormControl fullWidth>
+        <InputLabel>Session type</InputLabel>
+        <Select
+          label="Session type"
+          value={quickBookSessionTypeId}
+          onChange={(event) => handleSelectQuickBookSessionType(event.target.value)}
+        >
+          <MenuItem value="">No session type</MenuItem>
+          {sessionTypes.map((type) => (
+            <MenuItem key={type._id} value={type._id}>
+              {type.name}
+              {type.durationMinutes ? ` · ${type.durationMinutes} min` : ""}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      {/* Price + payout (auto-filled from session type, editable) */}
+      <Stack direction="row" spacing={1}>
+        <TextField
+          label="Price"
+          type="number"
+          value={quickBookPrice}
+          onChange={(event) => setQuickBookPrice(event.target.value)}
+          slotProps={moneyAdornment}
+          fullWidth
+        />
+        <TextField
+          label="Payout"
+          type="number"
+          value={quickBookPayout}
+          onChange={(event) => setQuickBookPayout(event.target.value)}
+          slotProps={moneyAdornment}
+          fullWidth
+        />
+      </Stack>
+
+      {/* Editable times */}
+      <Stack direction="row" spacing={1}>
+        <TextField
+          label="Start"
+          type="time"
+          value={selectionStartTime}
+          onChange={(event) => setSelectionStartTime(event.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          fullWidth
+        />
+        <TextField
+          label="End"
+          type="time"
+          value={selectionEndTime}
+          onChange={(event) => setSelectionEndTime(event.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          fullWidth
+        />
+      </Stack>
+
+      {/* Recurring */}
+      <Box>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={quickBookRecurring}
+              onChange={(event) => setQuickBookRecurring(event.target.checked)}
+            />
+          }
+          label="Repeat weekly"
+        />
+        <Collapse in={quickBookRecurring}>
+          <TextField
+            label="Repeat until"
+            type="date"
+            value={quickBookRecurUntil}
+            onChange={(event) => setQuickBookRecurUntil(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            helperText="Creates one session each week through this date."
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+        </Collapse>
+      </Box>
+
+      {/* Primary action */}
+      <Button
+        variant="contained"
+        size="large"
+        onClick={handleQuickBookClient}
+        disabled={!quickBookClientId}
+      >
+        Book session
+      </Button>
+
+      <Button
+        variant="text"
+        size="small"
+        onClick={() => setShowMoreOptions((prev) => !prev)}
+        sx={{ alignSelf: "flex-start" }}
+      >
+        {showMoreOptions ? "Fewer options ▲" : "More options ▾"}
+      </Button>
+
+      <Collapse in={showMoreOptions}>
+        <Stack spacing={2}>
+          {/* Attach / create workout */}
+          <FormControl fullWidth disabled={!quickBookClientId}>
+            <InputLabel>Workout (optional)</InputLabel>
+            <Select
+              label="Workout (optional)"
+              value={quickBookWorkoutId}
+              onChange={(event) => setQuickBookWorkoutId(event.target.value)}
+            >
+              <MenuItem value="">No workout</MenuItem>
+              {quickBookWorkouts.map((workout) => (
+                <MenuItem key={workout._id} value={workout._id}>
+                  {workout.title || "Untitled"} - {dayjs.utc(workout.date).format("MMM D")}
+                </MenuItem>
+              ))}
+              {quickBookQueuedWorkouts.map((workout) => (
+                <MenuItem key={workout._id} value={workout._id}>
+                  {workout.title || "Untitled"} - Queued
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant="outlined"
+            onClick={handleQuickBookCreateWorkout}
+            disabled={!quickBookClientId}
+          >
+            Create workout & book
+          </Button>
+
+          <Divider />
+
+          {/* Walk-in / custom client */}
+          <Typography variant="subtitle2">Walk-in / custom client</Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <TextField
+              label="Name"
+              value={quickBookCustomName}
+              onChange={(event) => setQuickBookCustomName(event.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Email"
+              value={quickBookCustomEmail}
+              onChange={(event) => setQuickBookCustomEmail(event.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Phone"
+              value={quickBookCustomPhone}
+              onChange={(event) => setQuickBookCustomPhone(event.target.value)}
+              fullWidth
+            />
+          </Stack>
+          <Button
+            variant="contained"
+            onClick={handleQuickBookCustom}
+            disabled={!quickBookCustomName.trim()}
+          >
+            Book custom client
+          </Button>
+
+          <Divider />
+
+          {/* Open availability slot */}
+          <Button
+            variant="outlined"
+            onClick={handleCreateSlotsFromSelection}
+            disabled={
+              !selectionRangeAdjusted ||
+              selectionRangeAdjusted.end.valueOf() <= selectionRangeAdjusted.start.valueOf()
+            }
+          >
+            Create open availability slot
+          </Button>
+        </Stack>
+      </Collapse>
+    </Stack>
+  ) : null;
+
   return (
     <>
-      <Dialog open={openSelectionDialog} onClose={handleClearSelection} maxWidth="md" fullWidth>
-        <DialogTitle>Selected Time Range</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          {selectionRange && (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Typography variant="body2">
-                {selectionRangeAdjusted
-                  ? `${selectionRangeAdjusted.start.format("ddd, MMM D h:mm A")} - ${selectionRangeAdjusted.end.format("h:mm A")}`
-                  : ""}
-              </Typography>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                <TextField
-                  label="Start time"
-                  type="time"
-                  value={selectionStartTime}
-                  onChange={(event) => setSelectionStartTime(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  fullWidth
-                />
-                <TextField
-                  label="End time"
-                  type="time"
-                  value={selectionEndTime}
-                  onChange={(event) => setSelectionEndTime(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  fullWidth
-                />
-              </Stack>
-              <Stack spacing={1}>
-                <Typography variant="subtitle2">Book a client</Typography>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1}
-                  sx={{ alignItems: { xs: "stretch", sm: "center" } }}
-                >
-                  <FormControl fullWidth>
-                    <InputLabel>Client</InputLabel>
-                    <Select
-                      label="Client"
-                      value={quickBookClientId}
-                      onChange={(event) => setQuickBookClientId(event.target.value)}
-                    >
-                      {clients
-                        .filter((clientRel) => clientRel.accepted)
-                        .map((clientRel) => (
-                          <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                            {clientRel.client.firstName} {clientRel.client.lastName}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth disabled={!quickBookClientId}>
-                    <InputLabel>Workout (optional)</InputLabel>
-                    <Select
-                      label="Workout (optional)"
-                      value={quickBookWorkoutId}
-                      onChange={(event) => setQuickBookWorkoutId(event.target.value)}
-                    >
-                      <MenuItem value="">No workout</MenuItem>
-                      {quickBookWorkouts.map((workout) => (
-                        <MenuItem key={workout._id} value={workout._id}>
-                          {workout.title || "Untitled"} - {dayjs.utc(workout.date).format("MMM D")}
-                        </MenuItem>
-                      ))}
-                      {quickBookQueuedWorkouts.map((workout) => (
-                        <MenuItem key={workout._id} value={workout._id}>
-                          {workout.title || "Untitled"} - Queued
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Stack>
-                <FormControl fullWidth>
-                  <InputLabel>Session type</InputLabel>
-                  <Select
-                    label="Session type"
-                    value={quickBookSessionTypeId}
-                    onChange={(event) => setQuickBookSessionTypeId(event.target.value)}
-                  >
-                    <MenuItem value="">No session type</MenuItem>
-                    {sessionTypes.map((type) => (
-                      <MenuItem key={type._id} value={type._id}>
-                        {type.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  <Button
-                    variant="contained"
-                    onClick={handleQuickBookClient}
-                    disabled={!quickBookClientId}
-                  >
-                    Book client
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={handleQuickBookCreateWorkout}
-                    disabled={!quickBookClientId}
-                  >
-                    Create workout & book
-                  </Button>
-                </Stack>
-              </Stack>
-              <Stack spacing={1}>
-                <Typography variant="subtitle2">Book custom client</Typography>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  <TextField
-                    label="Name"
-                    value={quickBookCustomName}
-                    onChange={(event) => setQuickBookCustomName(event.target.value)}
-                    fullWidth
-                  />
-                  <TextField
-                    label="Email"
-                    value={quickBookCustomEmail}
-                    onChange={(event) => setQuickBookCustomEmail(event.target.value)}
-                    fullWidth
-                  />
-                  <TextField
-                    label="Phone"
-                    value={quickBookCustomPhone}
-                    onChange={(event) => setQuickBookCustomPhone(event.target.value)}
-                    fullWidth
-                  />
-                </Stack>
-                <Button
-                  variant="contained"
-                  onClick={handleQuickBookCustom}
-                  disabled={!quickBookCustomName.trim()}
-                >
-                  Book custom client
-                </Button>
-              </Stack>
-              <Stack spacing={1}>
-                <Typography variant="subtitle2">Or open this slot</Typography>
-                <Button
-                  variant="outlined"
-                  onClick={handleCreateSlotsFromSelection}
-                  disabled={
-                    !selectionRangeAdjusted ||
-                    selectionRangeAdjusted.end.valueOf() <= selectionRangeAdjusted.start.valueOf()
-                  }
-                >
-                  Create open slot
-                </Button>
-              </Stack>
+      {isMobile ? (
+        <Drawer
+          anchor="bottom"
+          open={openSelectionDialog}
+          onClose={handleClearSelection}
+          slotProps={{
+            paper: {
+              sx: {
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                maxHeight: "92vh",
+              },
+            },
+          }}
+        >
+          <Box sx={{ p: 2, pb: 3 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 4,
+                bgcolor: "divider",
+                borderRadius: 2,
+                mx: "auto",
+                mb: 1.5,
+              }}
+            />
+            <Stack
+              direction="row"
+              sx={{ alignItems: "center", justifyContent: "space-between" }}
+            >
+              <Typography variant="h6">New session</Typography>
+              <Button size="small" onClick={handleClearSelection}>
+                Cancel
+              </Button>
             </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClearSelection}>Cancel</Button>
-        </DialogActions>
-      </Dialog>
+            {selectionContent}
+          </Box>
+        </Drawer>
+      ) : (
+        <Dialog open={openSelectionDialog} onClose={handleClearSelection} maxWidth="sm" fullWidth>
+          <DialogTitle>New session</DialogTitle>
+          <DialogContent sx={{ pt: 1 }}>{selectionContent}</DialogContent>
+          <DialogActions>
+            <Button onClick={handleClearSelection}>Cancel</Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       <Dialog
         open={openAvailabilityDialog}

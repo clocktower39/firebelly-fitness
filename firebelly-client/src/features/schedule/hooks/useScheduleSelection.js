@@ -10,6 +10,7 @@ export default function useScheduleSelection({
   setSelectedDate,
   setOpenSelectionDialog,
   onClearSelection,
+  defaultSessionMinutes = SLOT_MINUTES,
 }) {
   const [dragSelection, setDragSelection] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -97,11 +98,17 @@ export default function useScheduleSelection({
     if (!normalizedSelection) return null;
     const day = weekDays[normalizedSelection.dayIndex];
     const startMinutes = calendarStartHour * 60 + normalizedSelection.startIndex * SLOT_MINUTES;
-    const endMinutes = calendarStartHour * 60 + (normalizedSelection.endIndex + 1) * SLOT_MINUTES;
+    // A single-slot click uses the trainer's default session length; dragging across
+    // multiple slots stays exactly as sized by the drag.
+    const isSingleSlot = normalizedSelection.startIndex === normalizedSelection.endIndex;
+    const spanMinutes = isSingleSlot
+      ? Math.max(defaultSessionMinutes, SLOT_MINUTES)
+      : (normalizedSelection.endIndex - normalizedSelection.startIndex + 1) * SLOT_MINUTES;
+    const endMinutes = startMinutes + spanMinutes;
     const start = day.startOf("day").add(startMinutes, "minute");
     const end = day.startOf("day").add(endMinutes, "minute");
     return { start, end };
-  }, [calendarStartHour, normalizedSelection, weekDays]);
+  }, [calendarStartHour, normalizedSelection, weekDays, defaultSessionMinutes]);
 
   const handleSlotTouchEnd = () => {
     if (touchTimerRef.current) {

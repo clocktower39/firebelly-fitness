@@ -141,6 +141,12 @@ export default function Schedule() {
   const [quickBookCustomEmail, setQuickBookCustomEmail] = useState("");
   const [quickBookCustomPhone, setQuickBookCustomPhone] = useState("");
   const [quickBookSessionTypeId, setQuickBookSessionTypeId] = useState("");
+  const [quickBookPrice, setQuickBookPrice] = useState("");
+  const [quickBookPriceCurrency, setQuickBookPriceCurrency] = useState("USD");
+  const [quickBookPayout, setQuickBookPayout] = useState("");
+  const [quickBookPayoutCurrency, setQuickBookPayoutCurrency] = useState("USD");
+  const [quickBookRecurring, setQuickBookRecurring] = useState(false);
+  const [quickBookRecurUntil, setQuickBookRecurUntil] = useState("");
   const [openSelectionDialog, setOpenSelectionDialog] = useState(false);
   const [openCopyDialog, setOpenCopyDialog] = useState(false);
   const [copySourceEvent, setCopySourceEvent] = useState(null);
@@ -860,45 +866,97 @@ export default function Schedule() {
     [quickBookClientId, workoutQueue]
   );
 
+  // Selecting a session type auto-fills price, payout, and duration (all still
+  // editable for grandfathered-client overrides). Done on change (not in an effect)
+  // so manual edits afterward are never clobbered.
+  const handleSelectQuickBookSessionType = (typeId) => {
+    setQuickBookSessionTypeId(typeId);
+    const type = sessionTypes.find((t) => t._id === typeId);
+    if (!type) return;
+    setQuickBookPrice(type.defaultPrice != null ? String(type.defaultPrice) : "");
+    setQuickBookPriceCurrency(type.currency || "USD");
+    setQuickBookPayout(type.defaultPayout != null ? String(type.defaultPayout) : "");
+    setQuickBookPayoutCurrency(type.payoutCurrency || "USD");
+    if (type.durationMinutes && selectionStartTime) {
+      setSelectionEndTime(
+        dayjs(`2000-01-01T${selectionStartTime}`)
+          .add(type.durationMinutes, "minute")
+          .format("HH:mm")
+      );
+    }
+  };
+
+  // Expand the booking into weekly occurrences when "repeat weekly" is on and an end
+  // date is set. Each occurrence is created as its own appointment (the calendar has no
+  // recurrence expansion). Capped at 26 for safety.
+  const buildBookingOccurrences = () => {
+    const baseStart = selectionRangeAdjusted.start;
+    const baseEnd = selectionRangeAdjusted.end;
+    if (!quickBookRecurring || !quickBookRecurUntil) {
+      return [{ start: baseStart, end: baseEnd }];
+    }
+    const until = dayjs(quickBookRecurUntil).endOf("day");
+    const out = [];
+    for (let i = 0; i < 26; i++) {
+      const start = baseStart.add(i * 7, "day");
+      if (start.isAfter(until)) break;
+      out.push({ start, end: baseEnd.add(i * 7, "day") });
+    }
+    return out.length ? out : [{ start: baseStart, end: baseEnd }];
+  };
+
+  const quickBookPricingFields = () => ({
+    sessionTypeId: quickBookSessionTypeId || null,
+    priceAmount: quickBookPrice === "" ? null : Number(quickBookPrice),
+    priceCurrency: quickBookPriceCurrency,
+    payoutAmount: quickBookPayout === "" ? null : Number(quickBookPayout),
+    payoutCurrency: quickBookPayoutCurrency,
+  });
+
   const handleQuickBookClient = async () => {
     if (!isTrainerView || !selectionRangeAdjusted || !quickBookClientId) return;
-    const payload = {
-      startDateTime: selectionRangeAdjusted.start.toISOString(),
-      endDateTime: selectionRangeAdjusted.end.toISOString(),
-      eventType: "APPOINTMENT",
-      status: "BOOKED",
-      clientId: quickBookClientId,
-      sessionTypeId: quickBookSessionTypeId || null,
-    };
-    if (quickBookWorkoutId) {
-      payload.workoutId = quickBookWorkoutId;
+    const occurrences = buildBookingOccurrences();
+    for (const occ of occurrences) {
+      const payload = {
+        startDateTime: occ.start.toISOString(),
+        endDateTime: occ.end.toISOString(),
+        eventType: "APPOINTMENT",
+        status: "BOOKED",
+        clientId: quickBookClientId,
+        ...quickBookPricingFields(),
+      };
+      // Only attach the chosen workout to a single (non-recurring) booking.
+      if (quickBookWorkoutId && occurrences.length === 1) {
+        payload.workoutId = quickBookWorkoutId;
+      }
+      await dispatch(createScheduleEvent(payload));
     }
-    await dispatch(createScheduleEvent(payload));
     setDragSelection(null);
     setOpenSelectionDialog(false);
-    setQuickBookWorkoutId("");
+    resetSelectionBookingForm();
     refreshSchedule();
   };
 
   const handleQuickBookCustom = async () => {
     if (!isTrainerView || !selectionRangeAdjusted || !quickBookCustomName.trim()) return;
-    await dispatch(
-      createScheduleEvent({
-        startDateTime: selectionRangeAdjusted.start.toISOString(),
-        endDateTime: selectionRangeAdjusted.end.toISOString(),
-        eventType: "APPOINTMENT",
-        status: "BOOKED",
-        customClientName: quickBookCustomName.trim(),
-        customClientEmail: quickBookCustomEmail.trim(),
-        customClientPhone: quickBookCustomPhone.trim(),
-        sessionTypeId: quickBookSessionTypeId || null,
-      })
-    );
+    const occurrences = buildBookingOccurrences();
+    for (const occ of occurrences) {
+      await dispatch(
+        createScheduleEvent({
+          startDateTime: occ.start.toISOString(),
+          endDateTime: occ.end.toISOString(),
+          eventType: "APPOINTMENT",
+          status: "BOOKED",
+          customClientName: quickBookCustomName.trim(),
+          customClientEmail: quickBookCustomEmail.trim(),
+          customClientPhone: quickBookCustomPhone.trim(),
+          ...quickBookPricingFields(),
+        })
+      );
+    }
     setDragSelection(null);
     setOpenSelectionDialog(false);
-    setQuickBookCustomName("");
-    setQuickBookCustomEmail("");
-    setQuickBookCustomPhone("");
+    resetSelectionBookingForm();
     refreshSchedule();
   };
 
@@ -919,12 +977,12 @@ export default function Schedule() {
         status: "BOOKED",
         clientId: quickBookClientId,
         workoutId: created._id,
-        sessionTypeId: quickBookSessionTypeId || null,
+        ...quickBookPricingFields(),
       })
     );
     setDragSelection(null);
     setOpenSelectionDialog(false);
-    setQuickBookWorkoutId("");
+    resetSelectionBookingForm();
     refreshSchedule();
   };
 
@@ -1211,6 +1269,12 @@ export default function Schedule() {
     setQuickBookCustomEmail("");
     setQuickBookCustomPhone("");
     setQuickBookSessionTypeId("");
+    setQuickBookPrice("");
+    setQuickBookPriceCurrency("USD");
+    setQuickBookPayout("");
+    setQuickBookPayoutCurrency("USD");
+    setQuickBookRecurring(false);
+    setQuickBookRecurUntil("");
   }, []);
 
   const {
@@ -1237,6 +1301,7 @@ export default function Schedule() {
     setSelectedDate,
     setOpenSelectionDialog,
     onClearSelection: resetSelectionBookingForm,
+    defaultSessionMinutes: defaultSessionLength,
   });
   const getRowClientLabel = useCallback(
     (event) => {
@@ -1618,6 +1683,19 @@ export default function Schedule() {
         quickBookQueuedWorkouts={quickBookQueuedWorkouts}
         quickBookSessionTypeId={quickBookSessionTypeId}
         setQuickBookSessionTypeId={setQuickBookSessionTypeId}
+        handleSelectQuickBookSessionType={handleSelectQuickBookSessionType}
+        quickBookPrice={quickBookPrice}
+        setQuickBookPrice={setQuickBookPrice}
+        quickBookPriceCurrency={quickBookPriceCurrency}
+        setQuickBookPriceCurrency={setQuickBookPriceCurrency}
+        quickBookPayout={quickBookPayout}
+        setQuickBookPayout={setQuickBookPayout}
+        quickBookPayoutCurrency={quickBookPayoutCurrency}
+        setQuickBookPayoutCurrency={setQuickBookPayoutCurrency}
+        quickBookRecurring={quickBookRecurring}
+        setQuickBookRecurring={setQuickBookRecurring}
+        quickBookRecurUntil={quickBookRecurUntil}
+        setQuickBookRecurUntil={setQuickBookRecurUntil}
         sessionTypes={sessionTypes}
         handleQuickBookClient={handleQuickBookClient}
         handleQuickBookCreateWorkout={handleQuickBookCreateWorkout}
