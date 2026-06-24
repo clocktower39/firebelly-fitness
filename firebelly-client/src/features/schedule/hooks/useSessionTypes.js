@@ -14,6 +14,13 @@ const defaultSessionTypeForm = {
   isDefault: false,
 };
 
+const emptyRepriceForm = {
+  defaultPrice: "",
+  defaultPayout: "",
+  currency: "USD",
+  payoutCurrency: "USD",
+};
+
 export default function useSessionTypes({ isTrainer }) {
   const [sessionTypes, setSessionTypes] = useState([]);
   const [sessionTypesStatus, setSessionTypesStatus] = useState("");
@@ -21,6 +28,8 @@ export default function useSessionTypes({ isTrainer }) {
   const [openSessionTypeFormDialog, setOpenSessionTypeFormDialog] = useState(false);
   const [sessionTypeForm, setSessionTypeForm] = useState(defaultSessionTypeForm);
   const [editingSessionTypeId, setEditingSessionTypeId] = useState("");
+  const [repriceTarget, setRepriceTarget] = useState(null);
+  const [repriceForm, setRepriceForm] = useState(emptyRepriceForm);
 
   const loadSessionTypes = useCallback(async () => {
     if (!isTrainer) return;
@@ -124,6 +133,51 @@ export default function useSessionTypes({ isTrainer }) {
     }
   };
 
+  const handleArchiveSessionType = async (typeId) => {
+    try {
+      const data = await scheduleApi.archiveSessionType(typeId);
+      if (data?.error) throw new Error(data.error);
+      setSessionTypesStatus("");
+      loadSessionTypes();
+    } catch (err) {
+      setSessionTypesStatus(err.message || "Unable to archive session type.");
+    }
+  };
+
+  // Reprice = archive current + clone at a new rate (keeps the same name).
+  const openRepriceDialog = (type) => {
+    setRepriceTarget(type);
+    setRepriceForm({
+      defaultPrice: type.defaultPrice ?? "",
+      defaultPayout: type.defaultPayout ?? "",
+      currency: type.currency || "USD",
+      payoutCurrency: type.payoutCurrency || "USD",
+    });
+  };
+
+  const closeRepriceDialog = () => {
+    setRepriceTarget(null);
+    setRepriceForm(emptyRepriceForm);
+  };
+
+  const handleReprice = async () => {
+    if (!repriceTarget) return;
+    try {
+      const data = await scheduleApi.repriceSessionType(repriceTarget._id, {
+        defaultPrice: repriceForm.defaultPrice === "" ? null : Number(repriceForm.defaultPrice),
+        defaultPayout: repriceForm.defaultPayout === "" ? null : Number(repriceForm.defaultPayout),
+        currency: repriceForm.currency || "USD",
+        payoutCurrency: repriceForm.payoutCurrency || "USD",
+      });
+      if (data?.error) throw new Error(data.error);
+      setSessionTypesStatus("");
+      closeRepriceDialog();
+      loadSessionTypes();
+    } catch (err) {
+      setSessionTypesStatus(err.message || "Unable to change price.");
+    }
+  };
+
   return {
     sessionTypes,
     sessionTypesStatus,
@@ -140,5 +194,12 @@ export default function useSessionTypes({ isTrainer }) {
     handleSaveSessionType,
     handleEditSessionType,
     handleDeleteSessionType,
+    handleArchiveSessionType,
+    repriceTarget,
+    repriceForm,
+    setRepriceForm,
+    openRepriceDialog,
+    closeRepriceDialog,
+    handleReprice,
   };
 }

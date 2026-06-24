@@ -111,6 +111,17 @@ export const scheduleApi = {
       method: "DELETE",
     }),
 
+  archiveSessionType: (sessionTypeId) =>
+    apiFetch(`/session-types/${encodeURIComponent(sessionTypeId)}/archive`, {
+      method: "POST",
+    }),
+
+  repriceSessionType: (sessionTypeId, payload) =>
+    apiFetch(`/session-types/${encodeURIComponent(sessionTypeId)}/reprice`, {
+      method: "POST",
+      body: payload,
+    }),
+
   getSessionSummary: ({ trainerId, clientId }) =>
     apiFetch("/sessions/summary", {
       method: "POST",

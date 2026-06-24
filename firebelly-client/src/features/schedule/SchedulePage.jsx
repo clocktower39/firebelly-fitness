@@ -228,6 +228,13 @@ export default function Schedule() {
     handleSaveSessionType,
     handleEditSessionType,
     handleDeleteSessionType,
+    handleArchiveSessionType,
+    repriceTarget,
+    repriceForm,
+    setRepriceForm,
+    openRepriceDialog,
+    closeRepriceDialog,
+    handleReprice,
   } = useSessionTypes({ isTrainer: user.isTrainer });
 
   useEffect(() => {
@@ -1926,6 +1933,13 @@ export default function Schedule() {
         formatPrice={formatPrice}
         handleEditSessionType={handleEditSessionType}
         handleDeleteSessionType={handleDeleteSessionType}
+        handleArchiveSessionType={handleArchiveSessionType}
+        repriceTarget={repriceTarget}
+        repriceForm={repriceForm}
+        setRepriceForm={setRepriceForm}
+        openRepriceDialog={openRepriceDialog}
+        closeRepriceDialog={closeRepriceDialog}
+        handleReprice={handleReprice}
         resetSessionTypeForm={resetSessionTypeForm}
         setOpenSessionTypeFormDialog={setOpenSessionTypeFormDialog}
         openSessionTypeFormDialog={openSessionTypeFormDialog}

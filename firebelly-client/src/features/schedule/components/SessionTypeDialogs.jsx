@@ -29,6 +29,13 @@ export default function SessionTypeDialogs({
   formatPrice,
   handleEditSessionType,
   handleDeleteSessionType,
+  handleArchiveSessionType,
+  repriceTarget,
+  repriceForm,
+  setRepriceForm,
+  openRepriceDialog,
+  closeRepriceDialog,
+  handleReprice,
   resetSessionTypeForm,
   setOpenSessionTypeFormDialog,
   openSessionTypeFormDialog,
@@ -37,6 +44,69 @@ export default function SessionTypeDialogs({
   setSessionTypeForm,
   handleSaveSessionType,
 }) {
+  const activeTypes = sessionTypes.filter((t) => !t.archivedAt);
+  const archivedTypes = sessionTypes.filter((t) => t.archivedAt);
+
+  const priceLabel = (type) =>
+    type.defaultPrice === null || type.defaultPrice === undefined
+      ? "Price not set"
+      : formatPrice(type.defaultPrice || 0, type.currency || "USD");
+
+  const renderCard = (type, { archived = false } = {}) => (
+    <Card key={type._id} variant="outlined" sx={archived ? { opacity: 0.7 } : undefined}>
+      <CardContent>
+        <Stack spacing={0.5}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Typography variant="subtitle1">{type.name}</Typography>
+            {archived && <Chip size="small" label="Archived" />}
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {priceLabel(type)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Duration: {type.durationMinutes || 60} min • Credits: {type.creditsRequired || 1}
+          </Typography>
+          {type.defaultPayout != null && (
+            <Typography variant="caption" color="text.secondary">
+              Payout: {formatPrice(type.defaultPayout || 0, type.payoutCurrency || "USD")}
+            </Typography>
+          )}
+          {type.description && (
+            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
+              {type.description}
+            </Typography>
+          )}
+        </Stack>
+      </CardContent>
+      {!archived && (
+        <CardActions sx={{ px: 2, pb: 2, flexWrap: "wrap" }}>
+          <Button size="small" variant="outlined" onClick={() => handleEditSessionType(type)}>
+            Edit
+          </Button>
+          <Button size="small" variant="outlined" onClick={() => openRepriceDialog(type)}>
+            Change price
+          </Button>
+          <Button
+            size="small"
+            color="warning"
+            variant="text"
+            onClick={() => handleArchiveSessionType(type._id)}
+          >
+            Archive
+          </Button>
+          <Button
+            size="small"
+            color="error"
+            variant="text"
+            onClick={() => handleDeleteSessionType(type._id)}
+          >
+            Delete
+          </Button>
+        </CardActions>
+      )}
+    </Card>
+  );
+
   return (
     <>
       <Dialog
@@ -58,62 +128,19 @@ export default function SessionTypeDialogs({
                 No session types yet.
               </Typography>
             ) : (
-              <Stack spacing={1}>
-                {sessionTypes.map((type) => (
-                  <Card key={type._id} variant="outlined">
-                    <CardContent>
-                      <Stack spacing={0.5}>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                          <Typography variant="subtitle1">{type.name}</Typography>
-                          {type.active === false && <Chip size="small" label="Inactive" />}
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          {type.defaultPrice === null || type.defaultPrice === undefined
-                            ? "Price not set"
-                            : formatPrice(type.defaultPrice || 0, type.currency || "USD")}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Duration: {type.durationMinutes || 60} min • Credits:{" "}
-                          {type.creditsRequired || 1}
-                        </Typography>
-                        {type.defaultPayout != null && (
-                          <Typography variant="caption" color="text.secondary">
-                            Payout:{" "}
-                            {formatPrice(type.defaultPayout || 0, type.payoutCurrency || "USD")}
-                          </Typography>
-                        )}
-                        {type.description && (
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ whiteSpace: "pre-wrap" }}
-                          >
-                            {type.description}
-                          </Typography>
-                        )}
-                      </Stack>
-                    </CardContent>
-                    <CardActions sx={{ px: 2, pb: 2 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => handleEditSessionType(type)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="text"
-                        onClick={() => handleDeleteSessionType(type._id)}
-                        disabled={type.isDefault}
-                      >
-                        Delete
-                      </Button>
-                    </CardActions>
-                  </Card>
-                ))}
-              </Stack>
+              <>
+                <Stack spacing={1}>{activeTypes.map((type) => renderCard(type))}</Stack>
+                {archivedTypes.length > 0 && (
+                  <>
+                    <Typography variant="overline" color="text.secondary">
+                      Archived — grandfathered clients only
+                    </Typography>
+                    <Stack spacing={1}>
+                      {archivedTypes.map((type) => renderCard(type, { archived: true }))}
+                    </Stack>
+                  </>
+                )}
+              </>
             )}
             <Divider />
             <Button
@@ -271,6 +298,51 @@ export default function SessionTypeDialogs({
             disabled={!sessionTypeForm.name.trim()}
           >
             {editingSessionTypeId ? "Save changes" : "Add session type"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(repriceTarget)}
+        onClose={closeRepriceDialog}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          Change price{repriceTarget ? ` — ${repriceTarget.name}` : ""}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              This archives the current rate and creates a new version at the new price.
+              Clients who already bought the old rate keep it.
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                label="New price"
+                type="number"
+                fullWidth
+                value={repriceForm?.defaultPrice ?? ""}
+                onChange={(e) =>
+                  setRepriceForm((f) => ({ ...f, defaultPrice: e.target.value }))
+                }
+              />
+              <TextField
+                label="New payout"
+                type="number"
+                fullWidth
+                value={repriceForm?.defaultPayout ?? ""}
+                onChange={(e) =>
+                  setRepriceForm((f) => ({ ...f, defaultPayout: e.target.value }))
+                }
+              />
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRepriceDialog}>Cancel</Button>
+          <Button variant="contained" onClick={handleReprice}>
+            Save new price
           </Button>
         </DialogActions>
       </Dialog>
