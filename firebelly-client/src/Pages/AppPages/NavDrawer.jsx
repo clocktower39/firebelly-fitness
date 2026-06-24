@@ -51,6 +51,7 @@ import {
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
 import BrandLogo from "../../Components/BrandLogo";
+import NotificationBell from "../../Components/NotificationBell";
 
 export default function NavDrawer() {
   const user = useSelector((state) => state.user);
@@ -367,6 +368,7 @@ export default function NavDrawer() {
               </Button>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              {user._id && <NotificationBell />}
               {user._id && (
                 <Box sx={{ textAlign: "right", display: { xs: "none", sm: "block" } }}>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>

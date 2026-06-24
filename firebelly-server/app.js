@@ -25,6 +25,7 @@ const guardianRoutes = require("./routes/guardianRoutes");
 const billingRoutes = require("./routes/billingRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const productRoutes = require("./routes/productRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const GuardianLink = require("./models/guardianLink");
 const User = require("./models/user");
 const Training = require("./models/training");
@@ -131,6 +132,7 @@ app.use("/", guardianRoutes);
 app.use("/", billingRoutes);
 app.use("/", invoiceRoutes);
 app.use("/", productRoutes);
+app.use("/", notificationRoutes);
 
 const connectedClients = {};
 const pagePresenceBySocket = new Map();
@@ -184,6 +186,8 @@ global.io.on("connection", (socket) => {
 
   // Save the user's socket ID
   connectedClients[userId] = socket.id;
+  // Per-user room so services can push targeted notifications.
+  if (userId) socket.join(String(userId));
 
   // Notify all trainers about the client's online status
   global.io.emit("clientStatusChanged", { userId, status: "online" });

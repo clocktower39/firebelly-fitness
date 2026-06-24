@@ -6,6 +6,7 @@ const GuardianLink = require("../models/guardianLink");
 const Relationship = require("../models/relationship");
 const SessionType = require("../models/sessionType");
 const { createEventDebitEntry, reverseEventDebitEntry } = require("../services/billingLedgerService");
+const { createNotification } = require("../services/notificationService");
 const { pick } = require("../utils/object");
 
 const APPOINTMENT_STATUSES = ["REQUESTED", "BOOKED", "COMPLETED"];
@@ -575,6 +576,22 @@ const request_booking = async (req, res, next) => {
         );
       }
     }
+
+    const requester = await User.findById(userId).lean();
+    const requesterName = requester
+      ? `${requester.firstName || ""} ${requester.lastName || ""}`.trim()
+      : "A client";
+    await createNotification({
+      userId: trainerId,
+      type: "BOOKING_REQUEST",
+      title: "New session request",
+      body: `${requesterName} requested a session on ${new Date(requestedStart).toLocaleString(
+        "en-US",
+        { dateStyle: "medium", timeStyle: "short" }
+      )}.`,
+      link: "/sessions",
+    });
+
     return res.json({ event: saved });
   } catch (err) {
     return next(err);

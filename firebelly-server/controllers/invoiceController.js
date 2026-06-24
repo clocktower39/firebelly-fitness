@@ -9,6 +9,7 @@ const User = require("../models/user");
 const Product = require("../models/product");
 const SessionType = require("../models/sessionType");
 const { getPurchasableTypes } = require("./sessionTypeController");
+const { createNotification } = require("../services/notificationService");
 const { sendEmail } = require("../services/emailService");
 const { buildInvoicePdf } = require("../services/invoicePdf");
 
@@ -552,6 +553,14 @@ const request_invoice = async (req, res, next) => {
     } catch (err) {
       notificationStatus = "failed";
     }
+
+    await createNotification({
+      userId: trainerId,
+      type: "PACKAGE_REQUEST",
+      title: "New session package request",
+      body: `${saved.billToName || "A client"} requested to buy sessions (${saved.invoiceNumber}).`,
+      link: "/invoices",
+    });
 
     return res.json({ invoice: saved, notificationStatus });
   } catch (err) {
