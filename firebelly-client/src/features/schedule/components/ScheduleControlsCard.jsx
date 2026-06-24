@@ -34,6 +34,7 @@ export default function ScheduleControlsCard({
   setSessionTypesStatus,
   setOpenSessionTypesDialog,
   setOpenSellPackageDialog,
+  setOpenClientAccessDialog,
 }) {
   return (
     <Grid container size={12}>
@@ -73,6 +74,13 @@ export default function ScheduleControlsCard({
                   onClick={() => setOpenSellPackageDialog(true)}
                 >
                   Sell sessions
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setOpenClientAccessDialog(true)}
+                >
+                  Grandfathered access
                 </Button>
                 <DefaultSessionLengthField size="small" sx={{ minWidth: 0 }} />
               </Stack>

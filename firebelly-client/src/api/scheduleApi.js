@@ -127,6 +127,24 @@ export const scheduleApi = {
       body: { trainerId, clientId },
     }),
 
+  listEntitlements: ({ clientId }) =>
+    apiFetch("/session-types/entitlements/list", {
+      method: "POST",
+      body: { clientId },
+    }),
+
+  grantEntitlement: ({ clientId, sessionTypeId, note }) =>
+    apiFetch("/session-types/entitlements", {
+      method: "POST",
+      body: { clientId, sessionTypeId, note },
+    }),
+
+  revokeEntitlement: ({ clientId, sessionTypeId }) =>
+    apiFetch("/session-types/entitlements/revoke", {
+      method: "POST",
+      body: { clientId, sessionTypeId },
+    }),
+
   repriceSessionType: (sessionTypeId, payload) =>
     apiFetch(`/session-types/${encodeURIComponent(sessionTypeId)}/reprice`, {
       method: "POST",
