@@ -77,6 +77,7 @@ export default function Invoices() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidInvoice, setVoidInvoice] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     if (user.isTrainer) {
@@ -321,6 +322,7 @@ export default function Invoices() {
         return;
       }
       resetForm();
+      setCreateOpen(false);
       refreshInvoices();
       refreshSummary();
     } catch (err) {
@@ -512,12 +514,10 @@ export default function Invoices() {
         </Grid>
       )}
 
-      {targetId && (
-        <Grid container size={12}>
-          <Card sx={{ width: "100%" }}>
-            <CardContent>
-              <Stack spacing={2}>
-                <Typography variant="h6">Create Invoice</Typography>
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>New invoice</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+              <Stack spacing={2} sx={{ mt: 1 }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                   <TextField
                     label="Invoice # (optional)"
@@ -726,20 +726,37 @@ export default function Invoices() {
                   </CardContent>
                 </Card>
 
-                <Button variant="contained" onClick={handleCreateInvoice}>
-                  Create Invoice
-                </Button>
               </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreateInvoice}>
+            Create Invoice
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {targetId && (
         <Grid container size={12}>
           <Card sx={{ width: "100%" }}>
             <CardContent sx={{ overflowX: "auto" }}>
-              <Typography variant="h6">Invoice History</Typography>
+              <Stack
+                direction="row"
+                sx={{ alignItems: "center", justifyContent: "space-between" }}
+              >
+                <Typography variant="h6">Invoice History</Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => {
+                    resetForm();
+                    setError("");
+                    setCreateOpen(true);
+                  }}
+                >
+                  New invoice
+                </Button>
+              </Stack>
               <Divider sx={{ my: 1 }} />
               {loadingInvoices ? (
                 <Typography color="text.secondary">Loading invoices...</Typography>
