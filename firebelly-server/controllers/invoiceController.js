@@ -8,6 +8,7 @@ const Group = require("../models/group");
 const User = require("../models/user");
 const Product = require("../models/product");
 const SessionType = require("../models/sessionType");
+const { getPurchasableTypes } = require("./sessionTypeController");
 const { sendEmail } = require("../services/emailService");
 const { buildInvoicePdf } = require("../services/invoicePdf");
 
@@ -325,6 +326,25 @@ const create_invoice = async (req, res, next) => {
         error: "Session line items must include a session type with credits.",
       });
     }
+
+    // Grandfathering guard: a client can only be sold session types they're
+    // eligible for (active, previously purchased, or explicitly entitled).
+    if (billToType === "CLIENT") {
+      const sessionTypeIds = normalizedLineItems
+        .filter((item) => item.itemType === "SESSION" && item.sessionTypeId)
+        .map((item) => String(item.sessionTypeId));
+      if (sessionTypeIds.length) {
+        const purchasable = await getPurchasableTypes(userId, clientId);
+        const allowed = new Set(purchasable.map((t) => String(t._id)));
+        if (sessionTypeIds.some((id) => !allowed.has(id))) {
+          return res.status(400).json({
+            error:
+              "This client isn't eligible to buy one of these session types (archived or not entitled).",
+          });
+        }
+      }
+    }
+
     const totals = calculateTotals({ lineItems: normalizedLineItems, tax, discount });
     const normalizedPayments = normalizePayments(payments);
     const amountPaid = normalizedPayments.reduce((sum, payment) => sum + payment.amount, 0);

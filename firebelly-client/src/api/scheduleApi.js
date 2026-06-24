@@ -121,6 +121,12 @@ export const scheduleApi = {
       method: "POST",
     }),
 
+  getPurchasableTypes: ({ trainerId, clientId }) =>
+    apiFetch("/session-types/purchasable", {
+      method: "POST",
+      body: { trainerId, clientId },
+    }),
+
   repriceSessionType: (sessionTypeId, payload) =>
     apiFetch(`/session-types/${encodeURIComponent(sessionTypeId)}/reprice`, {
       method: "POST",

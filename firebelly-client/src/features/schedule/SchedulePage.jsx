@@ -18,6 +18,7 @@ import CopyShareDialogs from "./components/CopyShareDialogs";
 import DeleteEventDialog from "./components/DeleteEventDialog";
 import EventActionDialogs from "./components/EventActionDialogs";
 import ScheduleControlsCard from "./components/ScheduleControlsCard";
+import SellPackageDialog from "./components/SellPackageDialog";
 import SessionEventsTable from "./components/SessionEventsTable";
 import SessionTypeDialogs from "./components/SessionTypeDialogs";
 import SchedulePageHeader from "./components/SchedulePageHeader";
@@ -163,6 +164,7 @@ export default function Schedule() {
   const [quickBookRecurUntil, setQuickBookRecurUntil] = useState("");
   const [quickBookClientSummary, setQuickBookClientSummary] = useState(null);
   const [openSelectionDialog, setOpenSelectionDialog] = useState(false);
+  const [openSellPackageDialog, setOpenSellPackageDialog] = useState(false);
   const [openCopyDialog, setOpenCopyDialog] = useState(false);
   const [copySourceEvent, setCopySourceEvent] = useState(null);
   const [copyDate, setCopyDate] = useState("");
@@ -1678,6 +1680,7 @@ export default function Schedule() {
           setHasClientSelection={setHasClientSelection}
           setSessionTypesStatus={setSessionTypesStatus}
           setOpenSessionTypesDialog={setOpenSessionTypesDialog}
+          setOpenSellPackageDialog={setOpenSellPackageDialog}
         />
         <Grid container size={12} sx={{ minWidth: 0 }}>
           <Stack spacing={2} sx={{ minWidth: 0 }}>
@@ -1924,6 +1927,14 @@ export default function Schedule() {
         trainerBookCustomPhone={trainerBookCustomPhone}
         setTrainerBookCustomPhone={setTrainerBookCustomPhone}
         handleTrainerBookSlot={handleTrainerBookSlot}
+      />
+
+      <SellPackageDialog
+        open={openSellPackageDialog}
+        onClose={() => setOpenSellPackageDialog(false)}
+        clients={clients}
+        trainerId={user?._id}
+        onSold={refreshBillingSummary}
       />
 
       <SessionTypeDialogs
