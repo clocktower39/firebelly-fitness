@@ -20,6 +20,7 @@ import EventActionDialogs from "./components/EventActionDialogs";
 import ScheduleControlsCard from "./components/ScheduleControlsCard";
 import SellPackageDialog from "./components/SellPackageDialog";
 import ClientAccessDialog from "./components/ClientAccessDialog";
+import RequestPackageDialog from "./components/RequestPackageDialog";
 import SessionEventsTable from "./components/SessionEventsTable";
 import SessionTypeDialogs from "./components/SessionTypeDialogs";
 import SchedulePageHeader from "./components/SchedulePageHeader";
@@ -167,6 +168,7 @@ export default function Schedule() {
   const [openSelectionDialog, setOpenSelectionDialog] = useState(false);
   const [openSellPackageDialog, setOpenSellPackageDialog] = useState(false);
   const [openClientAccessDialog, setOpenClientAccessDialog] = useState(false);
+  const [openRequestPackageDialog, setOpenRequestPackageDialog] = useState(false);
   const [openCopyDialog, setOpenCopyDialog] = useState(false);
   const [copySourceEvent, setCopySourceEvent] = useState(null);
   const [copyDate, setCopyDate] = useState("");
@@ -1684,6 +1686,7 @@ export default function Schedule() {
           setOpenSessionTypesDialog={setOpenSessionTypesDialog}
           setOpenSellPackageDialog={setOpenSellPackageDialog}
           setOpenClientAccessDialog={setOpenClientAccessDialog}
+          setOpenRequestPackageDialog={setOpenRequestPackageDialog}
         />
         <Grid container size={12} sx={{ minWidth: 0 }}>
           <Stack spacing={2} sx={{ minWidth: 0 }}>
@@ -1945,6 +1948,13 @@ export default function Schedule() {
         onClose={() => setOpenClientAccessDialog(false)}
         clients={clients}
         sessionTypes={sessionTypes}
+      />
+
+      <RequestPackageDialog
+        open={openRequestPackageDialog}
+        onClose={() => setOpenRequestPackageDialog(false)}
+        trainerId={selectedTrainerId}
+        clientId={user?._id}
       />
 
       <SessionTypeDialogs

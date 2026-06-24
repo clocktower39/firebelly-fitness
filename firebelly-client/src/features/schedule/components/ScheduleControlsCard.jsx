@@ -35,6 +35,7 @@ export default function ScheduleControlsCard({
   setOpenSessionTypesDialog,
   setOpenSellPackageDialog,
   setOpenClientAccessDialog,
+  setOpenRequestPackageDialog,
 }) {
   return (
     <Grid container size={12}>
@@ -87,6 +88,7 @@ export default function ScheduleControlsCard({
             )}
 
             {isClientView && (
+              <>
               <FormControl fullWidth>
                 <InputLabel>Trainer</InputLabel>
                 <Select
@@ -108,6 +110,16 @@ export default function ScheduleControlsCard({
                     ))}
                 </Select>
               </FormControl>
+              {selectedTrainerId && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setOpenRequestPackageDialog(true)}
+                >
+                  Request sessions
+                </Button>
+              )}
+              </>
             )}
 
             {isTrainerView && (

@@ -475,6 +475,21 @@ const request_invoice = async (req, res, next) => {
       return res.status(400).json({ error: "At least one line item is required." });
     }
 
+    // Grandfathering guard: a client can only request session types they're eligible
+    // for (active, previously purchased, or explicitly entitled).
+    const requestedSessionTypeIds = normalizedLineItems
+      .filter((item) => item.itemType === "SESSION" && item.sessionTypeId)
+      .map((item) => String(item.sessionTypeId));
+    if (requestedSessionTypeIds.length) {
+      const purchasable = await getPurchasableTypes(trainerId, userId);
+      const allowed = new Set(purchasable.map((t) => String(t._id)));
+      if (requestedSessionTypeIds.some((id) => !allowed.has(id))) {
+        return res
+          .status(400)
+          .json({ error: "You're not eligible to buy one of these session types." });
+      }
+    }
+
     const totals = calculateTotals({ lineItems: normalizedLineItems, tax, discount });
     const finalInvoiceNumber = String(invoiceNumber || "").trim() || buildInvoiceNumber();
 
