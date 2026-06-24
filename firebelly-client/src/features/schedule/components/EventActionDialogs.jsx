@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Alert,
   Autocomplete,
   Avatar,
   Box,
@@ -61,6 +62,8 @@ export default function EventActionDialogs({
   setQuickBookRecurring,
   quickBookRecurUntil,
   setQuickBookRecurUntil,
+  bookingConflictLabels = [],
+  quickBookRemainingCredits = null,
   sessionTypes,
   handleQuickBookClient,
   handleQuickBookCreateWorkout,
@@ -244,6 +247,24 @@ export default function EventActionDialogs({
         </Select>
       </FormControl>
 
+      {/* Prepaid balance for the chosen client (informational — credits draw down
+          when the session is marked complete, not at booking). */}
+      {quickBookClientId && quickBookRemainingCredits !== null && (
+        quickBookRemainingCredits > 0 ? (
+          <Typography variant="caption" color="text.secondary">
+            {quickBookRemainingCredits} prepaid session
+            {quickBookRemainingCredits === 1 ? "" : "s"} remaining
+            {quickBookSessionTypeId ? " for this type" : ""}
+          </Typography>
+        ) : (
+          <Alert severity="info" sx={{ py: 0.5 }}>
+            No prepaid sessions remaining
+            {quickBookSessionTypeId ? " for this type" : ""} — this client will owe for
+            this session.
+          </Alert>
+        )
+      )}
+
       {/* Price + payout (auto-filled from session type, editable) */}
       <Stack direction="row" spacing={1}>
         <TextField
@@ -309,14 +330,22 @@ export default function EventActionDialogs({
         </Collapse>
       </Box>
 
+      {/* Conflict warning (non-blocking) */}
+      {bookingConflictLabels.length > 0 && (
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          Overlaps an existing session: {bookingConflictLabels.join(", ")}
+        </Alert>
+      )}
+
       {/* Primary action */}
       <Button
         variant="contained"
         size="large"
+        color={bookingConflictLabels.length > 0 ? "warning" : "primary"}
         onClick={handleQuickBookClient}
         disabled={!quickBookClientId}
       >
-        Book session
+        {bookingConflictLabels.length > 0 ? "Book anyway" : "Book session"}
       </Button>
 
       <Button
@@ -1056,6 +1085,45 @@ export default function EventActionDialogs({
                     Book
                   </Button>
                 )}
+
+              {/* Quick completion / no-show actions (drive billing) */}
+              {isTrainerView &&
+                eventActionTarget.eventType !== "AVAILABILITY" &&
+                onQuickStatus &&
+                ["BOOKED", "REQUESTED"].includes(eventActionTarget.status) && (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => onQuickStatus(eventActionTarget, "COMPLETED")}
+                    >
+                      Mark complete
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      onClick={() =>
+                        onQuickStatus(eventActionTarget, "CANCELLED", "CHARGED")
+                      }
+                    >
+                      No-show (charge)
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() =>
+                        onQuickStatus(eventActionTarget, "CANCELLED", "NO_CHARGE")
+                      }
+                    >
+                      Cancel (no charge)
+                    </Button>
+                    <Typography variant="caption" color="text.secondary">
+                      Completing or a charged no-show draws down the client&apos;s prepaid
+                      balance.
+                    </Typography>
+                    <Divider />
+                  </>
+                )}
+
               <Button
                 variant="outlined"
                 onClick={() => {

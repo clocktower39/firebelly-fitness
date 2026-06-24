@@ -23,6 +23,7 @@ const scheduleFields = {
   payoutAmount: Joi.number().allow(null).optional(),
   payoutCurrency: Joi.string().valid("USD", "EUR", "JPY").optional(),
   recurrenceRule: Joi.string().allow(null, "").optional(),
+  recurrenceGroupId: objectId.allow(null).optional(),
   availabilitySource: Joi.string().valid("NORMAL", "MANUAL").optional(),
   billingStatus: Joi.string().valid("UNBILLED", "CHARGED", "NO_CHARGE").optional(),
   notes: Joi.string().allow("").optional(),
@@ -47,12 +48,19 @@ const idBodyValidate = {
     _id: objectId.required(),
   }).unknown(true),
 };
+const deleteSeriesValidate = {
+  body: Joi.object({
+    recurrenceGroupId: objectId.required(),
+    fromDate: Joi.date().optional(),
+  }),
+};
 
 router.post("/schedule/range", verifyAccessToken, scheduleController.get_schedule_range);
 router.post("/schedule/event/create", validate(createScheduleEventValidate, {}, {}), verifyAccessToken, ensureWriteAccess, scheduleController.create_schedule_event);
 router.post("/schedule/event/update", validate(updateScheduleEventValidate, {}, {}), verifyAccessToken, ensureWriteAccess, scheduleController.update_schedule_event);
 router.post("/schedule/event/cancel", validate(idBodyValidate, {}, {}), verifyAccessToken, ensureWriteAccess, scheduleController.cancel_schedule_event);
 router.post("/schedule/event/delete", validate(idBodyValidate, {}, {}), verifyAccessToken, ensureWriteAccess, scheduleController.delete_schedule_event);
+router.post("/schedule/series/delete", validate(deleteSeriesValidate, {}, {}), verifyAccessToken, ensureWriteAccess, scheduleController.delete_schedule_series);
 router.post("/schedule/event", verifyAccessToken, scheduleController.get_schedule_event_by_id);
 router.post("/schedule/event/by-workout", verifyAccessToken, scheduleController.get_schedule_event_by_workout);
 router.post("/schedule/public/range", scheduleController.get_public_schedule_range);

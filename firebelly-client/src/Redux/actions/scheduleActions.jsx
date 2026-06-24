@@ -88,6 +88,14 @@ export function deleteScheduleEvent(eventId, accessTokenOverride = null) {
   };
 }
 
+export function deleteScheduleSeries(recurrenceGroupId, fromDate = null, accessTokenOverride = null) {
+  return async (dispatch) => {
+    const data = await scheduleApi.deleteSeries(recurrenceGroupId, fromDate, accessTokenOverride);
+    if (data.error) dispatch({ type: ERROR, error: data.error });
+    return data;
+  };
+}
+
 export function requestBooking(payload) {
   return async (dispatch) => {
     const data = await scheduleApi.requestBooking(payload);

@@ -25,6 +25,7 @@ const SCHEDULE_EVENT_UPDATE_FIELDS = [
   "payoutAmount",
   "payoutCurrency",
   "recurrenceRule",
+  "recurrenceGroupId",
   "availabilitySource",
   "billingStatus",
   "notes",
@@ -818,6 +819,27 @@ const delete_schedule_event = async (req, res, next) => {
   }
 };
 
+// Delete a whole recurring series (or just this-and-future when fromDate is given).
+const delete_schedule_series = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const { recurrenceGroupId, fromDate } = req.body;
+
+    const query = {
+      trainerId: userId,
+      recurrenceGroupId,
+    };
+    if (fromDate) {
+      query.startDateTime = { $gte: new Date(fromDate) };
+    }
+
+    const result = await ScheduleEvent.deleteMany(query);
+    return res.json({ status: "deleted", deletedCount: result.deletedCount });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // ---- iCalendar (.ics) subscribe feed ---------------------------------------
 
 const ICS_WINDOW_PAST_DAYS = 7;
@@ -952,6 +974,7 @@ module.exports = {
   update_schedule_event,
   cancel_schedule_event,
   delete_schedule_event,
+  delete_schedule_series,
   request_booking,
   get_public_schedule_range,
   trainer_book_availability,

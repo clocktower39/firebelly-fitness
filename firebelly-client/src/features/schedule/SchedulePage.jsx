@@ -30,6 +30,7 @@ import WeekNavigator from "./components/WeekNavigator";
 import usePersistentSchedulePreference from "./hooks/usePersistentSchedulePreference";
 import useScheduleClipboardShare from "./hooks/useScheduleClipboardShare";
 import useScheduleBilling from "./hooks/useScheduleBilling";
+import { billingApi } from "../../api/billingApi";
 import useScheduleRange from "./hooks/useScheduleRange";
 import useScheduleSelection from "./hooks/useScheduleSelection";
 import useScheduleTableFilters from "./hooks/useScheduleTableFilters";
@@ -48,10 +49,23 @@ import {
   trainerBookAvailability,
   serverURL,
   deleteScheduleEvent,
+  deleteScheduleSeries,
   updateScheduleEvent,
 } from "../../Redux/actions";
 
 dayjs.extend(utc);
+
+// Generate a MongoDB-compatible ObjectId hex string (client-side) so recurring
+// bookings created in one batch share a recurrenceGroupId (a series).
+const generateObjectId = () => {
+  const timestamp = Math.floor(Date.now() / 1000)
+    .toString(16)
+    .padStart(8, "0");
+  const tail = Array.from({ length: 16 }, () =>
+    Math.floor(Math.random() * 16).toString(16)
+  ).join("");
+  return timestamp + tail;
+};
 
 import {
   DEFAULT_BOOKING_MINUTES,
@@ -147,6 +161,7 @@ export default function Schedule() {
   const [quickBookPayoutCurrency, setQuickBookPayoutCurrency] = useState("USD");
   const [quickBookRecurring, setQuickBookRecurring] = useState(false);
   const [quickBookRecurUntil, setQuickBookRecurUntil] = useState("");
+  const [quickBookClientSummary, setQuickBookClientSummary] = useState(null);
   const [openSelectionDialog, setOpenSelectionDialog] = useState(false);
   const [openCopyDialog, setOpenCopyDialog] = useState(false);
   const [copySourceEvent, setCopySourceEvent] = useState(null);
@@ -509,6 +524,22 @@ export default function Schedule() {
     }
   };
 
+  // Delete a recurring series: scope "future" removes this and all later
+  // occurrences; "all" removes the entire series.
+  const handleDeleteSeries = async (event, scope = "future") => {
+    if (!event?.recurrenceGroupId) return;
+    setDeleting(true);
+    try {
+      const fromDate = scope === "future" ? event.startDateTime : null;
+      await dispatch(deleteScheduleSeries(event.recurrenceGroupId, fromDate));
+      setOpenDeleteDialog(false);
+      setDeleteEvent(null);
+      refreshSchedule();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const openDeleteConfirm = (event) => {
     setDeleteEvent(event);
     setOpenDeleteDialog(true);
@@ -651,12 +682,17 @@ export default function Schedule() {
     setOpenEventActionDialog(true);
   };
 
-  // Quick status change from the event popover, no full edit form.
-  const handleQuickStatus = async (event, status) => {
-    if (!event?._id || !status || status === event.status) return;
-    await dispatch(updateScheduleEvent(event._id, { status }));
+  // Quick status change from the event popover, no full edit form. An explicit
+  // billingStatus lets us distinguish "no-show (charge)" from "cancel (no charge)".
+  const handleQuickStatus = async (event, status, billingStatus) => {
+    if (!event?._id || !status) return;
+    if (status === event.status && billingStatus === undefined) return;
+    const updates = { status };
+    if (billingStatus !== undefined) updates.billingStatus = billingStatus;
+    await dispatch(updateScheduleEvent(event._id, updates));
     setOpenEventActionDialog(false);
     refreshSchedule();
+    refreshBillingSummary();
   };
 
   const openTrainerBookForEvent = (event) => {
@@ -905,17 +941,19 @@ export default function Schedule() {
     return out.length ? out : [{ start: baseStart, end: baseEnd }];
   };
 
-  const quickBookPricingFields = () => ({
+  const quickBookPricingFields = (recurrenceGroupId = null) => ({
     sessionTypeId: quickBookSessionTypeId || null,
     priceAmount: quickBookPrice === "" ? null : Number(quickBookPrice),
     priceCurrency: quickBookPriceCurrency,
     payoutAmount: quickBookPayout === "" ? null : Number(quickBookPayout),
     payoutCurrency: quickBookPayoutCurrency,
+    ...(recurrenceGroupId ? { recurrenceGroupId } : {}),
   });
 
   const handleQuickBookClient = async () => {
     if (!isTrainerView || !selectionRangeAdjusted || !quickBookClientId) return;
     const occurrences = buildBookingOccurrences();
+    const groupId = occurrences.length > 1 ? generateObjectId() : null;
     for (const occ of occurrences) {
       const payload = {
         startDateTime: occ.start.toISOString(),
@@ -923,7 +961,7 @@ export default function Schedule() {
         eventType: "APPOINTMENT",
         status: "BOOKED",
         clientId: quickBookClientId,
-        ...quickBookPricingFields(),
+        ...quickBookPricingFields(groupId),
       };
       // Only attach the chosen workout to a single (non-recurring) booking.
       if (quickBookWorkoutId && occurrences.length === 1) {
@@ -940,6 +978,7 @@ export default function Schedule() {
   const handleQuickBookCustom = async () => {
     if (!isTrainerView || !selectionRangeAdjusted || !quickBookCustomName.trim()) return;
     const occurrences = buildBookingOccurrences();
+    const groupId = occurrences.length > 1 ? generateObjectId() : null;
     for (const occ of occurrences) {
       await dispatch(
         createScheduleEvent({
@@ -950,7 +989,7 @@ export default function Schedule() {
           customClientName: quickBookCustomName.trim(),
           customClientEmail: quickBookCustomEmail.trim(),
           customClientPhone: quickBookCustomPhone.trim(),
-          ...quickBookPricingFields(),
+          ...quickBookPricingFields(groupId),
         })
       );
     }
@@ -1303,6 +1342,62 @@ export default function Schedule() {
     onClearSelection: resetSelectionBookingForm,
     defaultSessionMinutes: defaultSessionLength,
   });
+
+  // Warn (non-blocking) when the chosen booking time overlaps an existing
+  // appointment for this trainer in the loaded range.
+  const bookingConflictLabels = useMemo(() => {
+    if (!selectionRangeAdjusted) return [];
+    const selStart = selectionRangeAdjusted.start.valueOf();
+    const selEnd = selectionRangeAdjusted.end.valueOf();
+    return (scheduleData.events || [])
+      .filter((event) => {
+        if (event.eventType !== "APPOINTMENT") return false;
+        if (event.status === "CANCELLED") return false;
+        const evStart = dayjs(event.startDateTime).valueOf();
+        const evEnd = dayjs(event.endDateTime).valueOf();
+        return evStart < selEnd && evEnd > selStart;
+      })
+      .map((event) => {
+        const who = event.clientId
+          ? clientLookup.get(event.clientId) || "Client"
+          : event.customClientName || "Client";
+        return `${who} · ${dayjs(event.startDateTime).format("h:mm")}–${dayjs(
+          event.endDateTime
+        ).format("h:mm A")}`;
+      });
+  }, [scheduleData.events, selectionRangeAdjusted, clientLookup]);
+
+  // Fetch the booking pop-up client's prepaid balance (keyed to the pop-up's chosen
+  // client, which can differ from the header's filter-selected client).
+  useEffect(() => {
+    if (!openSelectionDialog || !isTrainerView || !quickBookClientId || !user?._id) {
+      setQuickBookClientSummary(null);
+      return;
+    }
+    let cancelled = false;
+    billingApi
+      .getSummary({ trainerId: user._id, clientId: quickBookClientId })
+      .then((data) => {
+        if (!cancelled && data && !data.error) setQuickBookClientSummary(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [openSelectionDialog, isTrainerView, quickBookClientId, user?._id]);
+
+  // Remaining prepaid sessions for the chosen client + session type (overall if no type).
+  const quickBookRemainingCredits = useMemo(() => {
+    if (!quickBookClientSummary) return null;
+    if (quickBookSessionTypeId) {
+      const entry = (quickBookClientSummary.bySessionType || []).find(
+        (e) => e.sessionTypeId === quickBookSessionTypeId
+      );
+      return entry ? entry.remainingSessions : 0;
+    }
+    return quickBookClientSummary.remainingSessions ?? null;
+  }, [quickBookClientSummary, quickBookSessionTypeId]);
+
   const getRowClientLabel = useCallback(
     (event) => {
       if (isTrainerView && (event.clientId || event.customClientName)) {
@@ -1697,6 +1792,8 @@ export default function Schedule() {
         quickBookRecurUntil={quickBookRecurUntil}
         setQuickBookRecurUntil={setQuickBookRecurUntil}
         sessionTypes={sessionTypes}
+        bookingConflictLabels={bookingConflictLabels}
+        quickBookRemainingCredits={quickBookRemainingCredits}
         handleQuickBookClient={handleQuickBookClient}
         handleQuickBookCreateWorkout={handleQuickBookCreateWorkout}
         quickBookCustomName={quickBookCustomName}
@@ -1943,6 +2040,7 @@ export default function Schedule() {
         onClose={() => setOpenDeleteDialog(false)}
         deleteEvent={deleteEvent}
         onDelete={handleDeleteEvent}
+        onDeleteSeries={handleDeleteSeries}
         deleting={deleting}
         dayjs={dayjs}
       />

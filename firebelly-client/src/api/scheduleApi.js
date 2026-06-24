@@ -34,6 +34,13 @@ export const scheduleApi = {
       accessToken,
     }),
 
+  deleteSeries: (recurrenceGroupId, fromDate = null, accessToken = null) =>
+    apiFetch("/schedule/series/delete", {
+      method: "POST",
+      body: fromDate ? { recurrenceGroupId, fromDate } : { recurrenceGroupId },
+      accessToken,
+    }),
+
   requestBooking: (payload) =>
     apiFetch("/schedule/book/request", {
       method: "POST",
