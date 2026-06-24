@@ -116,6 +116,11 @@ export const scheduleApi = {
       method: "POST",
     }),
 
+  unarchiveSessionType: (sessionTypeId) =>
+    apiFetch(`/session-types/${encodeURIComponent(sessionTypeId)}/unarchive`, {
+      method: "POST",
+    }),
+
   repriceSessionType: (sessionTypeId, payload) =>
     apiFetch(`/session-types/${encodeURIComponent(sessionTypeId)}/reprice`, {
       method: "POST",

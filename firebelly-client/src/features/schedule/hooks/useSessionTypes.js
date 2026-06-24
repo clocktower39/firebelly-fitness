@@ -144,6 +144,17 @@ export default function useSessionTypes({ isTrainer }) {
     }
   };
 
+  const handleUnarchiveSessionType = async (typeId) => {
+    try {
+      const data = await scheduleApi.unarchiveSessionType(typeId);
+      if (data?.error) throw new Error(data.error);
+      setSessionTypesStatus("");
+      loadSessionTypes();
+    } catch (err) {
+      setSessionTypesStatus(err.message || "Unable to reactivate session type.");
+    }
+  };
+
   // Reprice = archive current + clone at a new rate (keeps the same name).
   const openRepriceDialog = (type) => {
     setRepriceTarget(type);
@@ -195,6 +206,7 @@ export default function useSessionTypes({ isTrainer }) {
     handleEditSessionType,
     handleDeleteSessionType,
     handleArchiveSessionType,
+    handleUnarchiveSessionType,
     repriceTarget,
     repriceForm,
     setRepriceForm,

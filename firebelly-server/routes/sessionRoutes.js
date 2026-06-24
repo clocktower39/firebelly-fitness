@@ -11,6 +11,7 @@ router.post("/session-types", verifyAccessToken, ensureWriteAccess, sessionTypeC
 router.put("/session-types/:id", verifyAccessToken, ensureWriteAccess, sessionTypeController.update_session_type);
 router.delete("/session-types/:id", verifyAccessToken, ensureWriteAccess, sessionTypeController.delete_session_type);
 router.post("/session-types/:id/archive", verifyAccessToken, ensureWriteAccess, sessionTypeController.archive_session_type);
+router.post("/session-types/:id/unarchive", verifyAccessToken, ensureWriteAccess, sessionTypeController.unarchive_session_type);
 router.post("/session-types/:id/reprice", verifyAccessToken, ensureWriteAccess, sessionTypeController.reprice_session_type);
 router.post("/session-types/purchasable", verifyAccessToken, sessionTypeController.list_purchasable_types);
 router.post("/session-types/entitlements", verifyAccessToken, ensureWriteAccess, sessionTypeController.grant_entitlement);

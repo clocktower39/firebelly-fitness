@@ -229,6 +229,7 @@ export default function Schedule() {
     handleEditSessionType,
     handleDeleteSessionType,
     handleArchiveSessionType,
+    handleUnarchiveSessionType,
     repriceTarget,
     repriceForm,
     setRepriceForm,
@@ -1934,6 +1935,7 @@ export default function Schedule() {
         handleEditSessionType={handleEditSessionType}
         handleDeleteSessionType={handleDeleteSessionType}
         handleArchiveSessionType={handleArchiveSessionType}
+        handleUnarchiveSessionType={handleUnarchiveSessionType}
         repriceTarget={repriceTarget}
         repriceForm={repriceForm}
         setRepriceForm={setRepriceForm}

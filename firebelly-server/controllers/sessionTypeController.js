@@ -243,6 +243,39 @@ const archive_session_type = async (req, res, next) => {
   }
 };
 
+// Undo an archive: reactivate a type (unless an active type of the same name now
+// exists — e.g. created by a reprice — which would break the unique-name rule).
+const unarchive_session_type = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!ensureTrainer(user)) {
+      return res.status(403).json({ error: "Trainer access required." });
+    }
+    const existing = await SessionType.findById(req.params.id);
+    if (!existing || String(existing.trainerId) !== String(user._id)) {
+      return res.status(404).json({ error: "Session type not found." });
+    }
+    const clash = await SessionType.findOne({
+      trainerId: user._id,
+      name: existing.name,
+      active: true,
+      archivedAt: null,
+      _id: { $ne: existing._id },
+    });
+    if (clash) {
+      return res.status(400).json({
+        error: `An active session type named "${existing.name}" already exists. Archive it first.`,
+      });
+    }
+    existing.archivedAt = null;
+    existing.active = true;
+    await existing.save();
+    return res.json({ sessionType: existing });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // Change a type's rate: archive the current version and create a clone at the new
 // rate (same name/identity). Clients with history/entitlement keep the old rate.
 const reprice_session_type = async (req, res, next) => {
@@ -385,6 +418,7 @@ module.exports = {
   update_session_type,
   delete_session_type,
   archive_session_type,
+  unarchive_session_type,
   reprice_session_type,
   list_purchasable_types,
   grant_entitlement,

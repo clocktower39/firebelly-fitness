@@ -30,6 +30,7 @@ export default function SessionTypeDialogs({
   handleEditSessionType,
   handleDeleteSessionType,
   handleArchiveSessionType,
+  handleUnarchiveSessionType,
   repriceTarget,
   repriceForm,
   setRepriceForm,
@@ -44,6 +45,9 @@ export default function SessionTypeDialogs({
   setSessionTypeForm,
   handleSaveSessionType,
 }) {
+  // Confirmation gate for destructive actions: { action: "archive" | "delete", type }.
+  const [confirmAction, setConfirmAction] = React.useState(null);
+
   const activeTypes = sessionTypes.filter((t) => !t.archivedAt);
   const archivedTypes = sessionTypes.filter((t) => t.archivedAt);
 
@@ -78,32 +82,42 @@ export default function SessionTypeDialogs({
           )}
         </Stack>
       </CardContent>
-      {!archived && (
-        <CardActions sx={{ px: 2, pb: 2, flexWrap: "wrap" }}>
-          <Button size="small" variant="outlined" onClick={() => handleEditSessionType(type)}>
-            Edit
-          </Button>
-          <Button size="small" variant="outlined" onClick={() => openRepriceDialog(type)}>
-            Change price
-          </Button>
+      <CardActions sx={{ px: 2, pb: 2, flexWrap: "wrap" }}>
+        {archived ? (
           <Button
             size="small"
-            color="warning"
-            variant="text"
-            onClick={() => handleArchiveSessionType(type._id)}
+            variant="outlined"
+            onClick={() => handleUnarchiveSessionType(type._id)}
           >
-            Archive
+            Reactivate
           </Button>
-          <Button
-            size="small"
-            color="error"
-            variant="text"
-            onClick={() => handleDeleteSessionType(type._id)}
-          >
-            Delete
-          </Button>
-        </CardActions>
-      )}
+        ) : (
+          <>
+            <Button size="small" variant="outlined" onClick={() => handleEditSessionType(type)}>
+              Edit
+            </Button>
+            <Button size="small" variant="outlined" onClick={() => openRepriceDialog(type)}>
+              Change price
+            </Button>
+            <Button
+              size="small"
+              color="warning"
+              variant="text"
+              onClick={() => setConfirmAction({ action: "archive", type })}
+            >
+              Archive
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              variant="text"
+              onClick={() => setConfirmAction({ action: "delete", type })}
+            >
+              Delete
+            </Button>
+          </>
+        )}
+      </CardActions>
     </Card>
   );
 
@@ -343,6 +357,49 @@ export default function SessionTypeDialogs({
           <Button onClick={closeRepriceDialog}>Cancel</Button>
           <Button variant="contained" onClick={handleReprice}>
             Save new price
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(confirmAction)}
+        onClose={() => setConfirmAction(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {confirmAction?.action === "delete" ? "Delete session type?" : "Archive session type?"}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {confirmAction?.action === "delete" ? (
+              <>
+                Permanently delete <strong>{confirmAction?.type?.name}</strong>? This can&apos;t be
+                undone. (Types with bookings or purchases can&apos;t be deleted — archive them
+                instead.)
+              </>
+            ) : (
+              <>
+                Archive <strong>{confirmAction?.type?.name}</strong>? It will be hidden from sale,
+                but stays available to grandfathered clients and you can reactivate it anytime.
+              </>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmAction(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color={confirmAction?.action === "delete" ? "error" : "warning"}
+            onClick={() => {
+              const { action, type } = confirmAction || {};
+              if (!type) return;
+              if (action === "delete") handleDeleteSessionType(type._id);
+              else handleArchiveSessionType(type._id);
+              setConfirmAction(null);
+            }}
+          >
+            {confirmAction?.action === "delete" ? "Delete" : "Archive"}
           </Button>
         </DialogActions>
       </Dialog>
