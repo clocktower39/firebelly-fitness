@@ -1,6 +1,35 @@
 const SessionType = require("../models/sessionType");
+const SessionTypeEntitlement = require("../models/sessionTypeEntitlement");
+const BillingLedgerEntry = require("../models/billingLedgerEntry");
+const Relationship = require("../models/relationship");
 
 const ensureTrainer = (user) => user && user.isTrainer;
+
+const ensureRelationship = async (trainerId, clientId) =>
+  Relationship.findOne({ trainer: trainerId, client: clientId, accepted: true });
+
+// The set of session types a client may PURCHASE from a trainer:
+//   active (non-archived) types  ∪  types the client already bought (implicit
+//   grandfathering)  ∪  explicit entitlements (archived types granted to them).
+const getPurchasableTypes = async (trainerId, clientId) => {
+  const [active, historyTypeIds, entitlements] = await Promise.all([
+    SessionType.find({ trainerId, active: true, archivedAt: null }).lean(),
+    BillingLedgerEntry.distinct("sessionTypeId", { trainerId, clientId, delta: { $gt: 0 } }),
+    SessionTypeEntitlement.find({ trainerId, clientId }).lean(),
+  ]);
+
+  const byId = new Map(active.map((t) => [String(t._id), t]));
+  const extraIds = [
+    ...historyTypeIds.filter(Boolean).map(String),
+    ...entitlements.map((e) => String(e.sessionTypeId)),
+  ].filter((id) => !byId.has(id));
+
+  if (extraIds.length) {
+    const extra = await SessionType.find({ trainerId, _id: { $in: extraIds } }).lean();
+    extra.forEach((t) => byId.set(String(t._id), t));
+  }
+  return Array.from(byId.values());
+};
 
 const DEFAULT_SESSION_TYPES = [
   { name: "60 Min Session", durationMinutes: 60, creditsRequired: 1 },
@@ -211,10 +240,100 @@ const delete_session_type = async (req, res, next) => {
   }
 };
 
+// What a given client can buy from the authenticated trainer (or, for a client,
+// what they can buy from the given trainer).
+const list_purchasable_types = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const { trainerId, clientId } = req.body;
+    const effectiveTrainerId = trainerId || userId;
+
+    const isTrainer = String(effectiveTrainerId) === String(userId);
+    const isClient = String(clientId) === String(userId);
+    if (!isTrainer && !isClient) {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+    if (!clientId) {
+      return res.status(400).json({ error: "clientId is required." });
+    }
+    const relationship = await ensureRelationship(effectiveTrainerId, clientId);
+    if (!relationship) {
+      return res.status(403).json({ error: "No accepted relationship." });
+    }
+
+    const types = await getPurchasableTypes(effectiveTrainerId, clientId);
+    return res.json({ sessionTypes: types });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const grant_entitlement = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!ensureTrainer(user)) {
+      return res.status(403).json({ error: "Trainer access required." });
+    }
+    const { clientId, sessionTypeId, note } = req.body;
+    if (!clientId || !sessionTypeId) {
+      return res.status(400).json({ error: "clientId and sessionTypeId are required." });
+    }
+    const sessionType = await SessionType.findOne({ _id: sessionTypeId, trainerId: user._id });
+    if (!sessionType) {
+      return res.status(404).json({ error: "Session type not found." });
+    }
+    const entitlement = await SessionTypeEntitlement.findOneAndUpdate(
+      { trainerId: user._id, clientId, sessionTypeId },
+      { $set: { grantedBy: user._id, note: note || "" } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    return res.json({ entitlement });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const revoke_entitlement = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!ensureTrainer(user)) {
+      return res.status(403).json({ error: "Trainer access required." });
+    }
+    const { clientId, sessionTypeId } = req.body;
+    await SessionTypeEntitlement.deleteOne({ trainerId: user._id, clientId, sessionTypeId });
+    return res.json({ success: true });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const list_entitlements = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!ensureTrainer(user)) {
+      return res.status(403).json({ error: "Trainer access required." });
+    }
+    const { clientId } = req.body;
+    const query = { trainerId: user._id };
+    if (clientId) query.clientId = clientId;
+    const entitlements = await SessionTypeEntitlement.find(query)
+      .populate("sessionTypeId", "name durationMinutes defaultPrice archivedAt")
+      .lean();
+    return res.json({ entitlements });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   ensureDefaultSessionTypes,
+  getPurchasableTypes,
   list_session_types,
   create_session_type,
   update_session_type,
   delete_session_type,
+  list_purchasable_types,
+  grant_entitlement,
+  revoke_entitlement,
+  list_entitlements,
 };

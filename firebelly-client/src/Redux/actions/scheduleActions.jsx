@@ -133,37 +133,6 @@ export function requestSessionSummary(trainerId, clientId) {
   };
 }
 
-export function createSessionPurchase({ clientId, sessionsPurchased, expiresAt, notes }) {
-  return async (dispatch) => {
-    const data = await scheduleApi.createSessionPurchase({
-      clientId,
-      sessionsPurchased,
-      expiresAt,
-      notes,
-    });
-    if (data.error) {
-      dispatch({ type: ERROR, error: data.error });
-      return data;
-    }
-    return data;
-  };
-}
-
-export function requestSessionPurchases({ trainerId, clientId, activeOnly = false }) {
-  return async (dispatch) => {
-    const data = await scheduleApi.listSessionPurchases({
-      trainerId,
-      clientId,
-      activeOnly,
-    });
-    if (data.error) {
-      dispatch({ type: ERROR, error: data.error });
-      return data;
-    }
-    return data.purchases || [];
-  };
-}
-
 export function requestWorkoutQueue(accountId, startDate) {
   return async (dispatch) => {
     const data = await workoutApi.getWorkoutQueue({ accountId, startDate });

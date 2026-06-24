@@ -117,15 +117,4 @@ export const scheduleApi = {
       body: { trainerId, clientId },
     }),
 
-  createSessionPurchase: ({ clientId, sessionsPurchased, expiresAt, notes }) =>
-    apiFetch("/sessions/purchase/create", {
-      method: "POST",
-      body: { clientId, sessionsPurchased, expiresAt, notes },
-    }),
-
-  listSessionPurchases: ({ trainerId, clientId, activeOnly = false }) =>
-    apiFetch("/sessions/purchase/list", {
-      method: "POST",
-      body: { trainerId, clientId, activeOnly },
-    }),
 };

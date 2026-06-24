@@ -13,6 +13,11 @@ const sessionTypeSchema = new mongoose.Schema(
     payoutCurrency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
     active: { type: Boolean, default: true },
     isDefault: { type: Boolean, default: false },
+    // Lifecycle: archived types are hidden from general sale but stay purchasable
+    // by entitled (grandfathered) clients and remain referenced by past bookings.
+    archivedAt: { type: Date, default: null },
+    // Links a re-priced clone back to the version it replaced (for history/UX).
+    previousVersionId: { type: mongoose.Schema.Types.ObjectId, ref: "SessionType", default: null },
   },
   { timestamps: true }
 );
