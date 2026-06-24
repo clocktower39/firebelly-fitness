@@ -88,6 +88,7 @@ export default function Invoices() {
   const [historyFilter, setHistoryFilter] = useState("ALL");
   const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
   const [rowMenuInvoice, setRowMenuInvoice] = useState(null);
+  const [detailInvoice, setDetailInvoice] = useState(null);
 
   useEffect(() => {
     if (user.isTrainer) {
@@ -824,6 +825,10 @@ export default function Invoices() {
                     return (
                       <Card key={invoice._id} variant="outlined">
                         <CardContent sx={{ pb: 1.5, "&:last-child": { pb: 1.5 } }}>
+                          <Box
+                            onClick={() => setDetailInvoice(invoice)}
+                            sx={{ cursor: "pointer" }}
+                          >
                           <Stack
                             direction="row"
                             spacing={1}
@@ -865,6 +870,7 @@ export default function Invoices() {
                               ) : null}
                             </Stack>
                           </Stack>
+                          </Box>
 
                           <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: "center" }}>
                             {canPay && (
@@ -936,6 +942,175 @@ export default function Invoices() {
           </MenuItem>
         )}
       </Menu>
+
+      <Dialog
+        open={Boolean(detailInvoice)}
+        onClose={() => setDetailInvoice(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        {detailInvoice && (
+          <>
+            <DialogTitle>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <span>{detailInvoice.invoiceNumber}</span>
+                <Chip
+                  size="small"
+                  label={(STATUS_CHIP[detailInvoice.status] || {}).label || detailInvoice.status}
+                  color={(STATUS_CHIP[detailInvoice.status] || {}).color || "default"}
+                />
+              </Stack>
+            </DialogTitle>
+            <DialogContent dividers>
+              <Stack spacing={1.5}>
+                <Typography variant="body2" color="text.secondary">
+                  {detailInvoice.billToName || ""}
+                  {detailInvoice.issuedAt
+                    ? ` · Issued ${dayjs(detailInvoice.issuedAt).format("MMM D, YYYY")}`
+                    : ""}
+                  {detailInvoice.dueAt
+                    ? ` · Due ${dayjs(detailInvoice.dueAt).format("MMM D, YYYY")}`
+                    : ""}
+                </Typography>
+
+                <Divider />
+                <Typography variant="subtitle2">Items</Typography>
+                {(detailInvoice.lineItems || []).map((li, idx) => (
+                  <Stack
+                    key={idx}
+                    direction="row"
+                    spacing={1}
+                    sx={{ justifyContent: "space-between" }}
+                  >
+                    <Box>
+                      <Typography variant="body2">{li.description || li.itemType}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {li.quantity} × {formatPrice(li.unitPrice, detailInvoice.currency)}
+                        {li.itemType === "SESSION" && li.sessionCreditsTotal
+                          ? ` · ${li.sessionCreditsTotal} credits`
+                          : ""}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2">
+                      {formatPrice(li.lineTotal, detailInvoice.currency)}
+                    </Typography>
+                  </Stack>
+                ))}
+
+                <Divider />
+                <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Subtotal
+                  </Typography>
+                  <Typography variant="body2">
+                    {formatPrice(detailInvoice.subtotal, detailInvoice.currency)}
+                  </Typography>
+                </Stack>
+                {detailInvoice.tax ? (
+                  <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Tax
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatPrice(detailInvoice.tax, detailInvoice.currency)}
+                    </Typography>
+                  </Stack>
+                ) : null}
+                {detailInvoice.discount ? (
+                  <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Discount
+                    </Typography>
+                    <Typography variant="body2">
+                      −{formatPrice(detailInvoice.discount, detailInvoice.currency)}
+                    </Typography>
+                  </Stack>
+                ) : null}
+                <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                  <Typography variant="subtitle2">Total</Typography>
+                  <Typography variant="subtitle2">
+                    {formatPrice(detailInvoice.total, detailInvoice.currency)}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Paid
+                  </Typography>
+                  <Typography variant="body2">
+                    {formatPrice(detailInvoice.amountPaid || 0, detailInvoice.currency)}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                  <Typography
+                    variant="body2"
+                    color={Number(detailInvoice.balanceDue) > 0 ? "warning.main" : "text.secondary"}
+                  >
+                    Balance due
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color={Number(detailInvoice.balanceDue) > 0 ? "warning.main" : "text.secondary"}
+                  >
+                    {formatPrice(detailInvoice.balanceDue || 0, detailInvoice.currency)}
+                  </Typography>
+                </Stack>
+                {detailInvoice.sessionCreditsTotal ? (
+                  <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Session credits
+                    </Typography>
+                    <Typography variant="body2">+{detailInvoice.sessionCreditsTotal}</Typography>
+                  </Stack>
+                ) : null}
+
+                {(detailInvoice.payments || []).length > 0 && (
+                  <>
+                    <Divider />
+                    <Typography variant="subtitle2">Payments</Typography>
+                    {detailInvoice.payments.map((p, i) => (
+                      <Stack key={i} direction="row" sx={{ justifyContent: "space-between" }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {p.paidAt ? dayjs(p.paidAt).format("MMM D, YYYY") : ""}
+                          {p.method ? ` · ${p.method}` : ""}
+                        </Typography>
+                        <Typography variant="body2">
+                          {formatPrice(p.amount, p.currency || detailInvoice.currency)}
+                        </Typography>
+                      </Stack>
+                    ))}
+                  </>
+                )}
+
+                {detailInvoice.notes && (
+                  <Typography variant="caption" color="text.secondary">
+                    Notes: {detailInvoice.notes}
+                  </Typography>
+                )}
+                {detailInvoice.terms && (
+                  <Typography variant="caption" color="text.secondary">
+                    Terms: {detailInvoice.terms}
+                  </Typography>
+                )}
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => handleDownloadPdf(detailInvoice)}>PDF</Button>
+              {detailInvoice.status !== "PAID" && detailInvoice.status !== "VOID" && (
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    handleStatusUpdate(detailInvoice._id, "PAID");
+                    setDetailInvoice(null);
+                  }}
+                >
+                  Mark paid
+                </Button>
+              )}
+              <Button onClick={() => setDetailInvoice(null)}>Close</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       {error && (
         <Grid container size={12}>
