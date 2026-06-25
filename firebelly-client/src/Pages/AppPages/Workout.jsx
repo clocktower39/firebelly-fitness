@@ -450,6 +450,7 @@ export default function Workout({ socket }) {
                   <StrengthWorkoutEditor
                     activeStep={activeStep}
                     activeWorkoutWeightUnit={activeWorkoutWeightUnit}
+                    allowFeedback={!training.isTemplate}
                     localTraining={localTraining}
                     newExercise={newExercise}
                     newSet={newSet}

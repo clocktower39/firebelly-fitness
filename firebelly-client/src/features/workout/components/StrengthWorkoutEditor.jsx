@@ -4,6 +4,7 @@ import SwipeableSet from "../../../Components/TrainingComponents/SwipeableSet";
 export default function StrengthWorkoutEditor({
   activeStep,
   activeWorkoutWeightUnit,
+  allowFeedback,
   localTraining,
   newExercise,
   newSet,
@@ -52,6 +53,7 @@ export default function StrengthWorkoutEditor({
           setActiveStep={setActiveStep}
           weightUnit={activeWorkoutWeightUnit}
           onToggleWeightUnit={onToggleWeightUnit}
+          allowFeedback={allowFeedback}
         />
       )}
     </>

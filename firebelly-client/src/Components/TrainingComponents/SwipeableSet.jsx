@@ -34,6 +34,7 @@ import {
 } from "@mui/icons-material";
 import SwipeableViewsModule from "react-swipeable-views";
 import Exercise from "./Exercise";
+import CircuitFeedback from "./CircuitFeedback";
 import { ExerciseListAutocomplete } from "../../features/workout/components/AddExercisesDialog";
 import dayjs from "dayjs";
 
@@ -64,6 +65,7 @@ function SwipeableSet(props) {
     setActiveStep,
     weightUnit,
     onToggleWeightUnit,
+    allowFeedback,
   } = props;
 
   const [heightToggle, setHeightToggle] = useState(true);
@@ -218,6 +220,13 @@ function SwipeableSet(props) {
                   </Tooltip>
                 </Grid>
               </Grid>
+              {allowFeedback && (
+                <CircuitFeedback
+                  circuit={group}
+                  circuitIndex={index}
+                  setLocalTraining={setLocalTraining}
+                />
+              )}
             </Grid>
           </div>
         ))}

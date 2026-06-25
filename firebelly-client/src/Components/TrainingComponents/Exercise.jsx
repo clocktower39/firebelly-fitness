@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -540,11 +541,22 @@ export default function Exercise(props) {
                 <Grid
                   container
                   size={8}
-                  sx={{ justifyContent: "flex-start", alignContent: "center" }}
+                  sx={{
+                    justifyContent: "flex-start",
+                    alignItems: "center",
+                    gap: 1,
+                    flexWrap: "wrap",
+                  }}
                 >
                   <Typography color="text.primary" variant="h6">
                     {title?.exerciseTitle || "Select an exercise"}
                   </Typography>
+                  {exercise.feedback?.difficulty === 0 && (
+                    <Chip size="small" color="secondary" label="Too easy" />
+                  )}
+                  {exercise.feedback?.difficulty === 2 && (
+                    <Chip size="small" color="error" label="Too hard" />
+                  )}
                 </Grid>
                 <Grid
                   container
