@@ -455,7 +455,7 @@ export default function Invoices() {
   const filteredClient = clients.find((c) => c.client?._id === clientFilter)?.client;
 
   // At-a-glance totals computed from the already-loaded invoices (no extra fetch).
-  const dashboard = useMemo(() => {
+  const dashboard = (() => {
     const now = dayjs();
     let outstanding = 0;
     let overdue = 0;
@@ -474,7 +474,7 @@ export default function Invoices() {
       });
     });
     return { outstanding, overdue, collectedYTD };
-  }, [invoiceList]);
+  })();
 
   const filteredInvoices = invoiceList.filter((inv) => {
     if (clientFilter && String(inv.clientId) !== String(clientFilter)) return false;
