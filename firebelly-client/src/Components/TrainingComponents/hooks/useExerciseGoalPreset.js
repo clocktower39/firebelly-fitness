@@ -76,6 +76,12 @@ export default function useExerciseGoalPreset({
 
       setCurrentExercise(newSelection);
 
+      // Default the entry mode from the library classification (e.g. isometric holds →
+      // Time). A matching history preset below still wins if one exists.
+      if (newSelection.measurementType === "time") {
+        setExerciseType("Time");
+      }
+
       const reduxExercise = exerciseList.find((item) => item._id === newSelection._id);
       const history = reduxExercise?.history?.[historyUserId] || [];
       const historyOptions = buildRecentHistoryOptions(history);
@@ -98,6 +104,7 @@ export default function useExerciseGoalPreset({
       historyTargetUser,
       historyUserId,
       setCurrentExercise,
+      setExerciseType,
     ]
   );
 
