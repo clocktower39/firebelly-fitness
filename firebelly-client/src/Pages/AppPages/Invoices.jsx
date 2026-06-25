@@ -454,6 +454,28 @@ export default function Invoices() {
 
   const filteredClient = clients.find((c) => c.client?._id === clientFilter)?.client;
 
+  // At-a-glance totals computed from the already-loaded invoices (no extra fetch).
+  const dashboard = useMemo(() => {
+    const now = dayjs();
+    let outstanding = 0;
+    let overdue = 0;
+    let collectedYTD = 0;
+    invoiceList.forEach((inv) => {
+      if (inv.status === "VOID") return;
+      const bal = Number(inv.balanceDue || 0);
+      if (inv.status !== "DRAFT") {
+        outstanding += bal;
+        if (bal > 0 && inv.dueAt && dayjs(inv.dueAt).isBefore(now)) overdue += bal;
+      }
+      (inv.payments || []).forEach((p) => {
+        if (p.paidAt && dayjs(p.paidAt).year() === now.year()) {
+          collectedYTD += p.type === "REFUND" ? -Number(p.amount || 0) : Number(p.amount || 0);
+        }
+      });
+    });
+    return { outstanding, overdue, collectedYTD };
+  }, [invoiceList]);
+
   const filteredInvoices = invoiceList.filter((inv) => {
     if (clientFilter && String(inv.clientId) !== String(clientFilter)) return false;
     if (historyFilter === "ALL") return true;
@@ -553,6 +575,29 @@ export default function Invoices() {
             {requestCount} session-purchase {requestCount === 1 ? "request" : "requests"} awaiting
             your approval.
           </Alert>
+        </Grid>
+      )}
+
+      {invoiceList.length > 0 && (
+        <Grid container size={12} spacing={1}>
+          {[
+            { label: `Collected (${dayjs().year()})`, value: dashboard.collectedYTD, color: "success.main" },
+            { label: "Outstanding", value: dashboard.outstanding, color: "text.primary" },
+            { label: "Overdue", value: dashboard.overdue, color: dashboard.overdue > 0 ? "warning.main" : "text.primary" },
+          ].map((stat) => (
+            <Grid key={stat.label} size={{ xs: 4 }}>
+              <Card sx={{ width: "100%" }}>
+                <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {stat.label}
+                  </Typography>
+                  <Typography variant="h6" color={stat.color}>
+                    {formatPrice(stat.value, "USD")}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
         </Grid>
       )}
 
