@@ -4,6 +4,7 @@
 > subscribe feed, "Sync to calendar") is built and live. This is the next tier:
 > reading the trainer's Google Calendar so the scheduler won't double-book them against
 > personal events. It requires Google OAuth, which is a real (one-time) setup.
+> **v1 decisions are locked (see "Decisions" below); implementation is not started.**
 
 ## Goal
 A trainer connects their Google Calendar; the scheduler then treats their Google
@@ -17,17 +18,40 @@ your Google account):
 - An **OAuth consent screen**. Calendar scopes are "sensitive/restricted," so for
   production Google requires **app verification** (can take days to weeks). In testing
   mode it works immediately for a small allowlist of accounts — fine for dev and a pilot.
-- **Recommend the narrowest scope:** `https://www.googleapis.com/auth/calendar.freebusy`
-  (or `calendar.readonly` if freebusy alone is insufficient). FreeBusy returns only
-  busy/free intervals — **no event titles/details** — which is better for privacy *and*
-  eases verification.
+- **Decided scope (v1): `https://www.googleapis.com/auth/calendar.freebusy`** — busy/free
+  intervals only, **no event titles/details**. Best privacy and avoids the heaviest
+  verification. Full `calendar.readonly` is a deferred upgrade (see Decisions #1).
 
-## Decisions to confirm before building
-1. **Scope:** FreeBusy-only (recommended — busy blocks, no details) vs full read.
-2. **Which calendars:** primary only (simplest) vs let the trainer pick multiple.
-3. **Look-ahead window:** how far forward to check (e.g. 60–90 days) + cache TTL.
-4. **Granularity:** block any overlapping busy time, or only events marked "busy"
-   (ignore "free"/transparent events)?
+## Decisions (locked for v1)
+1. **Scope — FreeBusy only.** One OAuth grant governs what we can read; it can't be
+   "FreeBusy for clients, full-read for the trainer." We pull only busy/free, so:
+   - **Clients** viewing a trainer's availability see only blocked vs. open slots (no details).
+   - **Trainers** see their personal time as **busy blocks** inside Firebelly (no titles);
+     their own Firebelly sessions still render in full, and Google itself holds the details.
+   - **Why not full read:** `calendar.readonly` is a Google **"restricted" scope** →
+     heaviest verification (annual third-party CASA security assessment — slow, can cost
+     money). FreeBusy (`auth/calendar.freebusy`) avoids all of that and is all the
+     scheduler actually needs.
+   - **Upgrade path (deferred):** if showing a trainer their *own* external event titles
+     in-app later proves worth it, switch to `calendar.readonly` then and accept the heavier
+     verification. Clients would still only ever be shown busy/free.
+2. **Calendars — primary only.** The trainer's `primary` Google calendar; needs nothing
+   beyond FreeBusy. Multi-calendar selection is deferred — it requires *listing* the
+   trainer's calendars (a broader scope that undercuts #1). Keep `calendarIds[]` in the
+   model so adding it later is additive.
+3. **Window & cache — query the view/booking window; cap ~90 days; cache 2–5 min; fail
+   open.** Don't pull a giant fixed range — query FreeBusy only for the window actually
+   being shown or booked (tied to how far ahead clients can book, capped ~90 days). Cache
+   per trainer+window for ~2–5 min. On any Google error/timeout, **ignore busy-import for
+   that request** — native scheduling is never blocked.
+4. **Granularity — busy-marked time only.** Block only time Google reports as busy;
+   FreeBusy already honors each event's Busy/Free ("transparency") setting, so this is
+   inherent. **Refinement (finalize at build):** likely **ignore all-day busy events** so a
+   single all-day event doesn't wipe a whole day of bookable slots.
+
+**Display rule (independent of scope):** clients are *only ever* shown busy/free; the
+trainer's own Firebelly view shows their Firebelly sessions in full plus Google busy blocks
+(titles only if/when the scope is upgraded per #1).
 
 ## Data model
 **User (trainer)** — `firebelly-server/models/user.js`:
