@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Autocomplete,
   Button,
@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import DefaultSessionLengthField from "../../../Components/AccountComponents/DefaultSessionLengthField";
+import CalendarSyncDialog from "./CalendarSyncDialog";
 
 export default function ScheduleControlsCard({
   user,
@@ -37,11 +38,25 @@ export default function ScheduleControlsCard({
   setOpenClientAccessDialog,
   setOpenRequestPackageDialog,
 }) {
+  const [calendarSyncOpen, setCalendarSyncOpen] = useState(false);
+
   return (
     <Grid container size={12}>
       <Card sx={{ width: "100%" }}>
         <CardContent>
+          <CalendarSyncDialog
+            open={calendarSyncOpen}
+            onClose={() => setCalendarSyncOpen(false)}
+          />
           <Stack spacing={2}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setCalendarSyncOpen(true)}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Sync to calendar
+            </Button>
             {user.isTrainer && (
               <Stack spacing={1}>
                 <Typography variant="overline" color="text.secondary">

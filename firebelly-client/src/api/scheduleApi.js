@@ -7,6 +7,13 @@ export const scheduleApi = {
       body: payload,
     }),
 
+  // Get (or rotate) the caller's secret iCalendar subscribe-feed token.
+  getCalendarFeed: ({ rotate = false } = {}) =>
+    apiFetch("/calendar/feed/token", {
+      method: "POST",
+      body: { rotate },
+    }),
+
   createEvent: (payload, accessToken = null) =>
     apiFetch("/schedule/event/create", {
       method: "POST",
