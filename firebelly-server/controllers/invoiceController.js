@@ -228,7 +228,9 @@ const applyInvoiceCredits = async (invoice, userId) => {
 
   if (creditEntries.length) {
     await BillingLedgerEntry.insertMany(creditEntries);
-    await Invoice.findByIdAndUpdate(invoice._id, { creditsAppliedAt: new Date() });
+    const appliedAt = new Date();
+    await Invoice.findByIdAndUpdate(invoice._id, { creditsAppliedAt: appliedAt });
+    invoice.creditsAppliedAt = appliedAt; // keep the in-memory doc in sync for the response
   }
 };
 
@@ -265,6 +267,47 @@ const reverseInvoiceCredits = async (invoice, userId) => {
 
 const removeInvoiceReversals = async (invoiceId) =>
   BillingLedgerEntry.deleteMany({ sourceInvoiceId: invoiceId, source: "REVERSAL" });
+
+// Single source of truth: turn payments[] into amountPaid / balanceDue / status and
+// release or reverse credits accordingly. Manual entry uses this today; the future
+// Stripe webhook will append a payment and call this exact function.
+const settleInvoice = async (invoice, userId) => {
+  const paid = (invoice.payments || []).reduce((sum, p) => {
+    const amt = Number(p.amount || 0);
+    return sum + (p.type === "REFUND" ? -amt : amt);
+  }, 0);
+  const total = Number(invoice.total || 0);
+  invoice.amountPaid = paid;
+  invoice.balanceDue = Math.max(total - paid, 0);
+
+  const fullyPaid = paid > 0 && invoice.balanceDue <= 0;
+
+  if (invoice.status !== "VOID") {
+    if (fullyPaid) {
+      invoice.status = "PAID";
+      invoice.paidAt = invoice.paidAt || new Date();
+    } else if (paid > 0) {
+      invoice.status = "PARTIAL";
+      invoice.paidAt = null;
+    } else {
+      if (invoice.status === "PAID" || invoice.status === "PARTIAL") invoice.status = "SENT";
+      invoice.paidAt = null;
+    }
+  }
+
+  await invoice.save();
+
+  if (fullyPaid) {
+    // Releasing credits is idempotent (per-line-item + creditsAppliedAt).
+    await removeInvoiceReversals(invoice._id);
+    await applyInvoiceCredits(invoice, userId);
+  } else if (invoice.creditsAppliedAt) {
+    // Was fully paid before, now isn't (refund / removed payment): pull the credits back.
+    await reverseInvoiceCredits(invoice, userId);
+  }
+
+  return invoice;
+};
 
 const create_invoice = async (req, res, next) => {
   try {
@@ -676,22 +719,6 @@ const update_invoice_status = async (req, res, next) => {
 
     if (nextStatus) updates.status = nextStatus;
 
-    if (nextStatus === "PAID") {
-      const remaining = Math.max(invoice.total - invoice.amountPaid, 0);
-      if (remaining > 0) {
-        invoice.payments.push({
-          amount: remaining,
-          currency: invoice.currency,
-          paidAt: new Date(),
-          method: "manual",
-          notes: "Marked paid",
-        });
-        invoice.amountPaid += remaining;
-        invoice.balanceDue = 0;
-      }
-      updates.paidAt = new Date();
-    }
-
     if (nextStatus === "VOID") {
       updates.voidedAt = new Date();
     }
@@ -700,17 +727,33 @@ const update_invoice_status = async (req, res, next) => {
     }
 
     updates.updatedBy = userId;
-
     Object.assign(invoice, updates);
-    const saved = await invoice.save();
 
+    // "Mark paid" = record a payment for the outstanding balance, then settle (which
+    // sets status/paidAt and releases credits) — same path Stripe will use.
     if (nextStatus === "PAID") {
-      await removeInvoiceReversals(saved._id);
-      await applyInvoiceCredits(saved, userId);
-    } else if (wasVoided && nextStatus && nextStatus !== "VOID") {
-      await removeInvoiceReversals(saved._id);
+      const remaining = Math.max(Number(invoice.total || 0) - Number(invoice.amountPaid || 0), 0);
+      if (remaining > 0) {
+        invoice.payments.push({
+          type: "PAYMENT",
+          amount: remaining,
+          currency: invoice.currency,
+          paidAt: new Date(),
+          method: "manual",
+          processor: "MANUAL",
+          notes: "Marked paid",
+          recordedBy: userId,
+        });
+      }
+      const settled = await settleInvoice(invoice, userId);
+      return res.json({ invoice: settled });
     }
 
+    const saved = await invoice.save();
+
+    if (wasVoided && nextStatus && nextStatus !== "VOID") {
+      await removeInvoiceReversals(saved._id);
+    }
     if (nextStatus === "VOID") {
       await reverseInvoiceCredits(saved, userId);
     }
@@ -725,7 +768,8 @@ const record_payment = async (req, res, next) => {
   try {
     const userId = res.locals.user._id;
     const isTrainer = res.locals.user?.isTrainer;
-    const { invoiceId, amount, method, paidAt, notes } = req.body;
+    const { invoiceId, amount, method, paidAt, notes, reference, processor, processorPaymentId } =
+      req.body;
 
     if (!invoiceId || !isValidObjectId(invoiceId)) {
       return res.status(400).json({ error: "invoiceId is required." });
@@ -753,27 +797,124 @@ const record_payment = async (req, res, next) => {
       return res.status(400).json({ error: "Payment amount must be greater than 0." });
     }
 
+    // Idempotency: a processor (e.g. Stripe) may retry a webhook — don't double-record.
+    if (processorPaymentId) {
+      const dup = (invoice.payments || []).some(
+        (p) => p.processorPaymentId && p.processorPaymentId === String(processorPaymentId)
+      );
+      if (dup) return res.json({ invoice });
+    }
+
     invoice.payments.push({
+      type: "PAYMENT",
       amount: paymentAmount,
       currency: invoice.currency,
       paidAt: paidAt ? new Date(paidAt) : new Date(),
       method: String(method || "").trim(),
+      processor: String(processor || "MANUAL").trim() || "MANUAL",
+      processorPaymentId: String(processorPaymentId || "").trim(),
+      reference: String(reference || "").trim(),
       notes: String(notes || "").trim(),
+      recordedBy: userId,
     });
 
-    invoice.amountPaid += paymentAmount;
-    invoice.balanceDue = Math.max(invoice.total - invoice.amountPaid, 0);
+    invoice.updatedBy = userId;
+    const saved = await settleInvoice(invoice, userId);
+    return res.json({ invoice: saved });
+  } catch (err) {
+    return next(err);
+  }
+};
 
-    if (invoice.balanceDue <= 0) {
-      invoice.status = "PAID";
-      invoice.paidAt = new Date();
-      await applyInvoiceCredits(invoice, userId);
-    } else if (invoice.status === "DRAFT") {
-      invoice.status = "SENT";
+const record_refund = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const isTrainer = res.locals.user?.isTrainer;
+    const { invoiceId, amount, reason, method, processor, processorPaymentId } = req.body;
+
+    if (!invoiceId || !isValidObjectId(invoiceId)) {
+      return res.status(400).json({ error: "invoiceId is required." });
+    }
+    if (!isTrainer) {
+      return res.status(403).json({ error: "Only trainers can record refunds." });
     }
 
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found." });
+    }
+    if (String(invoice.trainerId) !== String(userId)) {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+
+    const refundAmount = Math.max(0, normalizeNumber(amount, 0));
+    if (!refundAmount) {
+      return res.status(400).json({ error: "Refund amount must be greater than 0." });
+    }
+    if (refundAmount > Number(invoice.amountPaid || 0)) {
+      return res.status(400).json({ error: "Refund cannot exceed the amount paid." });
+    }
+
+    if (processorPaymentId) {
+      const dup = (invoice.payments || []).some(
+        (p) => p.type === "REFUND" && p.processorPaymentId === String(processorPaymentId)
+      );
+      if (dup) return res.json({ invoice });
+    }
+
+    invoice.payments.push({
+      type: "REFUND",
+      amount: refundAmount,
+      currency: invoice.currency,
+      paidAt: new Date(),
+      method: String(method || "").trim(),
+      processor: String(processor || "MANUAL").trim() || "MANUAL",
+      processorPaymentId: String(processorPaymentId || "").trim(),
+      notes: String(reason || "Refund").trim(),
+      recordedBy: userId,
+    });
+
     invoice.updatedBy = userId;
-    const saved = await invoice.save();
+    const saved = await settleInvoice(invoice, userId);
+    return res.json({ invoice: saved });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const remove_payment = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const isTrainer = res.locals.user?.isTrainer;
+    const { invoiceId, paymentId } = req.body;
+
+    if (!invoiceId || !isValidObjectId(invoiceId) || !paymentId) {
+      return res.status(400).json({ error: "invoiceId and paymentId are required." });
+    }
+    if (!isTrainer) {
+      return res.status(403).json({ error: "Only trainers can edit payments." });
+    }
+
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found." });
+    }
+    if (String(invoice.trainerId) !== String(userId)) {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+
+    const payment = invoice.payments.id(paymentId);
+    if (!payment) {
+      return res.status(404).json({ error: "Payment not found." });
+    }
+    // Processor-recorded entries (Stripe) must be corrected at the source, not here.
+    if (payment.processor && payment.processor !== "MANUAL") {
+      return res.status(400).json({ error: "Only manual payments can be removed here." });
+    }
+
+    payment.deleteOne();
+    invoice.updatedBy = userId;
+    const saved = await settleInvoice(invoice, userId);
     return res.json({ invoice: saved });
   } catch (err) {
     return next(err);
@@ -931,6 +1072,8 @@ module.exports = {
   get_invoice,
   update_invoice_status,
   record_payment,
+  record_refund,
+  remove_payment,
   export_invoice_pdf,
   email_invoice,
 };

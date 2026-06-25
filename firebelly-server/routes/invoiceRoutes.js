@@ -106,7 +106,28 @@ const recordPaymentValidate = {
     amount: Joi.number().greater(0).required(),
     paidAt: Joi.date().optional(),
     method: Joi.string().trim().allow("").max(120).optional(),
+    reference: Joi.string().trim().allow("").max(200).optional(),
+    processor: Joi.string().trim().allow("").max(40).optional(),
+    processorPaymentId: Joi.string().trim().allow("").max(200).optional(),
     notes: Joi.string().trim().allow("").max(1000).optional(),
+  }),
+};
+
+const recordRefundValidate = {
+  body: Joi.object({
+    invoiceId: objectId.required(),
+    amount: Joi.number().greater(0).required(),
+    reason: Joi.string().trim().allow("").max(1000).optional(),
+    method: Joi.string().trim().allow("").max(120).optional(),
+    processor: Joi.string().trim().allow("").max(40).optional(),
+    processorPaymentId: Joi.string().trim().allow("").max(200).optional(),
+  }),
+};
+
+const removePaymentValidate = {
+  body: Joi.object({
+    invoiceId: objectId.required(),
+    paymentId: objectId.required(),
   }),
 };
 
@@ -125,6 +146,8 @@ router.post("/invoices/list", validate(listInvoicesValidate, {}, {}), verifyAcce
 router.post("/invoices/detail", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.get_invoice);
 router.post("/invoices/status", validate(updateInvoiceStatusValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.update_invoice_status);
 router.post("/invoices/payment", validate(recordPaymentValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.record_payment);
+router.post("/invoices/refund", validate(recordRefundValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.record_refund);
+router.post("/invoices/payment/remove", validate(removePaymentValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.remove_payment);
 router.post("/invoices/pdf", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.export_invoice_pdf);
 router.post("/invoices/email", validate(emailInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.email_invoice);
 

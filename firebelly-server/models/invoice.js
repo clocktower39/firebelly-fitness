@@ -22,11 +22,18 @@ const invoiceLineItemSchema = new mongoose.Schema(
 
 const paymentSchema = new mongoose.Schema(
   {
+    type: { type: String, enum: ["PAYMENT", "REFUND"], default: "PAYMENT" },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "USD" },
     paidAt: { type: Date, default: Date.now },
     method: { type: String, default: "" },
+    // Where the money came from. MANUAL today; STRIPE (and others) plug in here later.
+    processor: { type: String, default: "MANUAL" },
+    // External id (e.g. Stripe PaymentIntent/charge) — used to dedupe webhook retries.
+    processorPaymentId: { type: String, default: "" },
+    reference: { type: String, default: "" },
     notes: { type: String, default: "" },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
   { _id: true }
 );
@@ -42,7 +49,7 @@ const invoiceSchema = new mongoose.Schema(
     invoiceNumber: { type: String, required: true },
     status: {
       type: String,
-      enum: ["DRAFT", "SENT", "PAID", "PAST_DUE", "VOID"],
+      enum: ["DRAFT", "SENT", "PARTIAL", "PAID", "PAST_DUE", "VOID"],
       default: "DRAFT",
     },
     currency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
