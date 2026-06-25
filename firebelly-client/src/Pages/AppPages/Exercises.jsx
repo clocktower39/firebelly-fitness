@@ -13,8 +13,12 @@ import {
   Button,
   Chip,
   Container,
+  FormControl,
   FormControlLabel,
   Grid,
+  InputLabel,
+  MenuItem,
+  Select,
   Switch,
   Tab,
   Tabs,
@@ -248,6 +252,8 @@ const createEmptyExercise = () => ({
   handSetup: [],
   movementPattern: [],
   bodyPosition: [],
+  movementComplexity: "",
+  measurementType: "",
   verified: false,
 });
 
@@ -366,6 +372,39 @@ const ExerciseLibrarySection = ({ selectedExercise }) => {
                 />
               )}
             />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth>
+              <InputLabel id="movement-complexity-label">Movement (for progression)</InputLabel>
+              <Select
+                labelId="movement-complexity-label"
+                label="Movement (for progression)"
+                name="movementComplexity"
+                value={exercise.movementComplexity || ""}
+                onChange={handleChange}
+              >
+                <MenuItem value="">Unclassified</MenuItem>
+                <MenuItem value="compound">Compound (multi-joint)</MenuItem>
+                <MenuItem value="isolation">Isolation (single-joint)</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth>
+              <InputLabel id="measurement-type-label">Measured by</InputLabel>
+              <Select
+                labelId="measurement-type-label"
+                label="Measured by"
+                name="measurementType"
+                value={exercise.measurementType || ""}
+                onChange={handleChange}
+              >
+                <MenuItem value="">Default (reps)</MenuItem>
+                <MenuItem value="reps">Reps</MenuItem>
+                <MenuItem value="time">Time (holds)</MenuItem>
+                <MenuItem value="distance">Distance</MenuItem>
+              </Select>
+            </FormControl>
           </Grid>
           {exercisePropertyOptions.map((field) => (
             <Grid size={12} key={field.fieldName}>
