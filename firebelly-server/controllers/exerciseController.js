@@ -22,6 +22,8 @@ const EXERCISE_FIELDS = [
   "handSetup",
   "movementPattern",
   "bodyPosition",
+  "movementComplexity",
+  "measurementType",
   "verified",
 ];
 

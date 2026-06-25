@@ -18,6 +18,11 @@ const exerciseSchema = new mongoose.Schema(
     handSetup: { type: Array },
     movementPattern: { type: Array },
     bodyPosition: { type: Array },
+    // Progression classification (see docs/program-progression-roadmap.md).
+    // movementComplexity drives weight-increment size for barbell/EZ-bar (compound +5 /
+    // isolation +2.5); measurementType makes isometric holds default to Time entry.
+    movementComplexity: { type: String, enum: ["", "compound", "isolation"], default: "" },
+    measurementType: { type: String, enum: ["", "reps", "time", "distance"], default: "" },
     verified: { type: Boolean, default: false, required: true, },
   },
   { minimize: false }
