@@ -64,6 +64,43 @@ const update_workout_date_by_id = async (req, res, next) => {
   }
 };
 
+// Apply a fixed progression rule to a workout's per-set goal arrays. Used by the program
+// builder to generate progressing weeks (week N+1 = week N + increment).
+//   weight: { amount, mode: "add" | "percent" }   reps: { amount }
+const applyProgression = (trainingArray, progression) => {
+  if (!progression || !Array.isArray(trainingArray)) return;
+  const toNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const weight = progression.weight || null;
+  const weightAmt = weight ? Number(weight.amount) || 0 : 0;
+  const repsAmt = Number(progression.reps?.amount) || 0;
+
+  trainingArray.forEach((circuit) => {
+    if (!Array.isArray(circuit)) return;
+    circuit.forEach((exercise) => {
+      if (!exercise || !exercise.goals) return;
+      const goals = exercise.goals;
+      if (weightAmt && Array.isArray(goals.weight)) {
+        goals.weight = goals.weight.map((v) => {
+          const base = toNum(v);
+          const next =
+            weight.mode === "percent" ? base * (1 + weightAmt / 100) : base + weightAmt;
+          return Math.max(0, Math.round(next * 2) / 2); // round to nearest 0.5
+        });
+      }
+      if (repsAmt) {
+        ["minReps", "maxReps", "exactReps"].forEach((key) => {
+          if (Array.isArray(goals[key])) {
+            goals[key] = goals[key].map((v) => Math.max(0, Math.round(toNum(v) + repsAmt)));
+          }
+        });
+      }
+    });
+  });
+};
+
 const copy_workout_by_id = async (req, res, next) => {
   try {
     const { newDate, _id, option = "exact", newTitle, newAccount } = req.body;
@@ -146,6 +183,11 @@ const copy_workout_by_id = async (req, res, next) => {
           });
           break;
       }
+    }
+
+    // Progression (program builder): bump goal weights/reps to generate a progressing week.
+    if (req.body.progression && Array.isArray(copyData.training)) {
+      applyProgression(copyData.training, req.body.progression);
     }
 
     const insertResult = await Training.collection.insertOne(copyData, { ordered: false });

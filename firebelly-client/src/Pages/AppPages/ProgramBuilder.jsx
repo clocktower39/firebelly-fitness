@@ -87,6 +87,14 @@ export default function ProgramBuilder() {
   const [copyWeekDialogOpen, setCopyWeekDialogOpen] = useState(false);
   const [copyWeekTarget, setCopyWeekTarget] = useState("");
   const [isCopyingWeek, setIsCopyingWeek] = useState(false);
+  const [autoProgressOpen, setAutoProgressOpen] = useState(false);
+  const [isAutoProgressing, setIsAutoProgressing] = useState(false);
+  const [progressForm, setProgressForm] = useState({
+    baseWeek: 0,
+    weightAmount: "5",
+    weightMode: "add", // "add" (lb) | "percent"
+    repsAmount: "0",
+  });
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [clearTarget, setClearTarget] = useState({ weekIndex: null, dayIndex: null });
 
@@ -400,6 +408,71 @@ export default function ProgramBuilder() {
     workoutCache,
   ]);
 
+  // Generate each week after the base week as a progressed copy of the base week —
+  // bumping goal weights/reps cumulatively (week N = base + (N - base) × increment).
+  const handleAutoProgress = useCallback(async () => {
+    if (!program?._id) return;
+    const programWeeks = program.weeks || [];
+    const weeksTotal = Number(program.weeksCount) || DEFAULT_WEEKS;
+    const baseWeekIndex = Number(progressForm.baseWeek) || 0;
+    const baseWeek = programWeeks[baseWeekIndex];
+    if (!baseWeek) return;
+
+    const weightAmt = Number(progressForm.weightAmount) || 0;
+    const repsAmt = Number(progressForm.repsAmount) || 0;
+    const mode = progressForm.weightMode;
+    if (!weightAmt && !repsAmt) {
+      setErrorMessage("Set a weight or rep increment to progress.");
+      return;
+    }
+    if (baseWeekIndex >= weeksTotal - 1) {
+      setErrorMessage("Pick a base week with later weeks to fill.");
+      return;
+    }
+
+    setIsAutoProgressing(true);
+    try {
+      for (let target = baseWeekIndex + 1; target < weeksTotal; target++) {
+        const n = target - baseWeekIndex; // cumulative offset from the base week
+        const progression = {
+          weight:
+            mode === "percent"
+              ? {
+                  amount: Math.round((Math.pow(1 + weightAmt / 100, n) - 1) * 1000) / 10,
+                  mode: "percent",
+                }
+              : { amount: weightAmt * n, mode: "add" },
+          reps: { amount: repsAmt * n },
+        };
+        for (let dayIndex = 0; dayIndex < baseWeek.length; dayIndex++) {
+          const day = baseWeek[dayIndex];
+          if (!day.workoutId) continue;
+          const src = workoutCache[day.workoutId];
+          const newTitle = src?.title
+            ? src.title.replace(/Week \d+/i, `Week ${target + 1}`)
+            : `Week ${target + 1} Day ${dayIndex + 1}`;
+          const data = await workoutApi.copyWorkoutById({
+            _id: day.workoutId,
+            newTitle,
+            option: "copyGoalOnly",
+            progression,
+          });
+          if (data?.error) throw new Error(data.error);
+          setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
+          await updateDaySlot(target, dayIndex, data._id);
+        }
+      }
+      setAutoProgressOpen(false);
+      setSavedMessage(
+        `Progressed weeks ${baseWeekIndex + 2}–${weeksTotal} from week ${baseWeekIndex + 1}.`
+      );
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to auto-progress weeks.");
+    } finally {
+      setIsAutoProgressing(false);
+    }
+  }, [program, progressForm, workoutCache, updateDaySlot, setErrorMessage, setSavedMessage]);
+
   useEffect(() => {
     if (programId) {
       loadProgram(programId);
@@ -560,14 +633,27 @@ export default function ProgramBuilder() {
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Typography variant="h6">Week Structure</Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => setCopyWeekDialogOpen(true)}
-                  disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
-                >
-                  Copy Week
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      setProgressForm((f) => ({ ...f, baseWeek: activeWeekIndex }));
+                      setAutoProgressOpen(true);
+                    }}
+                    disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
+                  >
+                    Auto-progress
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setCopyWeekDialogOpen(true)}
+                    disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
+                  >
+                    Copy Week
+                  </Button>
+                </Stack>
               </Stack>
               <Tabs
                 value={activeWeekIndex}
@@ -802,6 +888,82 @@ export default function ProgramBuilder() {
             disabled={copyWeekTarget === "" || isCopyingWeek}
           >
             {isCopyingWeek ? "Copying..." : "Copy Week"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={autoProgressOpen}
+        onClose={() => setAutoProgressOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Auto-progress weeks</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Fills every week after the base week with a progressed copy of it — increasing goal
+            weights and/or reps each week. This overwrites those weeks&apos; workouts.
+          </Typography>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="ap-base-label">Base week</InputLabel>
+              <Select
+                labelId="ap-base-label"
+                label="Base week"
+                value={progressForm.baseWeek}
+                onChange={(e) =>
+                  setProgressForm((f) => ({ ...f, baseWeek: Number(e.target.value) }))
+                }
+              >
+                {Array.from({ length: weeksCount }, (_, index) => (
+                  <MenuItem key={index} value={index}>
+                    Week {index + 1}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                label="Weight / week"
+                type="number"
+                value={progressForm.weightAmount}
+                onChange={(e) =>
+                  setProgressForm((f) => ({ ...f, weightAmount: e.target.value }))
+                }
+                fullWidth
+              />
+              <FormControl sx={{ minWidth: 90 }}>
+                <InputLabel id="ap-mode-label">Unit</InputLabel>
+                <Select
+                  labelId="ap-mode-label"
+                  label="Unit"
+                  value={progressForm.weightMode}
+                  onChange={(e) =>
+                    setProgressForm((f) => ({ ...f, weightMode: e.target.value }))
+                  }
+                >
+                  <MenuItem value="add">lb</MenuItem>
+                  <MenuItem value="percent">%</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
+            <TextField
+              label="Reps / week"
+              type="number"
+              value={progressForm.repsAmount}
+              onChange={(e) => setProgressForm((f) => ({ ...f, repsAmount: e.target.value }))}
+              fullWidth
+            />
+            <Typography variant="caption" color="text.secondary">
+              Cumulative from the base week (week N = base + (N − base) × increment), rounded
+              to the nearest 0.5 lb. Advancing to harder exercise variants is coming later.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAutoProgressOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleAutoProgress} disabled={isAutoProgressing}>
+            {isAutoProgressing ? "Progressing…" : "Progress weeks"}
           </Button>
         </DialogActions>
       </Dialog>
