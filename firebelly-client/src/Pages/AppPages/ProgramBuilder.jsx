@@ -91,9 +91,7 @@ export default function ProgramBuilder() {
   const [isAutoProgressing, setIsAutoProgressing] = useState(false);
   const [progressForm, setProgressForm] = useState({
     baseWeek: 0,
-    weightAmount: "5",
-    weightMode: "add", // "add" (lb) | "percent"
-    repsAmount: "0",
+    scheme: "linear", // "linear" | "rep-range" | "percent"
   });
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [clearTarget, setClearTarget] = useState({ weekIndex: null, dayIndex: null });
@@ -418,32 +416,16 @@ export default function ProgramBuilder() {
     const baseWeek = programWeeks[baseWeekIndex];
     if (!baseWeek) return;
 
-    const weightAmt = Number(progressForm.weightAmount) || 0;
-    const repsAmt = Number(progressForm.repsAmount) || 0;
-    const mode = progressForm.weightMode;
-    if (!weightAmt && !repsAmt) {
-      setErrorMessage("Set a weight or rep increment to progress.");
-      return;
-    }
     if (baseWeekIndex >= weeksTotal - 1) {
       setErrorMessage("Pick a base week with later weeks to fill.");
       return;
     }
+    const scheme = progressForm.scheme || "linear";
 
     setIsAutoProgressing(true);
     try {
       for (let target = baseWeekIndex + 1; target < weeksTotal; target++) {
-        const n = target - baseWeekIndex; // cumulative offset from the base week
-        const progression = {
-          weight:
-            mode === "percent"
-              ? {
-                  amount: Math.round((Math.pow(1 + weightAmt / 100, n) - 1) * 1000) / 10,
-                  mode: "percent",
-                }
-              : { amount: weightAmt * n, mode: "add" },
-          reps: { amount: repsAmt * n },
-        };
+        const step = target - baseWeekIndex; // cumulative engine steps from the base week
         for (let dayIndex = 0; dayIndex < baseWeek.length; dayIndex++) {
           const day = baseWeek[dayIndex];
           if (!day.workoutId) continue;
@@ -455,7 +437,8 @@ export default function ProgramBuilder() {
             _id: day.workoutId,
             newTitle,
             option: "copyGoalOnly",
-            progression,
+            scheme,
+            step,
           });
           if (data?.error) throw new Error(data.error);
           setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
@@ -467,7 +450,7 @@ export default function ProgramBuilder() {
         `Progressed weeks ${baseWeekIndex + 2}–${weeksTotal} from week ${baseWeekIndex + 1}.`
       );
     } catch (err) {
-      setErrorMessage(err.message || "Unable to auto-progress weeks.");
+      setErrorMessage(err.message || "Unable to generate progression.");
     } finally {
       setIsAutoProgressing(false);
     }
@@ -643,7 +626,7 @@ export default function ProgramBuilder() {
                     }}
                     disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
                   >
-                    Auto-progress
+                    Generate progression
                   </Button>
                   <Button
                     size="small"
@@ -898,11 +881,13 @@ export default function ProgramBuilder() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Auto-progress weeks</DialogTitle>
+        <DialogTitle>Generate progression</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Fills every week after the base week with a progressed copy of it — increasing goal
-            weights and/or reps each week. This overwrites those weeks&apos; workouts.
+            Fills every week after the base week with a progressed copy of it. Each exercise
+            advances by its <strong>own</strong> rule — barbell +5 (isolation +2.5), dumbbell
+            +2.5→5, machine +10, cable +2.5, bodyweight +1 rep, holds +5s. Overwrites those
+            weeks&apos; workouts.
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <FormControl fullWidth>
@@ -922,48 +907,29 @@ export default function ProgramBuilder() {
                 ))}
               </Select>
             </FormControl>
-            <Stack direction="row" spacing={1}>
-              <TextField
-                label="Weight / week"
-                type="number"
-                value={progressForm.weightAmount}
-                onChange={(e) =>
-                  setProgressForm((f) => ({ ...f, weightAmount: e.target.value }))
-                }
-                fullWidth
-              />
-              <FormControl sx={{ minWidth: 90 }}>
-                <InputLabel id="ap-mode-label">Unit</InputLabel>
-                <Select
-                  labelId="ap-mode-label"
-                  label="Unit"
-                  value={progressForm.weightMode}
-                  onChange={(e) =>
-                    setProgressForm((f) => ({ ...f, weightMode: e.target.value }))
-                  }
-                >
-                  <MenuItem value="add">lb</MenuItem>
-                  <MenuItem value="percent">%</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-            <TextField
-              label="Reps / week"
-              type="number"
-              value={progressForm.repsAmount}
-              onChange={(e) => setProgressForm((f) => ({ ...f, repsAmount: e.target.value }))}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel id="ap-scheme-label">Scheme</InputLabel>
+              <Select
+                labelId="ap-scheme-label"
+                label="Scheme"
+                value={progressForm.scheme}
+                onChange={(e) => setProgressForm((f) => ({ ...f, scheme: e.target.value }))}
+              >
+                <MenuItem value="linear">Linear — fixed reps, add weight</MenuItem>
+                <MenuItem value="rep-range">Rep range — build reps, then weight</MenuItem>
+                <MenuItem value="percent">% of 1RM — raise intensity</MenuItem>
+              </Select>
+            </FormControl>
             <Typography variant="caption" color="text.secondary">
-              Cumulative from the base week (week N = base + (N − base) × increment), rounded
-              to the nearest 0.5 lb. Advancing to harder exercise variants is coming later.
+              Cumulative from the base week, rounded to loadable weights. Deloads &amp;
+              feedback-driven autoregulation come next.
             </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAutoProgressOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAutoProgress} disabled={isAutoProgressing}>
-            {isAutoProgressing ? "Progressing…" : "Progress weeks"}
+            {isAutoProgressing ? "Generating…" : "Generate"}
           </Button>
         </DialogActions>
       </Dialog>
