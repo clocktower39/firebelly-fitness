@@ -1,0 +1,125 @@
+// Per-exercise progression engine. Given an exercise's classification (equipment +
+// movementComplexity + measurementType) and its current goals, produce the next step's
+// goals under a scheme. Pure + deterministic; the caller resolves classifications and
+// chains steps. See docs/program-progression-roadmap.md.
+
+const BARBELL = ["barbell", "ez-bar", "smith machine", "trap bar", "swiss bar", "landmine"];
+const DUMBBELL = ["dumbbell", "kettlebell"];
+const MACHINE = ["machine", "plate loaded machine"];
+const CABLE = ["cable"];
+const BODYWEIGHT = [
+  "bodyweight", "pull-up bar", "trx", "p-bar", "box", "band", "loop-band",
+  "stability ball", "bosu-ball", "ab wheel", "baseblocks", "bench",
+];
+
+const familyOf = (equipment) => {
+  const eq = (Array.isArray(equipment) ? equipment : [equipment])
+    .map((e) => String(e || "").toLowerCase());
+  const any = (list) => eq.some((e) => list.includes(e));
+  if (any(BARBELL)) return "barbell";
+  if (any(DUMBBELL)) return "dumbbell";
+  if (any(MACHINE)) return "machine";
+  if (any(CABLE)) return "cable";
+  if (any(BODYWEIGHT)) return "bodyweight";
+  return "other";
+};
+
+// The weight jump for one step, given the family + complexity + the current load.
+const weightIncrement = (family, complexity, currentWeight) => {
+  const w = Number(currentWeight) || 0;
+  switch (family) {
+    case "barbell":
+      return complexity === "isolation" ? 2.5 : 5;
+    case "dumbbell":
+      return w < 40 ? 2.5 : 5; // per hand; gyms carry 2.5s up to ~40
+    case "machine":
+      return 10;
+    case "cable":
+      return 2.5;
+    default:
+      return 5;
+  }
+};
+
+const loadableUnit = (family) => (family === "machine" ? 10 : 2.5);
+const roundToLoadable = (w, family) => {
+  const u = loadableUnit(family);
+  return Math.max(0, Math.round((Number(w) || 0) / u) * u);
+};
+
+const clone = (g) => JSON.parse(JSON.stringify(g || {}));
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+const mapArr = (arr, fn) => (Array.isArray(arr) ? arr.map((v, i) => fn(num(v), i)) : arr);
+
+// One progression step.
+const progressOneStep = (goals, ctx, scheme) => {
+  const g = goals;
+  const fam = familyOf(ctx.equipment);
+  const isTime = ctx.measurementType === "time" || ctx.exerciseType === "Time";
+
+  if (isTime) {
+    g.seconds = mapArr(g.seconds, (v) => Math.max(0, v + 5));
+    return g;
+  }
+  if (fam === "bodyweight") {
+    ["exactReps", "minReps", "maxReps"].forEach((k) => {
+      g[k] = mapArr(g[k], (v) => Math.max(0, Math.round(v + 1)));
+    });
+    return g;
+  }
+  if (scheme === "percent") {
+    g.percent = mapArr(g.percent, (v) => Math.min(100, v + 2.5));
+    if (g.oneRepMax) {
+      g.weight = mapArr(g.weight, (_, i) =>
+        roundToLoadable((num(g.oneRepMax) * num((g.percent || [])[i])) / 100, fam)
+      );
+    }
+    return g;
+  }
+  if (scheme === "rep-range") {
+    // Planned double progression: +1 rep until the top of the range, then add load and
+    // reset reps to the bottom.
+    const sets = Math.max(
+      (g.weight || []).length,
+      (g.exactReps || g.minReps || []).length
+    );
+    for (let i = 0; i < sets; i += 1) {
+      const min = num((g.minReps || [])[i]);
+      const max = num((g.maxReps || [])[i]) || num((g.exactReps || [])[i]);
+      const cur = (g.exactReps && g.exactReps[i] != null) ? num(g.exactReps[i]) : min;
+      if (max && cur < max) {
+        if (g.exactReps) g.exactReps[i] = cur + 1;
+      } else {
+        if (g.weight) {
+          g.weight[i] = roundToLoadable(
+            num(g.weight[i]) + weightIncrement(fam, ctx.movementComplexity, g.weight[i]),
+            fam
+          );
+        }
+        if (g.exactReps) g.exactReps[i] = min || max;
+      }
+    }
+    return g;
+  }
+  // linear (default): add load, reps fixed.
+  g.weight = mapArr(g.weight, (w) =>
+    roundToLoadable(w + weightIncrement(fam, ctx.movementComplexity, w), fam)
+  );
+  return g;
+};
+
+// Progress an exercise's goals by `step` increments under `scheme`. Chained so per-step
+// rules (dumbbell 40lb threshold, rep-range fill) resolve correctly.
+const progressExerciseGoals = (goals, ctx = {}, { scheme = "linear", step = 1 } = {}) => {
+  let g = clone(goals);
+  const n = Math.max(0, Math.floor(Number(step) || 0));
+  for (let s = 0; s < n; s += 1) g = progressOneStep(g, ctx, scheme);
+  return g;
+};
+
+module.exports = {
+  familyOf,
+  weightIncrement,
+  roundToLoadable,
+  progressExerciseGoals,
+};
