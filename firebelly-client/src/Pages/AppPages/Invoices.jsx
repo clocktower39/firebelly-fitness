@@ -31,6 +31,7 @@ import {
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import CloseIcon from "@mui/icons-material/Close";
+import InvoiceReportsDialog from "../../Components/InvoiceReportsDialog";
 import { alpha } from "@mui/material/styles";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
@@ -105,6 +106,7 @@ export default function Invoices() {
   const [payBusy, setPayBusy] = useState(false);
   const [refundMode, setRefundMode] = useState(false);
   const [refundReason, setRefundReason] = useState("");
+  const [reportsOpen, setReportsOpen] = useState(false);
 
   useEffect(() => {
     if (user.isTrainer) {
@@ -527,9 +529,14 @@ export default function Invoices() {
     <Grid container spacing={2}>
       <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h4">Invoices</Typography>
-        <Button variant="contained" onClick={startCreate}>
-          New invoice
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" onClick={() => setReportsOpen(true)}>
+            Reports
+          </Button>
+          <Button variant="contained" onClick={startCreate}>
+            New invoice
+          </Button>
+        </Stack>
       </Grid>
 
       {requestCount > 0 && historyFilter !== "REQUESTS" && (
@@ -1078,6 +1085,8 @@ export default function Invoices() {
           </MenuItem>
         )}
       </Menu>
+
+      <InvoiceReportsDialog open={reportsOpen} onClose={() => setReportsOpen(false)} />
 
       <Dialog
         open={Boolean(detailInvoice)}

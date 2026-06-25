@@ -131,6 +131,14 @@ const removePaymentValidate = {
   }),
 };
 
+const invoiceReportValidate = {
+  body: Joi.object({
+    from: Joi.date().optional(),
+    to: Joi.date().optional(),
+    clientId: objectId.allow(null).optional(),
+  }),
+};
+
 const emailInvoiceValidate = {
   body: Joi.object({
     invoiceId: objectId.required(),
@@ -148,6 +156,7 @@ router.post("/invoices/status", validate(updateInvoiceStatusValidate, {}, {}), v
 router.post("/invoices/payment", validate(recordPaymentValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.record_payment);
 router.post("/invoices/refund", validate(recordRefundValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.record_refund);
 router.post("/invoices/payment/remove", validate(removePaymentValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.remove_payment);
+router.post("/invoices/report", validate(invoiceReportValidate, {}, {}), verifyAccessToken, invoiceController.invoice_report);
 router.post("/invoices/pdf", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.export_invoice_pdf);
 router.post("/invoices/email", validate(emailInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.email_invoice);
 

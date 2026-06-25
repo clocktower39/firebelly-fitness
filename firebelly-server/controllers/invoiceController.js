@@ -1065,6 +1065,101 @@ const email_invoice = async (req, res, next) => {
   }
 };
 
+// Income report + export rows over a date range. Powers the dashboard summary, the
+// reports table, and the CSV exports (invoice-level and payment-level / cash basis).
+const invoice_report = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can run reports." });
+    }
+    const { from, to, clientId } = req.body;
+    const fromDate = from ? new Date(from) : new Date(0);
+    const toDate = to ? new Date(to) : new Date();
+    toDate.setHours(23, 59, 59, 999);
+    const now = new Date();
+
+    const query = { trainerId: userId };
+    if (clientId && isValidObjectId(clientId)) query.clientId = clientId;
+    const invoices = await Invoice.find(query).sort({ issuedAt: 1 }).lean();
+
+    const inRange = (d) => d && new Date(d) >= fromDate && new Date(d) <= toDate;
+
+    const summary = {
+      invoiced: 0,
+      tax: 0,
+      collected: 0,
+      refunded: 0,
+      outstanding: 0,
+      overdue: 0,
+      invoiceCount: 0,
+    };
+    const byMonth = {};
+    const invoiceRows = [];
+    const paymentRows = [];
+
+    for (const inv of invoices) {
+      const isVoid = inv.status === "VOID";
+
+      if (!isVoid && inRange(inv.issuedAt)) {
+        summary.invoiced += Number(inv.total || 0);
+        summary.tax += Number(inv.tax || 0);
+        summary.invoiceCount += 1;
+        invoiceRows.push({
+          invoiceNumber: inv.invoiceNumber,
+          status: inv.status,
+          billToName: inv.billToName || "",
+          issuedAt: inv.issuedAt,
+          dueAt: inv.dueAt,
+          paidAt: inv.paidAt,
+          currency: inv.currency,
+          subtotal: Number(inv.subtotal || 0),
+          tax: Number(inv.tax || 0),
+          discount: Number(inv.discount || 0),
+          total: Number(inv.total || 0),
+          amountPaid: Number(inv.amountPaid || 0),
+          balanceDue: Number(inv.balanceDue || 0),
+        });
+      }
+
+      if (!isVoid && inv.status !== "DRAFT") {
+        const bal = Number(inv.balanceDue || 0);
+        summary.outstanding += bal;
+        if (bal > 0 && inv.dueAt && new Date(inv.dueAt) < now) summary.overdue += bal;
+      }
+
+      for (const p of inv.payments || []) {
+        if (!inRange(p.paidAt)) continue;
+        const amt = Number(p.amount || 0);
+        const signed = p.type === "REFUND" ? -amt : amt;
+        summary.collected += signed;
+        if (p.type === "REFUND") summary.refunded += amt;
+        const key = new Date(p.paidAt).toISOString().slice(0, 7);
+        byMonth[key] = (byMonth[key] || 0) + signed;
+        paymentRows.push({
+          paidAt: p.paidAt,
+          invoiceNumber: inv.invoiceNumber,
+          billToName: inv.billToName || "",
+          type: p.type || "PAYMENT",
+          method: p.method || "",
+          processor: p.processor || "MANUAL",
+          reference: p.reference || "",
+          amount: amt,
+          currency: p.currency || inv.currency,
+        });
+      }
+    }
+
+    const byMonthArr = Object.keys(byMonth)
+      .sort()
+      .map((m) => ({ month: m, collected: byMonth[m] }));
+
+    return res.json({ summary, byMonth: byMonthArr, invoiceRows, paymentRows });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_invoice,
   request_invoice,
@@ -1074,6 +1169,7 @@ module.exports = {
   record_payment,
   record_refund,
   remove_payment,
+  invoice_report,
   export_invoice_pdf,
   email_invoice,
 };

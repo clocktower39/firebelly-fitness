@@ -43,6 +43,12 @@ export const billingApi = {
       body: { invoiceId, paymentId },
     }),
 
+  invoiceReport: ({ from, to, clientId } = {}) =>
+    apiFetch("/invoices/report", {
+      method: "POST",
+      body: { from, to, clientId },
+    }),
+
   downloadInvoicePdf: ({ invoiceId }) =>
     authFetch("/invoices/pdf", {
       method: "POST",
