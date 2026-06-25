@@ -5,6 +5,8 @@ import { scheduleApi } from "../../api/scheduleApi";
 import { useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
+  Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -27,6 +29,8 @@ import {
   DialogActions,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import { alpha } from "@mui/material/styles";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
 import { formatPrice } from "../../utils/currency";
@@ -86,6 +90,7 @@ export default function Invoices() {
   const [voidInvoice, setVoidInvoice] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("ALL");
+  const [clientFilter, setClientFilter] = useState("");
   const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
   const [rowMenuInvoice, setRowMenuInvoice] = useState(null);
   const [detailInvoice, setDetailInvoice] = useState(null);
@@ -119,6 +124,7 @@ export default function Invoices() {
     const clientParam = searchParams.get("client");
     const groupParam = searchParams.get("group");
     if (clientParam) {
+      setClientFilter(clientParam);
       setBillToType("CLIENT");
       setSelectedGroupId("");
       setSelectedClientId(clientParam);
@@ -150,40 +156,31 @@ export default function Invoices() {
 
   const targetId = billToType === "CLIENT" ? selectedClientId : selectedGroupId;
 
-  const refreshSummary = async () => {
-    if (!targetId) return;
+  // Per-client credit summary — only shown when the list is filtered to one client.
+  const refreshSummary = async (clientId) => {
+    if (!clientId) {
+      setBillingSummary(null);
+      return;
+    }
     setLoadingSummary(true);
-    setError("");
     try {
-      const payload = {
-        trainerId: user._id,
-        clientId: billToType === "CLIENT" ? targetId : null,
-        groupId: billToType === "GROUP" ? targetId : null,
-      };
-      const data = await billingApi.getSummary(payload);
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
-      setBillingSummary(data);
+      const data = await billingApi.getSummary({ trainerId: user._id, clientId });
+      setBillingSummary(data && !data.error ? data : null);
     } catch (err) {
-      setError(err.message || "Unable to load billing summary.");
+      setBillingSummary(null);
     } finally {
       setLoadingSummary(false);
     }
   };
 
+  // Load ALL of the trainer's invoices (across every client) so requests and
+  // outstanding balances are visible at a glance — no need to pick a client first.
   const refreshInvoices = async () => {
-    if (!targetId) return;
+    if (!user.isTrainer) return;
     setLoadingInvoices(true);
     setError("");
     try {
-      const payload = {
-        trainerId: user._id,
-        clientId: billToType === "CLIENT" ? targetId : null,
-        groupId: billToType === "GROUP" ? targetId : null,
-      };
-      const data = await billingApi.listInvoices(payload);
+      const data = await billingApi.listInvoices({ trainerId: user._id });
       if (data.error) {
         setError(data.error);
         return;
@@ -197,14 +194,12 @@ export default function Invoices() {
   };
 
   useEffect(() => {
-    if (user.isTrainer && targetId) {
-      refreshSummary();
-      refreshInvoices();
-    } else {
-      setBillingSummary(null);
-      setInvoiceList([]);
-    }
-  }, [billToType, targetId, user.isTrainer]);
+    if (user.isTrainer) refreshInvoices();
+  }, [user.isTrainer]);
+
+  useEffect(() => {
+    refreshSummary(clientFilter);
+  }, [clientFilter]);
 
   const selectedClient = clients.find((clientRel) => clientRel.client?._id === selectedClientId);
   const selectedGroup = groups.find((entry) => entry.group?._id === selectedGroupId);
@@ -335,7 +330,7 @@ export default function Invoices() {
       resetForm();
       setCreateOpen(false);
       refreshInvoices();
-      refreshSummary();
+      refreshSummary(clientFilter);
     } catch (err) {
       setError(err.message || "Unable to create invoice.");
     }
@@ -349,7 +344,7 @@ export default function Invoices() {
         return;
       }
       refreshInvoices();
-      refreshSummary();
+      refreshSummary(clientFilter);
     } catch (err) {
       setError(err.message || "Unable to update invoice.");
     }
@@ -369,9 +364,21 @@ export default function Invoices() {
     setCreateOpen(true);
   };
 
-  const filteredInvoices = invoiceList.filter(
-    (inv) => historyFilter === "ALL" || inv.status === historyFilter
-  );
+  // A client-initiated purchase request the trainer still needs to act on:
+  // request_invoice creates it as SENT with createdBy === the client (clientId).
+  const isRequest = (inv) =>
+    inv.status === "SENT" && inv.clientId && String(inv.createdBy) === String(inv.clientId);
+
+  const requestCount = invoiceList.filter(isRequest).length;
+
+  const filteredClient = clients.find((c) => c.client?._id === clientFilter)?.client;
+
+  const filteredInvoices = invoiceList.filter((inv) => {
+    if (clientFilter && String(inv.clientId) !== String(clientFilter)) return false;
+    if (historyFilter === "ALL") return true;
+    if (historyFilter === "REQUESTS") return isRequest(inv);
+    return inv.status === historyFilter;
+  });
 
   const handleDownloadPdf = async (invoice) => {
     try {
@@ -439,78 +446,84 @@ export default function Invoices() {
 
   return (
     <Grid container spacing={2}>
-      <Grid container size={12}>
+      <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h4">Invoices</Typography>
+        <Button variant="contained" onClick={startCreate}>
+          New invoice
+        </Button>
       </Grid>
+
+      {requestCount > 0 && historyFilter !== "REQUESTS" && (
+        <Grid container size={12}>
+          <Alert
+            severity="warning"
+            sx={{ width: "100%" }}
+            action={
+              <Button color="inherit" size="small" onClick={() => setHistoryFilter("REQUESTS")}>
+                Review
+              </Button>
+            }
+          >
+            {requestCount} session-purchase {requestCount === 1 ? "request" : "requests"} awaiting
+            your approval.
+          </Alert>
+        </Grid>
+      )}
 
       <Grid container size={12}>
         <Card sx={{ width: "100%" }}>
           <CardContent>
-            <Stack spacing={2}>
-              <Typography variant="h6">Billing Target</Typography>
-              <FormControl fullWidth>
-                <InputLabel>Bill To</InputLabel>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.5}
+              sx={{ alignItems: { sm: "center" } }}
+            >
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel>Show</InputLabel>
                 <Select
-                  label="Bill To"
-                  value={billToType}
-                  onChange={(event) => {
-                    setBillToType(event.target.value);
-                    setSelectedClientId("");
-                    setSelectedGroupId("");
-                    setBillToEmail("");
-                  }}
+                  label="Show"
+                  value={historyFilter}
+                  onChange={(event) => setHistoryFilter(event.target.value)}
                 >
-                  <MenuItem value="CLIENT">Client</MenuItem>
-                  <MenuItem value="GROUP">Group</MenuItem>
+                  <MenuItem value="ALL">All invoices</MenuItem>
+                  <MenuItem value="REQUESTS">
+                    Requests{requestCount > 0 ? ` (${requestCount})` : ""}
+                  </MenuItem>
+                  <MenuItem value="DRAFT">Draft</MenuItem>
+                  <MenuItem value="SENT">Sent</MenuItem>
+                  <MenuItem value="PAID">Paid</MenuItem>
+                  <MenuItem value="PAST_DUE">Past due</MenuItem>
+                  <MenuItem value="VOID">Void</MenuItem>
                 </Select>
               </FormControl>
-              {billToType === "CLIENT" ? (
-                <FormControl fullWidth>
-                  <InputLabel>Client</InputLabel>
-                  <Select
-                    label="Client"
-                    value={selectedClientId}
-                    onChange={(event) => setSelectedClientId(event.target.value)}
-                  >
-                    {clients
-                      .filter((clientRel) => clientRel.accepted)
-                      .map((clientRel) => (
-                        <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                          {clientRel.client.firstName} {clientRel.client.lastName}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
-              ) : (
-                <FormControl fullWidth>
-                  <InputLabel>Group</InputLabel>
-                  <Select
-                    label="Group"
-                    value={selectedGroupId}
-                    onChange={(event) => setSelectedGroupId(event.target.value)}
-                  >
-                    {groups.map((entry) => (
-                      <MenuItem key={entry.group?._id} value={entry.group?._id}>
-                        {entry.group?.name || "Group"}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
+              <Autocomplete
+                size="small"
+                sx={{ minWidth: 220, flexGrow: 1 }}
+                options={clients.filter((clientRel) => clientRel.accepted)}
+                getOptionLabel={(o) =>
+                  `${o.client?.firstName || ""} ${o.client?.lastName || ""}`.trim()
+                }
+                isOptionEqualToValue={(o, v) => o.client?._id === v.client?._id}
+                value={clients.find((c) => c.client?._id === clientFilter) || null}
+                onChange={(_, v) => setClientFilter(v ? v.client._id : "")}
+                renderInput={(params) => (
+                  <TextField {...params} label="Filter by client" placeholder="All clients" />
+                )}
+              />
             </Stack>
           </CardContent>
         </Card>
       </Grid>
 
-      {targetId && (
+      {clientFilter && (
         <Grid container size={12}>
           <Card sx={{ width: "100%" }}>
             <CardContent>
               <Stack spacing={1}>
                 <Typography variant="h6">
-                  {billToType === "CLIENT"
-                    ? `${selectedClient?.client?.firstName || ""} ${selectedClient?.client?.lastName || ""}`
-                    : selectedGroup?.group?.name || "Group"}
+                  {filteredClient
+                    ? `${filteredClient.firstName || ""} ${filteredClient.lastName || ""}`.trim()
+                    : "Client"}
                 </Typography>
                 {loadingSummary ? (
                   <Typography color="text.secondary">Loading summary...</Typography>
@@ -547,6 +560,57 @@ export default function Invoices() {
         <DialogTitle>New invoice</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
               <Stack spacing={2} sx={{ mt: 1 }}>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <FormControl fullWidth>
+                    <InputLabel>Bill to</InputLabel>
+                    <Select
+                      label="Bill to"
+                      value={billToType}
+                      onChange={(event) => {
+                        setBillToType(event.target.value);
+                        setSelectedClientId("");
+                        setSelectedGroupId("");
+                        setBillToEmail("");
+                      }}
+                    >
+                      <MenuItem value="CLIENT">Client</MenuItem>
+                      <MenuItem value="GROUP">Group</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {billToType === "CLIENT" ? (
+                    <FormControl fullWidth>
+                      <InputLabel>Client</InputLabel>
+                      <Select
+                        label="Client"
+                        value={selectedClientId}
+                        onChange={(event) => setSelectedClientId(event.target.value)}
+                      >
+                        {clients
+                          .filter((clientRel) => clientRel.accepted)
+                          .map((clientRel) => (
+                            <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
+                              {clientRel.client.firstName} {clientRel.client.lastName}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <FormControl fullWidth>
+                      <InputLabel>Group</InputLabel>
+                      <Select
+                        label="Group"
+                        value={selectedGroupId}
+                        onChange={(event) => setSelectedGroupId(event.target.value)}
+                      >
+                        {groups.map((entry) => (
+                          <MenuItem key={entry.group?._id} value={entry.group?._id}>
+                            {entry.group?.name || "Group"}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Stack>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                   <TextField
                     label="Invoice # (optional)"
@@ -765,38 +829,10 @@ export default function Invoices() {
         </DialogActions>
       </Dialog>
 
-      {targetId && (
+      {user.isTrainer && (
         <Grid container size={12}>
           <Card sx={{ width: "100%" }}>
             <CardContent>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1.5 }}
-              >
-                <Typography variant="h6">Invoices</Typography>
-                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                  <FormControl size="small" sx={{ minWidth: 130 }}>
-                    <InputLabel>Filter</InputLabel>
-                    <Select
-                      label="Filter"
-                      value={historyFilter}
-                      onChange={(event) => setHistoryFilter(event.target.value)}
-                    >
-                      <MenuItem value="ALL">All</MenuItem>
-                      <MenuItem value="DRAFT">Draft</MenuItem>
-                      <MenuItem value="SENT">Sent / requested</MenuItem>
-                      <MenuItem value="PAID">Paid</MenuItem>
-                      <MenuItem value="PAST_DUE">Past due</MenuItem>
-                      <MenuItem value="VOID">Void</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Button variant="contained" size="small" onClick={startCreate}>
-                    New invoice
-                  </Button>
-                </Stack>
-              </Stack>
-
               {loadingInvoices ? (
                 <Typography color="text.secondary">Loading invoices…</Typography>
               ) : filteredInvoices.length === 0 ? (
@@ -822,8 +858,21 @@ export default function Invoices() {
                     const total = Number(invoice.total || 0);
                     const balance = Number(invoice.balanceDue || 0);
                     const canPay = invoice.status !== "PAID" && invoice.status !== "VOID";
+                    const request = isRequest(invoice);
                     return (
-                      <Card key={invoice._id} variant="outlined">
+                      <Card
+                        key={invoice._id}
+                        variant="outlined"
+                        sx={
+                          request
+                            ? {
+                                borderColor: "warning.main",
+                                borderWidth: 1.5,
+                                bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08),
+                              }
+                            : undefined
+                        }
+                      >
                         <CardContent sx={{ pb: 1.5, "&:last-child": { pb: 1.5 } }}>
                           <Box
                             onClick={() => setDetailInvoice(invoice)}
@@ -835,18 +884,26 @@ export default function Invoices() {
                             sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
                           >
                             <Stack spacing={0.5}>
-                              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                  {invoice.invoiceNumber}
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                sx={{ alignItems: "center", flexWrap: "wrap" }}
+                              >
+                                {request && (
+                                  <PriorityHighIcon color="warning" fontSize="small" />
+                                )}
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 0.5 }}>
+                                  {invoice.billToName || "—"}
                                 </Typography>
                                 <Chip size="small" label={chip.label} color={chip.color} />
+                                {request && (
+                                  <Chip size="small" color="warning" label="Requested" />
+                                )}
                               </Stack>
                               <Typography variant="caption" color="text.secondary">
-                                {invoice.billToName || ""}
+                                {invoice.invoiceNumber}
                                 {invoice.issuedAt
-                                  ? `${invoice.billToName ? " · " : ""}${dayjs(
-                                      invoice.issuedAt
-                                    ).format("MMM D, YYYY")}`
+                                  ? ` · ${dayjs(invoice.issuedAt).format("MMM D, YYYY")}`
                                   : ""}
                               </Typography>
                             </Stack>
