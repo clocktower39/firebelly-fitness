@@ -4,6 +4,7 @@ export let user = {
     customThemes: [],
     workoutWeightUnit: "lbs",
     defaultSessionLengthMinutes: 60,
+    autoPaymentReminders: false,
 }
 
 export let exerciseLibrary = [];

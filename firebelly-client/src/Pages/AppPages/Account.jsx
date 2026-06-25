@@ -40,6 +40,11 @@ export default function Account() {
             <ListItemText primary="Scheduling Preferences" sx={{ color: "primary.contrastText" }} />
           </ListItem>
         )}
+        {user?.isTrainer && (
+          <ListItem button component={Link} to="/account/trainer-billing">
+            <ListItemText primary="Billing Preferences" sx={{ color: "primary.contrastText" }} />
+          </ListItem>
+        )}
         {canManageFamily && (
           <ListItem button component={Link} to="/account/family">
             <ListItemText primary="Family Access" sx={{ color: "primary.contrastText" }} />

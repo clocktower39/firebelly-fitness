@@ -12,6 +12,7 @@ const { areTypesPurchasable } = require("./sessionTypeController");
 const { createNotification } = require("../services/notificationService");
 const { sendEmail } = require("../services/emailService");
 const { buildInvoicePdf } = require("../services/invoicePdf");
+const { sendInvoiceReminder } = require("../services/invoiceEmail");
 
 const ACTIVE_STATUS = "ACTIVE";
 const TRAINER_ROLES = new Set(["TRAINER", "COACH", "ADMIN"]);
@@ -1160,6 +1161,34 @@ const invoice_report = async (req, res, next) => {
   }
 };
 
+// Trainer-initiated payment reminder (always allowed — it's the trainer's own action).
+const send_reminder = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can send reminders." });
+    }
+    const { invoiceId } = req.body;
+    if (!invoiceId || !isValidObjectId(invoiceId)) {
+      return res.status(400).json({ error: "invoiceId is required." });
+    }
+    const invoice = await Invoice.findById(invoiceId).lean();
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found." });
+    }
+    if (String(invoice.trainerId) !== String(userId)) {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+    const result = await sendInvoiceReminder(invoice);
+    if (!result.sent) {
+      return res.status(400).json({ error: "No email on file for this client." });
+    }
+    return res.json({ status: "ok", recipient: result.recipient });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_invoice,
   request_invoice,
@@ -1170,6 +1199,7 @@ module.exports = {
   record_refund,
   remove_payment,
   invoice_report,
+  send_reminder,
   export_invoice_pdf,
   email_invoice,
 };

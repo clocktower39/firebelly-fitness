@@ -107,6 +107,7 @@ export default function Invoices() {
   const [refundMode, setRefundMode] = useState(false);
   const [refundReason, setRefundReason] = useState("");
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     if (user.isTrainer) {
@@ -370,6 +371,22 @@ export default function Invoices() {
   const closeRowMenu = () => {
     setRowMenuAnchor(null);
     setRowMenuInvoice(null);
+  };
+
+  const handleSendReminder = async (invoice) => {
+    if (!invoice) return;
+    setError("");
+    setNotice("");
+    try {
+      const data = await billingApi.sendReminder({ invoiceId: invoice._id });
+      if (data?.error) {
+        setError(data.error);
+        return;
+      }
+      setNotice(`Reminder sent${data.recipient ? ` to ${data.recipient}` : ""}.`);
+    } catch (err) {
+      setError(err.message || "Unable to send reminder.");
+    }
   };
   const startCreate = () => {
     resetForm();
@@ -1118,6 +1135,18 @@ export default function Invoices() {
         >
           Email
         </MenuItem>
+        {rowMenuInvoice &&
+          Number(rowMenuInvoice.balanceDue) > 0 &&
+          ["SENT", "PARTIAL", "PAST_DUE"].includes(rowMenuInvoice.status) && (
+            <MenuItem
+              onClick={() => {
+                handleSendReminder(rowMenuInvoice);
+                closeRowMenu();
+              }}
+            >
+              Send reminder
+            </MenuItem>
+          )}
         {rowMenuInvoice?.status !== "VOID" && (
           <MenuItem
             sx={{ color: "error.main" }}
@@ -1408,6 +1437,12 @@ export default function Invoices() {
       {error && (
         <Grid container size={12}>
           <Typography color="error">{error}</Typography>
+        </Grid>
+      )}
+
+      {notice && (
+        <Grid container size={12}>
+          <Typography color="success.main">{notice}</Typography>
         </Grid>
       )}
 

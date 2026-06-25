@@ -20,6 +20,7 @@ const buildTokenPayload = (user, overrides = {}) => ({
   themeMode: user.themeMode || "light",
   workoutWeightUnit: user.workoutWeightUnit === "kg" ? "kg" : "lbs",
   defaultSessionLengthMinutes: user.defaultSessionLengthMinutes || 60,
+  autoPaymentReminders: user.autoPaymentReminders === true,
   customThemes: user.customThemes || [],
   weeklyFrequency: user.weeklyFrequency || null,
   preferredWorkoutDays: user.preferredWorkoutDays || [],

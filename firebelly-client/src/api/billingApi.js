@@ -49,6 +49,12 @@ export const billingApi = {
       body: { from, to, clientId },
     }),
 
+  sendReminder: ({ invoiceId }) =>
+    apiFetch("/invoices/remind", {
+      method: "POST",
+      body: { invoiceId },
+    }),
+
   downloadInvoicePdf: ({ invoiceId }) =>
     authFetch("/invoices/pdf", {
       method: "POST",

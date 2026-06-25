@@ -1,5 +1,7 @@
 const Invoice = require("../models/invoice");
+const User = require("../models/user");
 const { createNotification } = require("./notificationService");
+const { sendInvoiceReminder } = require("./invoiceEmail");
 
 const fmt = (amount, currency) => {
   const v = Number(amount || 0).toFixed(2);
@@ -20,6 +22,13 @@ const runPastDueSweep = async () => {
       balanceDue: { $gt: 0 },
     });
 
+    const trainerCache = new Map();
+    const getTrainer = async (id) => {
+      const key = String(id);
+      if (!trainerCache.has(key)) trainerCache.set(key, await User.findById(id).lean());
+      return trainerCache.get(key);
+    };
+
     for (const inv of overdue) {
       inv.status = "PAST_DUE";
       await inv.save();
@@ -33,6 +42,16 @@ const runPastDueSweep = async () => {
         )} outstanding.`,
         link: "/invoices",
       });
+
+      // Opt-in: only email the client if the trainer enabled auto reminders.
+      const trainer = await getTrainer(inv.trainerId);
+      if (trainer?.autoPaymentReminders) {
+        try {
+          await sendInvoiceReminder(inv);
+        } catch (err) {
+          console.error("[pastDueSweep] reminder email failed:", err.message);
+        }
+      }
     }
 
     if (overdue.length) {

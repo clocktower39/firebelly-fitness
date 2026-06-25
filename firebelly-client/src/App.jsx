@@ -44,6 +44,7 @@ const ChangePassword = lazy(() => import("./Components/AccountComponents/ChangeP
 const LogoutConfirmation = lazy(() => import("./Components/AccountComponents/LogoutConfirmation"));
 const WorkoutPreferences = lazy(() => import("./Components/AccountComponents/WorkoutPreferences"));
 const TrainerSchedulingPreferences = lazy(() => import("./Components/AccountComponents/TrainerSchedulingPreferences"));
+const TrainerBillingPreferences = lazy(() => import("./Components/AccountComponents/TrainerBillingPreferences"));
 const GuardianDashboard = lazy(() => import("./Components/AccountComponents/GuardianDashboard"));
 const ActivityTrackerContainer = lazy(() => import("./Pages/AppPages/ActivityTrackerContainer"));
 import PagePresenceAvatars from "./Components/PagePresenceAvatars";
@@ -154,6 +155,7 @@ function App({ }) {
     }
     // end line with false : true for production
     return subdomain === "app" ||
+      subdomain === "dev" ||
       subdomain === "172" ||
       subdomain === "192" ||
       subdomain === "10" ||
@@ -241,6 +243,7 @@ function App({ }) {
                       <Route index={true} exact path="theme" element={<ThemeSettings />} />
                       <Route index={true} exact path="workout-preferences" element={<WorkoutPreferences />} />
                       <Route index={true} exact path="trainer-scheduling" element={<TrainerSchedulingPreferences />} />
+                      <Route index={true} exact path="trainer-billing" element={<TrainerBillingPreferences />} />
                       <Route
                         index={true}
                         exact
