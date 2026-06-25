@@ -343,6 +343,8 @@ if (process.env.NODE_ENV !== "test") {
   server = http.listen(PORT, () => {
     console.log(`Server is listening on port ${PORT}`);
   });
+  const { startPastDueJob } = require("./services/pastDueJob");
+  startPastDueJob();
 }
 
 module.exports = {
