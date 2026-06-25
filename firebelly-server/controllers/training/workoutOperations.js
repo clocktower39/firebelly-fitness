@@ -13,6 +13,44 @@ const {
   pick,
   reverseEventDebitEntry,
 } = require("./context");
+const { progressExerciseGoals } = require("../../services/progressionEngine");
+
+// Engine-driven progression: resolve each exercise's library classification, then apply
+// the per-exercise progression step. Supersedes the flat applyProgression for the program
+// builder. See docs/program-progression-roadmap.md.
+const applyEngineProgression = async (training, { scheme = "linear", step = 1 } = {}) => {
+  if (!Array.isArray(training)) return;
+  const ids = [];
+  training.forEach((circuit) => {
+    if (Array.isArray(circuit)) {
+      circuit.forEach((ex) => {
+        if (ex?.exercise) ids.push(String(ex.exercise));
+      });
+    }
+  });
+  if (!ids.length) return;
+  const libs = await Exercise.find({ _id: { $in: [...new Set(ids)] } })
+    .select("equipment movementComplexity measurementType")
+    .lean();
+  const byId = new Map(libs.map((l) => [String(l._id), l]));
+  training.forEach((circuit) => {
+    if (!Array.isArray(circuit)) return;
+    circuit.forEach((ex) => {
+      if (!ex?.goals) return;
+      const lib = byId.get(String(ex.exercise)) || {};
+      ex.goals = progressExerciseGoals(
+        ex.goals,
+        {
+          equipment: lib.equipment,
+          movementComplexity: lib.movementComplexity,
+          measurementType: lib.measurementType,
+          exerciseType: ex.exerciseType,
+        },
+        { scheme, step }
+      );
+    });
+  });
+};
 
 const update_workout_date_by_id = async (req, res, next) => {
   try {
@@ -185,8 +223,14 @@ const copy_workout_by_id = async (req, res, next) => {
       }
     }
 
-    // Progression (program builder): bump goal weights/reps to generate a progressing week.
-    if (req.body.progression && Array.isArray(copyData.training)) {
+    // Progression (program builder). Prefer the engine (per-exercise, classification-aware);
+    // fall back to the legacy flat rule if only `progression` was sent.
+    if (req.body.scheme && Array.isArray(copyData.training)) {
+      await applyEngineProgression(copyData.training, {
+        scheme: req.body.scheme,
+        step: req.body.step || 1,
+      });
+    } else if (req.body.progression && Array.isArray(copyData.training)) {
       applyProgression(copyData.training, req.body.progression);
     }
 
