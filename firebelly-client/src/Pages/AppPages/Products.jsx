@@ -54,6 +54,7 @@ export default function Products() {
   const [editingId, setEditingId] = useState("");
   const [status, setStatus] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const sessionTypeLookup = useMemo(() => {
     const map = new Map();
@@ -352,6 +353,34 @@ export default function Products() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete product?</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Permanently delete <strong>{deleteTarget?.name}</strong>? This can&apos;t be undone.
+            (It won&apos;t affect invoices already created from it.)
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              if (deleteTarget) handleDelete(deleteTarget._id);
+              setDeleteTarget(null);
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Grid container size={12}>
         {products.length === 0 ? (
           <Card sx={{ width: "100%" }}>
@@ -410,7 +439,7 @@ export default function Products() {
                         size="small"
                         color="error"
                         variant="text"
-                        onClick={() => handleDelete(product._id)}
+                        onClick={() => setDeleteTarget(product)}
                       >
                         Delete
                       </Button>
