@@ -25,6 +25,24 @@ export const billingApi = {
       body: { invoiceId, status },
     }),
 
+  recordPayment: (payload) =>
+    apiFetch("/invoices/payment", {
+      method: "POST",
+      body: payload,
+    }),
+
+  recordRefund: (payload) =>
+    apiFetch("/invoices/refund", {
+      method: "POST",
+      body: payload,
+    }),
+
+  removePayment: ({ invoiceId, paymentId }) =>
+    apiFetch("/invoices/payment/remove", {
+      method: "POST",
+      body: { invoiceId, paymentId },
+    }),
+
   downloadInvoicePdf: ({ invoiceId }) =>
     authFetch("/invoices/pdf", {
       method: "POST",

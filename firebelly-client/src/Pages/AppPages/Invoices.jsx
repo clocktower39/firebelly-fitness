@@ -30,6 +30,7 @@ import {
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import CloseIcon from "@mui/icons-material/Close";
 import { alpha } from "@mui/material/styles";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
@@ -38,10 +39,13 @@ import { formatPrice } from "../../utils/currency";
 const STATUS_CHIP = {
   DRAFT: { label: "Draft", color: "default" },
   SENT: { label: "Sent", color: "info" },
+  PARTIAL: { label: "Partial", color: "info" },
   PAID: { label: "Paid", color: "success" },
   PAST_DUE: { label: "Past due", color: "warning" },
   VOID: { label: "Void", color: "error" },
 };
+
+const PAYMENT_METHODS = ["Cash", "Card", "Check", "Venmo", "Zelle", "Bank transfer", "Other"];
 
 const defaultLineItem = () => ({
   itemType: "SESSION",
@@ -94,6 +98,13 @@ export default function Invoices() {
   const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
   const [rowMenuInvoice, setRowMenuInvoice] = useState(null);
   const [detailInvoice, setDetailInvoice] = useState(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("Cash");
+  const [payDate, setPayDate] = useState("");
+  const [payReference, setPayReference] = useState("");
+  const [payBusy, setPayBusy] = useState(false);
+  const [refundMode, setRefundMode] = useState(false);
+  const [refundReason, setRefundReason] = useState("");
 
   useEffect(() => {
     if (user.isTrainer) {
@@ -362,6 +373,74 @@ export default function Invoices() {
     resetForm();
     setError("");
     setCreateOpen(true);
+  };
+
+  // Open the detail dialog and prime the payment form (amount defaults to the balance).
+  const openDetail = (invoice) => {
+    setDetailInvoice(invoice);
+    setRefundMode(false);
+    setRefundReason("");
+    setPayMethod("Cash");
+    setPayDate(dayjs().format("YYYY-MM-DD"));
+    setPayReference("");
+    setPayAmount(Number(invoice.balanceDue || 0) > 0 ? String(invoice.balanceDue) : "");
+  };
+
+  const afterPaymentChange = (invoice) => {
+    setDetailInvoice(invoice);
+    setRefundMode(false);
+    setRefundReason("");
+    setPayReference("");
+    setPayAmount(Number(invoice.balanceDue || 0) > 0 ? String(invoice.balanceDue) : "");
+    refreshInvoices();
+    refreshSummary(clientFilter);
+  };
+
+  const submitPayment = async () => {
+    if (!detailInvoice) return;
+    const amount = Number(payAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setPayBusy(true);
+    setError("");
+    try {
+      const data = refundMode
+        ? await billingApi.recordRefund({
+            invoiceId: detailInvoice._id,
+            amount,
+            reason: refundReason,
+          })
+        : await billingApi.recordPayment({
+            invoiceId: detailInvoice._id,
+            amount,
+            method: payMethod,
+            paidAt: payDate || undefined,
+            reference: payReference,
+          });
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
+      afterPaymentChange(data.invoice);
+    } catch (err) {
+      setError(err.message || "Unable to record payment.");
+    } finally {
+      setPayBusy(false);
+    }
+  };
+
+  const removePaymentEntry = async (paymentId) => {
+    if (!detailInvoice) return;
+    setError("");
+    try {
+      const data = await billingApi.removePayment({ invoiceId: detailInvoice._id, paymentId });
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
+      afterPaymentChange(data.invoice);
+    } catch (err) {
+      setError(err.message || "Unable to remove payment.");
+    }
   };
 
   // A client-initiated purchase request the trainer still needs to act on:
@@ -875,7 +954,7 @@ export default function Invoices() {
                       >
                         <CardContent sx={{ pb: 1.5, "&:last-child": { pb: 1.5 } }}>
                           <Box
-                            onClick={() => setDetailInvoice(invoice)}
+                            onClick={() => openDetail(invoice)}
                             sx={{ cursor: "pointer" }}
                           >
                           <Stack
@@ -1124,19 +1203,133 @@ export default function Invoices() {
                   <>
                     <Divider />
                     <Typography variant="subtitle2">Payments</Typography>
-                    {detailInvoice.payments.map((p, i) => (
-                      <Stack key={i} direction="row" sx={{ justifyContent: "space-between" }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {p.paidAt ? dayjs(p.paidAt).format("MMM D, YYYY") : ""}
-                          {p.method ? ` · ${p.method}` : ""}
-                        </Typography>
-                        <Typography variant="body2">
-                          {formatPrice(p.amount, p.currency || detailInvoice.currency)}
-                        </Typography>
-                      </Stack>
-                    ))}
+                    {detailInvoice.payments.map((p) => {
+                      const refund = p.type === "REFUND";
+                      const manual = !p.processor || p.processor === "MANUAL";
+                      return (
+                        <Stack
+                          key={p._id}
+                          direction="row"
+                          spacing={1}
+                          sx={{ justifyContent: "space-between", alignItems: "center" }}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            {p.paidAt ? dayjs(p.paidAt).format("MMM D, YYYY") : ""}
+                            {p.method ? ` · ${p.method}` : ""}
+                            {refund ? " · refund" : ""}
+                            {p.processor && p.processor !== "MANUAL" ? ` · ${p.processor}` : ""}
+                          </Typography>
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                            <Typography
+                              variant="body2"
+                              color={refund ? "error.main" : "text.primary"}
+                            >
+                              {refund ? "−" : ""}
+                              {formatPrice(p.amount, p.currency || detailInvoice.currency)}
+                            </Typography>
+                            {manual && detailInvoice.status !== "VOID" && (
+                              <IconButton
+                                size="small"
+                                aria-label="remove payment"
+                                onClick={() => removePaymentEntry(p._id)}
+                              >
+                                <CloseIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            )}
+                          </Stack>
+                        </Stack>
+                      );
+                    })}
                   </>
                 )}
+
+                {detailInvoice.status !== "VOID" &&
+                  (Number(detailInvoice.balanceDue) > 0 ||
+                    Number(detailInvoice.amountPaid) > 0) && (
+                    <>
+                      <Divider />
+                      <Stack
+                        direction="row"
+                        sx={{ justifyContent: "space-between", alignItems: "center" }}
+                      >
+                        <Typography variant="subtitle2">
+                          {refundMode ? "Record a refund" : "Record a payment"}
+                        </Typography>
+                        {Number(detailInvoice.amountPaid) > 0 && (
+                          <Button
+                            size="small"
+                            color={refundMode ? "inherit" : "error"}
+                            onClick={() => setRefundMode((v) => !v)}
+                          >
+                            {refundMode ? "Cancel refund" : "Refund"}
+                          </Button>
+                        )}
+                      </Stack>
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                        <TextField
+                          label="Amount"
+                          type="number"
+                          size="small"
+                          value={payAmount}
+                          onChange={(e) => setPayAmount(e.target.value)}
+                          slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                          fullWidth
+                        />
+                        {!refundMode && (
+                          <FormControl size="small" fullWidth>
+                            <InputLabel>Method</InputLabel>
+                            <Select
+                              label="Method"
+                              value={payMethod}
+                              onChange={(e) => setPayMethod(e.target.value)}
+                            >
+                              {PAYMENT_METHODS.map((m) => (
+                                <MenuItem key={m} value={m}>
+                                  {m}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
+                        {!refundMode && (
+                          <TextField
+                            label="Date"
+                            type="date"
+                            size="small"
+                            value={payDate}
+                            onChange={(e) => setPayDate(e.target.value)}
+                            slotProps={{ inputLabel: { shrink: true } }}
+                            fullWidth
+                          />
+                        )}
+                      </Stack>
+                      {refundMode ? (
+                        <TextField
+                          label="Reason (optional)"
+                          size="small"
+                          value={refundReason}
+                          onChange={(e) => setRefundReason(e.target.value)}
+                          fullWidth
+                        />
+                      ) : (
+                        <TextField
+                          label="Reference (optional)"
+                          size="small"
+                          value={payReference}
+                          onChange={(e) => setPayReference(e.target.value)}
+                          fullWidth
+                        />
+                      )}
+                      <Button
+                        variant="contained"
+                        color={refundMode ? "error" : "primary"}
+                        disabled={payBusy || !(Number(payAmount) > 0)}
+                        onClick={submitPayment}
+                      >
+                        {refundMode ? "Record refund" : "Record payment"}
+                      </Button>
+                    </>
+                  )}
 
                 {detailInvoice.notes && (
                   <Typography variant="caption" color="text.secondary">
@@ -1152,17 +1345,6 @@ export default function Invoices() {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => handleDownloadPdf(detailInvoice)}>PDF</Button>
-              {detailInvoice.status !== "PAID" && detailInvoice.status !== "VOID" && (
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    handleStatusUpdate(detailInvoice._id, "PAID");
-                    setDetailInvoice(null);
-                  }}
-                >
-                  Mark paid
-                </Button>
-              )}
               <Button onClick={() => setDetailInvoice(null)}>Close</Button>
             </DialogActions>
           </>
