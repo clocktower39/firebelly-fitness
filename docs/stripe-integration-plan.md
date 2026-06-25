@@ -24,19 +24,16 @@ translate Stripe webhooks into `settleInvoice` calls.
 
 ---
 
-## Key decisions (recommendations + what to confirm)
+## Key decisions (DECIDED)
 
-| Decision | Recommendation | Why / alternative |
+| Decision | Choice | Why |
 |---|---|---|
-| **Account model** | **Stripe Connect, Express accounts** | Each trainer receives money into their own account; Stripe hosts onboarding + handles KYC/compliance/payouts. Alternative: Standard (trainer brings a full Stripe account) — more friction. A single platform account is **not** viable (all money would land on Firebelly). |
-| **Charge type** | **Direct charges on the connected account** | The trainer is the merchant of record (matches "trainers bill their own clients"); client sees the trainer's business; simplest dispute/refund ownership. Alternative: destination charges (platform is merchant, transfers to trainer) — more platform liability. |
-| **Payment surface** | **Stripe Checkout (hosted page)** | PCI-minimal (SAQ-A), fast to build, supports Connect + Apple/Google Pay out of the box. Alternative: embedded Payment Element — more control, more work; do later if desired. |
-| **Platform fee** | **Configurable `application_fee_amount`, default 0** | Lets Firebelly optionally take a cut later without re-architecting. Confirm if/what % you want. |
-| **Partial online payments** | **Pay full balance only (v1)** | Simplest; Checkout charges the invoice's `balanceDue`. Manual partial entry still exists. Could add "pay any amount" later. |
-
-**Confirm before building:** (1) take a platform fee or not, (2) direct vs destination
-charges, (3) which currencies to enable (you support USD/EUR/JPY — Stripe handles all,
-but JPY is zero-decimal, see Money below).
+| **Account model** | **Stripe Connect, Express accounts** | Each trainer receives money into their own account; Stripe hosts onboarding + handles KYC/compliance/payouts, while we keep control of the in-app experience. Standard = more friction (trainer manages a full Stripe account); Custom = max onboarding UI + compliance liability on us. |
+| **Charge type** | **Direct charges on the connected account** | Trainer is the merchant of record — their name on the client's statement, funds settle straight to them, they own refunds/disputes. Keeps Firebelly out of the money flow and the liability. Destination charges would make Firebelly the merchant (more liability) — unnecessary given the flat-fee model below. |
+| **Payment surface** | **Stripe Checkout (hosted page)** | PCI-minimal (SAQ-A), fast to build, Connect + Apple/Google Pay out of the box. Embedded Payment Element later if desired. |
+| **Revenue model** | **Flat monthly trainer subscription — NO per-transaction fee** | Firebelly's revenue is a flat monthly fee trainers pay to use the platform. Trainers keep **100%** of what their clients pay → **no `application_fee_amount` on Connect charges.** Adds a separate "trainer subscription" system (see below). |
+| **Partial online payments** | **Pay full balance only (v1)** | Checkout charges the invoice's exact `balanceDue` — no amount box, no overpayment/race edge cases. Manual partials already work; "pay any amount online" is a trivial later add since `settleInvoice` already handles partials. |
+| **Currencies** | **USD at launch; Bitcoin later via a separate processor** | See Money & currency below. Bitcoin is **not** native to Stripe-via-Connect; it slots into the same `settleInvoice` path as a separate processor, or works manually today. |
 
 ---
 
@@ -67,9 +64,10 @@ notification to trainer ("Invoice X paid") — reuses existing notification syst
 ## Data model changes (small)
 
 **User (trainer)** — `firebelly-server/models/user.js`:
-- `stripeAccountId: String` — the connected account (`acct_…`).
-- `stripeChargesEnabled: Boolean` — from `account.updated` (can accept payments).
-- `stripePayoutsEnabled: Boolean` — onboarding complete enough to be paid out.
+- _Connect (client→trainer):_ `stripeAccountId` (`acct_…`), `stripeChargesEnabled`,
+  `stripePayoutsEnabled` (from `account.updated`).
+- _Subscription (trainer→Firebelly):_ `stripeCustomerId`, `subscriptionStatus`
+  (`active`/`trialing`/`past_due`/`canceled`), `subscriptionCurrentPeriodEnd`.
 
 (These are server-only; **do not** add to the JWT/token payload — they're not needed
 client-side beyond a derived "online payments enabled" boolean we can include.)
@@ -137,11 +135,37 @@ invoice) since there's no authenticated user in a webhook.
 
 ---
 
+## Trainer subscription (Firebelly's revenue — separate system)
+The flat monthly fee is a **distinct billing relationship**: Firebelly charges trainers,
+on **Firebelly's own Stripe account** (NOT Connect). Independent of the client→trainer
+Connect flow; can ship before or after it.
+- **Stripe Billing / Subscriptions:** a Product + recurring Price; trainer subscribes via
+  Checkout (mode `subscription`) or the Customer Portal for management/cancellation.
+- **Data:** trainer gets `stripeCustomerId`, `subscriptionStatus`
+  (`active`/`past_due`/`canceled`/`trialing`), `subscriptionCurrentPeriodEnd`.
+- **Gating:** decide what an unsubscribed/lapsed trainer loses (e.g. read-only, or can't
+  create invoices / accept online payments). Webhooks `customer.subscription.*` +
+  `invoice.payment_failed` keep status current.
+- **Pricing:** TBD and **does not affect the build** — pick the number later. Reference
+  range for solo-trainer SaaS: ~$10–30/mo flat, or tiered by active client count. A free
+  trial is easy via Stripe Billing.
+- **Note:** this reuses none of the Connect code; it's a second, smaller Stripe surface.
+
 ## Money & currency
-- Stripe amounts are in the **smallest currency unit**. Convert: USD/EUR → `Math.round(x*100)`;
-  **JPY is zero-decimal** → send the integer amount as-is. Centralize this in one helper.
-- The Checkout Session currency = the invoice currency. Connected account must support it.
-- Webhook amounts come back in the same minor units — convert back when recording the payment.
+- **USD at launch.** Stripe amounts are in the **smallest unit** — USD → `Math.round(x*100)`.
+  (If EUR/JPY are enabled later: JPY is **zero-decimal**, send the integer as-is.)
+  Centralize conversion in one helper. Webhook amounts come back in minor units — convert
+  back when recording the payment.
+- **Bitcoin** is **not** a native Stripe-via-Connect payment method (Stripe's crypto support
+  is stablecoin/USDC-oriented, not BTC settling to a connected account through Checkout).
+  Because our payment subdoc is processor-agnostic, BTC is best added as a **separate
+  payment source** that records into the same `settleInvoice` path:
+  - Integrate a crypto processor (e.g. **BTCPay Server** (self-host, no fees), **OpenNode**,
+    or **Coinbase Commerce**): on their "payment confirmed" webhook, append a payment with
+    `processor:"BITCOIN"`, `processorPaymentId:<their charge id>`, then `settleInvoice`.
+  - **Today, with zero new code:** a trainer who accepts BTC off-platform records a manual
+    payment with method "Bitcoin" — it already flows through `settleInvoice`.
+  - Treat a real Bitcoin integration as its **own phase** after Stripe USD is solid.
 
 ## Security & compliance
 - **Webhook signature verification is mandatory** (raw body + `STRIPE_WEBHOOK_SECRET`).
@@ -165,19 +189,24 @@ invoice) since there's no authenticated user in a webhook.
 
 ## Phasing
 - **Phase A — Connect onboarding:** account create + Account Link + status + `account.updated`
-  webhook + Billing Preferences UI. (No charges yet.)
-- **Phase B — Pay an invoice:** Checkout session + pay link + `payment_intent.succeeded`
-  webhook → `settleInvoice`. Pay link in reminder/invoice emails. **This is the core.**
+  webhook + Billing Preferences UI. (No charges yet.) No application fee (flat-fee model).
+- **Phase B — Pay an invoice:** Checkout session (direct charge, full balance) + pay link +
+  `payment_intent.succeeded` webhook → `settleInvoice`. Pay link in reminder/invoice emails.
+  **This is the core.**
 - **Phase C — Refunds & disputes:** `charge.refunded` → REFUND; `dispute.created` → notify.
+- **Phase S — Trainer subscription (Firebelly revenue):** Stripe Billing on the platform
+  account + gating. Independent — can run in parallel with A/B or come later.
 - **Phase D (later):** client-facing billing/pay view, embedded Payment Element, saved
-  cards, recurring/subscription billing.
+  cards. **Bitcoin** via a separate crypto processor → same `settleInvoice` path.
 
-## Open questions to confirm before Phase A
-1. Platform fee — take a cut? If so, flat or %?
-2. Direct vs destination charges (recommendation: direct).
-3. Express vs Standard connected accounts (recommendation: Express).
-4. Allow partial online payments, or full-balance only (recommendation: full v1)?
-5. Currencies to enable at launch.
+## Decisions locked / still open
+- **Locked:** Connect + Express; direct charges; Checkout; flat monthly subscription (no
+  per-transaction fee); full-balance online payments v1; USD at launch.
+- **Still open (don't block Phase A):**
+  1. Subscription **price** + flat vs tiered + free-trial length.
+  2. What an **unsubscribed/lapsed trainer** loses (gating policy).
+  3. Build **subscription (Phase S)** before or after Connect (Phases A/B)?
+  4. Bitcoin processor choice (BTCPay vs OpenNode vs Coinbase Commerce) — later phase.
 
 ## Not changing
 The ledger, `settleInvoice`, credit release/reversal, reports/CSV export, dashboard,
