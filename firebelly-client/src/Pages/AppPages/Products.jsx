@@ -5,8 +5,11 @@ import {
   Button,
   Card,
   CardContent,
-  CardActions,
-  Divider,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
   Grid,
@@ -19,6 +22,15 @@ import {
   Typography,
 } from "@mui/material";
 import { useSelector } from "react-redux";
+import { formatPrice } from "../../utils/currency";
+
+const TYPE_LABEL = {
+  SESSION: "Session",
+  PROGRAM: "Program",
+  NUTRITION: "Nutrition",
+  MERCH: "Merch",
+  CUSTOM: "Other",
+};
 
 const defaultForm = {
   itemType: "SESSION",
@@ -41,6 +53,7 @@ export default function Products() {
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState("");
   const [status, setStatus] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
 
   const sessionTypeLookup = useMemo(() => {
     const map = new Map();
@@ -118,6 +131,8 @@ export default function Products() {
       deliverableType: product.deliverableType || "NONE",
       deliverableValue: product.deliverableValue || "",
     });
+    setStatus("");
+    setFormOpen(true);
   };
 
   const handleSave = async () => {
@@ -150,6 +165,7 @@ export default function Products() {
       if (data?.error) throw new Error(data.error);
       setStatus("");
       resetForm();
+      setFormOpen(false);
       loadProducts();
     } catch (err) {
       setStatus(err.message || "Unable to save product.");
@@ -166,19 +182,30 @@ export default function Products() {
     }
   };
 
+  const startAdd = () => {
+    resetForm();
+    setStatus("");
+    setFormOpen(true);
+  };
+  const closeForm = () => {
+    resetForm();
+    setStatus("");
+    setFormOpen(false);
+  };
+
   return (
     <Grid container spacing={2}>
-      <Grid container size={12}>
+      <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h4">Products</Typography>
+        <Button variant="contained" onClick={startAdd}>
+          Add product
+        </Button>
       </Grid>
 
-      <Grid container size={12}>
-        <Card sx={{ width: "100%" }}>
-          <CardContent>
-            <Stack spacing={2}>
-              <Typography variant="h6">
-                {editingId ? "Edit Product" : "Add Product"}
-              </Typography>
+      <Dialog open={formOpen} onClose={closeForm} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingId ? "Edit product" : "Add product"}</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2} sx={{ mt: 1 }}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
                 <FormControl fullWidth>
                   <InputLabel>Type</InputLabel>
@@ -316,59 +343,66 @@ export default function Products() {
                 </Typography>
               )}
             </Stack>
-          </CardContent>
-          <CardActions sx={{ px: 2, pb: 2 }}>
-            <Button variant="contained" onClick={handleSave}>
-              {editingId ? "Save Changes" : "Add Product"}
-            </Button>
-            {editingId && (
-              <Button variant="outlined" onClick={resetForm}>
-                Cancel
-              </Button>
-            )}
-          </CardActions>
-        </Card>
-      </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeForm}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave}>
+            {editingId ? "Save changes" : "Add product"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Grid container size={12}>
-        <Card sx={{ width: "100%" }}>
-          <CardContent>
-            <Typography variant="h6">Product Catalog</Typography>
-            <Divider sx={{ my: 1 }} />
-            {products.length === 0 ? (
-              <Typography color="text.secondary">No products yet.</Typography>
-            ) : (
-              <Stack spacing={1}>
-                {products.map((product) => (
-                  <Card key={product._id} variant="outlined">
-                    <CardContent>
-                      <Stack spacing={0.5}>
-                        <Typography variant="subtitle1">{product.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {product.itemType}
-                          {product.sessionTypeId?.name
-                            ? ` • ${product.sessionTypeId.name}`
-                            : ""}
+        {products.length === 0 ? (
+          <Card sx={{ width: "100%" }}>
+            <CardContent>
+              <Stack spacing={1} sx={{ alignItems: "center", py: 4 }}>
+                <Typography color="text.secondary">No products yet.</Typography>
+                <Button variant="outlined" size="small" onClick={startAdd}>
+                  Add your first product
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        ) : (
+          <Stack spacing={1.5} sx={{ width: "100%" }}>
+            {products.map((product) => (
+              <Card key={product._id} variant="outlined">
+                <CardContent sx={{ "&:last-child": { pb: 2 } }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
+                  >
+                    <Stack spacing={0.5}>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ alignItems: "center", flexWrap: "wrap" }}
+                      >
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                          {product.name}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {product.currency} {Number(product.price || 0).toFixed(2)}
-                          {product.itemType === "SESSION"
-                            ? ` • ${product.creditsPerUnit || 0} credits`
-                            : ""}
-                        </Typography>
+                        <Chip size="small" label={TYPE_LABEL[product.itemType] || product.itemType} />
                         {!product.active && (
-                          <Typography variant="caption" color="error">
-                            Inactive
-                          </Typography>
-                        )}
-                        {product.description && (
-                          <Typography variant="body2" color="text.secondary">
-                            {product.description}
-                          </Typography>
+                          <Chip size="small" variant="outlined" label="Inactive" />
                         )}
                       </Stack>
-                    </CardContent>
-                    <CardActions sx={{ px: 2, pb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatPrice(product.price, product.currency)}
+                        {product.itemType === "SESSION"
+                          ? ` · ${product.creditsPerUnit || 0} credits${
+                              product.sessionTypeId?.name ? ` · ${product.sessionTypeId.name}` : ""
+                            }`
+                          : ""}
+                      </Typography>
+                      {product.description && (
+                        <Typography variant="body2" color="text.secondary">
+                          {product.description}
+                        </Typography>
+                      )}
+                    </Stack>
+                    <Stack direction="row" spacing={0.5}>
                       <Button size="small" variant="outlined" onClick={() => handleEdit(product)}>
                         Edit
                       </Button>
@@ -380,13 +414,13 @@ export default function Products() {
                       >
                         Delete
                       </Button>
-                    </CardActions>
-                  </Card>
-                ))}
-              </Stack>
-            )}
-          </CardContent>
-        </Card>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        )}
       </Grid>
     </Grid>
   );
