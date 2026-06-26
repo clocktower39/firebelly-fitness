@@ -36,7 +36,13 @@ export default function NotificationBell() {
   useEffect(() => {
     load();
     const timer = setInterval(load, 45000);
-    return () => clearInterval(timer);
+    // Real-time: refetch immediately when a notification arrives over the socket.
+    const onPush = () => load();
+    window.addEventListener("fb:notification", onPush);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("fb:notification", onPush);
+    };
   }, [load]);
 
   const open = (event) => {

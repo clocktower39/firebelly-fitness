@@ -13,6 +13,7 @@ const {
   pick,
   reverseEventDebitEntry,
 } = require("./context");
+const { createNotification } = require("../../services/notificationService");
 
 const create_training = async (req, res, next) => {
   try {
@@ -110,6 +111,40 @@ const update_training = async (req, res, next) => {
           );
           await reverseEventDebitEntry({ event: updatedEvent, userId: res.locals.user._id });
         }
+      }
+    }
+
+    // Notify the client's active trainers when a workout is completed (best-effort; never
+    // blocks the save). Skips whoever performed the action (e.g. a trainer completing it).
+    if (!wasComplete && isComplete) {
+      try {
+        const clientId = training.user?._id || training.user;
+        const clientName =
+          [training.user?.firstName, training.user?.lastName].filter(Boolean).join(" ") ||
+          "Your client";
+        const rels = await Relationship.find({
+          client: clientId,
+          accepted: true,
+          engagementStatus: "active",
+        })
+          .select("trainer")
+          .lean();
+        await Promise.all(
+          rels
+            .map((r) => String(r.trainer))
+            .filter((trainerId) => trainerId !== String(res.locals.user._id))
+            .map((trainerId) =>
+              createNotification({
+                userId: trainerId,
+                type: "CLIENT_WORKOUT_COMPLETED",
+                title: `${clientName} completed a workout`,
+                body: training.title || "Tap to review their session.",
+                link: `/workout/${training._id}`,
+              })
+            )
+        );
+      } catch (err) {
+        console.error("workout-complete notification failed:", err.message);
       }
     }
 

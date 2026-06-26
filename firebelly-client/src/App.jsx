@@ -115,11 +115,18 @@ function App({ }) {
       dispatch(removeWorkouts(payload.accountId, [payload.workoutId]));
     };
 
+    const handleNotification = (notification) => {
+      // Bridge to the NotificationBell (decoupled from this socket's local scope).
+      window.dispatchEvent(new CustomEvent("fb:notification", { detail: notification }));
+    };
+
     socket.on("workoutUpdated", handleWorkoutUpdated);
     socket.on("workoutDeleted", handleWorkoutDeleted);
+    socket.on("notification", handleNotification);
     return () => {
       socket.off("workoutUpdated", handleWorkoutUpdated);
       socket.off("workoutDeleted", handleWorkoutDeleted);
+      socket.off("notification", handleNotification);
     };
   }, [dispatch, socket]);
 
