@@ -24,6 +24,7 @@ const Schedule = lazy(() => import("./Pages/AppPages/Schedule"));
 const ProgramBuilder = lazy(() => import("./Pages/AppPages/ProgramBuilder"));
 const Programs = lazy(() => import("./Pages/AppPages/Programs"));
 const ProgramsMarketplacePreview = lazy(() => import("./Pages/AppPages/ProgramsMarketplacePreview"));
+const Marketplace = lazy(() => import("./Pages/AppPages/Marketplace"));
 const WorkoutTemplates = lazy(() => import("./Pages/AppPages/WorkoutTemplates"));
 const WorkoutHistory = lazy(() => import("./Pages/AppPages/WorkoutHistory"));
 const Exercises = lazy(() => import("./Pages/AppPages/Exercises"));
@@ -230,6 +231,7 @@ function App({ }) {
                     <Route exact path="/invoices" element={<Invoices />} />
                     <Route exact path="/session-counter" element={<Navigate to="/invoices" replace />} />
                     <Route exact path="/products" element={<Products />} />
+                    <Route exact path="/marketplace" element={<Marketplace />} />
                     <Route exact path="/trainer-store" element={<TrainerStore />} />
                     <Route exact path="/programs" element={<Programs />} />
                     <Route exact path="/programs/marketplace-preview" element={<ProgramsMarketplacePreview />} />

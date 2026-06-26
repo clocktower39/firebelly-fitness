@@ -243,6 +243,7 @@ export default function ProgramBuilder() {
         weeksCount: program.weeksCount,
         daysPerWeek: program.daysPerWeek,
         mesocycles: program.mesocycles || [],
+        price: program.price ?? null,
       });
       if (data?.error) {
         throw new Error(data.error);
@@ -710,6 +711,20 @@ export default function ProgramBuilder() {
               fullWidth
               multiline
               minRows={2}
+            />
+            <TextField
+              label="Price (USD)"
+              type="number"
+              value={program.price ?? ""}
+              onChange={(event) => {
+                const v = event.target.value;
+                setProgram((prev) => ({ ...prev, price: v === "" ? null : Math.max(0, Number(v)) }));
+                setDirty(true);
+              }}
+              onBlur={() => saveDraft()}
+              helperText="What clients pay on your products page once published. 0 = free."
+              slotProps={{ htmlInput: { min: 0, step: 1 } }}
+              sx={{ maxWidth: 260 }}
             />
           </Stack>
           <Stack spacing={1} alignItems={{ xs: "flex-start", md: "flex-end" }}>

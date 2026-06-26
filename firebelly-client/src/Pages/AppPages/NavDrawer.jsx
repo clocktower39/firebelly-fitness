@@ -47,6 +47,7 @@ import {
   PersonAddAlt1 as SignUpIcon,
   Login as LoginIcon,
   QrCodeScanner as QrCodeScannerIcon,
+  Storefront as StorefrontIcon,
 } from "@mui/icons-material";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
@@ -107,6 +108,11 @@ export default function NavDrawer() {
       title: "Trainers",
       to: "/account/trainers",
       icon: <TrainersIcon />,
+    },
+    {
+      title: "Marketplace",
+      to: "/marketplace",
+      icon: <StorefrontIcon />,
     },
     {
       title: "Groups",
