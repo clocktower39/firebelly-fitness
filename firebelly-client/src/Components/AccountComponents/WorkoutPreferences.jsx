@@ -11,6 +11,9 @@ import {
   MenuItem,
   Paper,
   Select,
+  Switch,
+  FormControlLabel,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -34,6 +37,16 @@ export default function WorkoutPreferences() {
   const [workoutWeightUnit, setWorkoutWeightUnit] = useState(
     normalizeWeightUnit(user.workoutWeightUnit)
   );
+  const prefs0 = user.notificationPrefs || {};
+  const [reminderTime, setReminderTime] = useState(prefs0.workoutReminderTime || "08:00");
+  const [reminderPerDay, setReminderPerDay] = useState(Boolean(prefs0.workoutReminderPerDay));
+  const [reminderTimesByDay, setReminderTimesByDay] = useState(() => {
+    const arr = Array.isArray(prefs0.workoutReminderTimesByDay)
+      ? [...prefs0.workoutReminderTimesByDay]
+      : [];
+    while (arr.length < 7) arr.push("");
+    return arr;
+  });
 
   const handleFrequencyChange = (event) => {
     setWeeklyFrequency(event.target.value);
@@ -44,7 +57,19 @@ export default function WorkoutPreferences() {
   };
 
   const savePreferences = () => {
-    dispatch(editUser({ weeklyFrequency, preferredWorkoutDays: selectedDays, workoutWeightUnit }));
+    dispatch(
+      editUser({
+        weeklyFrequency,
+        preferredWorkoutDays: selectedDays,
+        workoutWeightUnit,
+        notificationPrefs: {
+          ...(user.notificationPrefs || {}),
+          workoutReminderTime: reminderTime,
+          workoutReminderPerDay: reminderPerDay,
+          workoutReminderTimesByDay: reminderTimesByDay,
+        },
+      })
+    );
   };
 
   return (
@@ -135,6 +160,65 @@ export default function WorkoutPreferences() {
               ))}
             </ToggleButtonGroup>
           </Grid>
+          <Grid container size={12} sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Workout Reminder Time
+            </Typography>
+          </Grid>
+          <Grid container size={12}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              When to remind you on days you have a workout. (Turn workout reminders on in Account
+              &rarr; Notifications.)
+            </Typography>
+          </Grid>
+          <Grid container size={12}>
+            <TextField
+              type="time"
+              label="Default time"
+              value={reminderTime}
+              onChange={(e) => setReminderTime(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ width: 180 }}
+            />
+          </Grid>
+          <Grid container size={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={reminderPerDay}
+                  onChange={(e) => setReminderPerDay(e.target.checked)}
+                />
+              }
+              label="Use a different time for each day"
+            />
+          </Grid>
+          {reminderPerDay && (
+            <>
+              <Grid container size={12}>
+                <Typography variant="caption" color="text.secondary">
+                  Leave a day blank to use your default time.
+                </Typography>
+              </Grid>
+              <Grid container size={12} spacing={1}>
+                {DAYS_OF_WEEK.map((day) => (
+                  <Grid key={day.value} size={{ xs: 6, sm: 4, md: 3 }}>
+                    <TextField
+                      type="time"
+                      label={day.label}
+                      value={reminderTimesByDay[day.value] || ""}
+                      onChange={(e) => {
+                        const next = [...reminderTimesByDay];
+                        next[day.value] = e.target.value;
+                        setReminderTimesByDay(next);
+                      }}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      fullWidth
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </>
+          )}
           <Grid container size={12} sx={{ justifyContent: "center", mt: 2 }}>
             <Button variant="contained" onClick={savePreferences}>
               Save

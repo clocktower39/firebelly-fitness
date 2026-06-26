@@ -94,9 +94,14 @@ const runWorkoutReminderSweep = async () => {
     const localNow = dayjs(now).tz(tz);
     // Workout date is stored at UTC midnight of its intended day; compare calendar days.
     if (dayjs.utc(w.date).format("YYYY-MM-DD") !== localNow.format("YYYY-MM-DD")) continue;
-    const [rh, rm] = String(prefs.workoutReminderTime || "08:00")
-      .split(":")
-      .map((n) => Number(n) || 0);
+    // Pick the reminder time: per-day (by the workout's local day-of-week) if configured,
+    // otherwise the single default time.
+    const localDay = localNow.day(); // 0=Sun..6=Sat
+    let timeStr = prefs.workoutReminderTime || "08:00";
+    if (prefs.workoutReminderPerDay && prefs.workoutReminderTimesByDay?.[localDay]) {
+      timeStr = prefs.workoutReminderTimesByDay[localDay];
+    }
+    const [rh, rm] = String(timeStr).split(":").map((n) => Number(n) || 0);
     const reminderMin = rh * 60 + rm;
     const nowMin = localNow.hour() * 60 + localNow.minute();
 

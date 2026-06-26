@@ -57,7 +57,9 @@ const UserSchema = new mongoose.Schema({
       clientWorkoutCompleted: { type: Boolean, default: true }, // trainer: client finished a workout
       goalMet: { type: Boolean, default: true },
       workoutReminder: { type: Boolean, default: true },
-      workoutReminderTime: { type: String, default: "08:00" }, // HH:MM in the user's local time
+      workoutReminderTime: { type: String, default: "08:00" }, // HH:MM in the user's local time (single mode)
+      workoutReminderPerDay: { type: Boolean, default: false }, // use per-day times instead of the single time
+      workoutReminderTimesByDay: { type: [String], default: [] }, // index 0=Sun..6=Sat; "" = fall back to single time
       workoutOverdue: { type: Boolean, default: true },
       workoutOverdueAfterMinutes: { type: Number, default: 180, min: 15, max: 1440 },
       sessionReminder: { type: Boolean, default: true },

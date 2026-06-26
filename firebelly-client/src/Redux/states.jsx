@@ -11,6 +11,8 @@ export let user = {
         goalMet: true,
         workoutReminder: true,
         workoutReminderTime: "08:00",
+        workoutReminderPerDay: false,
+        workoutReminderTimesByDay: [],
         workoutOverdue: true,
         workoutOverdueAfterMinutes: 180,
         sessionReminder: true,

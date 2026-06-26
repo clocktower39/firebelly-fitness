@@ -59,6 +59,8 @@ const updateUserValidate = {
           goalMet: Joi.boolean(),
           workoutReminder: Joi.boolean(),
           workoutReminderTime: Joi.string().allow(""),
+          workoutReminderPerDay: Joi.boolean(),
+          workoutReminderTimesByDay: Joi.array().items(Joi.string().allow("")),
           workoutOverdue: Joi.boolean(),
           workoutOverdueAfterMinutes: Joi.number().integer().min(15).max(1440),
           sessionReminder: Joi.boolean(),
