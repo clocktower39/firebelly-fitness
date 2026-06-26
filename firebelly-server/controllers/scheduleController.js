@@ -685,6 +685,16 @@ const trainer_book_availability = async (req, res, next) => {
 
     const saved = await appointment.save();
 
+    if (saved.clientId) {
+      createNotification({
+        userId: saved.clientId,
+        type: "SESSION_CONFIRMED",
+        title: "Session confirmed",
+        body: "Your trainer scheduled a session for you — tap to view the details.",
+        link: "/sessions",
+      }).catch(() => {});
+    }
+
     if (!availability.recurrenceRule && availability.availabilitySource === "MANUAL") {
       const remaining = [];
       if (requestedStart > availabilityStart) {

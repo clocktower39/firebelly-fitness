@@ -5,6 +5,7 @@ const utc = require("dayjs/plugin/utc");
 const timezone = require("dayjs/plugin/timezone");
 const ScheduleEvent = require("../models/scheduleEvent");
 const Training = require("../models/training");
+const MetricEntry = require("../models/metricEntry");
 const User = require("../models/user");
 const { createNotification } = require("./notificationService");
 
@@ -127,14 +128,52 @@ const runWorkoutReminderSweep = async () => {
   return { reminders, overdue };
 };
 
+// Measurement reminders by cadence (opt-in). Fires when it's been a full cadence interval
+// since the user last logged a measurement OR was last reminded.
+const CADENCE_DAYS = { WEEKLY: 7, MONTHLY: 30, QUARTERLY: 90 };
+const runMeasurementReminderSweep = async () => {
+  const now = new Date();
+  const users = await User.find({ "notificationPrefs.measurementReminder": true })
+    .select("notificationPrefs lastMeasurementReminderAt createdAt")
+    .lean();
+  if (!users.length) return 0;
+  let sent = 0;
+  for (const u of users) {
+    const cadence = CADENCE_DAYS[u.notificationPrefs?.measurementCadence] || 30;
+    const intervalMs = cadence * 24 * 60 * 60 * 1000;
+    const lastEntry = await MetricEntry.findOne({ user: u._id })
+      .sort({ recordedAt: -1 })
+      .select("recordedAt")
+      .lean();
+    const reference = [u.lastMeasurementReminderAt, lastEntry?.recordedAt, u.createdAt]
+      .filter(Boolean)
+      .map((d) => new Date(d).getTime())
+      .reduce((a, b) => Math.max(a, b), 0);
+    if (now.getTime() - reference < intervalMs) continue;
+    const cadenceLabel = String(u.notificationPrefs?.measurementCadence || "monthly").toLowerCase();
+    await createNotification({
+      userId: u._id,
+      type: "MEASUREMENT_REMINDER",
+      title: "Time to log measurements",
+      body: `It's been a while — log your ${cadenceLabel} measurements.`,
+      link: "/progress",
+    });
+    await User.updateOne({ _id: u._id }, { $set: { lastMeasurementReminderAt: now } });
+    sent += 1;
+  }
+  return sent;
+};
+
 const runReminderSweep = async () => {
   try {
     const sessions = await runSessionReminderSweep();
     const workout = await runWorkoutReminderSweep();
+    const measurements = await runMeasurementReminderSweep();
     const parts = [];
     if (sessions) parts.push(`${sessions} session`);
     if (workout.reminders) parts.push(`${workout.reminders} workout`);
     if (workout.overdue) parts.push(`${workout.overdue} overdue`);
+    if (measurements) parts.push(`${measurements} measurement`);
     if (parts.length) console.log(`reminderJob: sent ${parts.join(", ")} reminder(s)`);
   } catch (err) {
     console.error("reminderJob sweep failed:", err.message);
@@ -151,4 +190,5 @@ module.exports = {
   runReminderSweep,
   runSessionReminderSweep,
   runWorkoutReminderSweep,
+  runMeasurementReminderSweep,
 };

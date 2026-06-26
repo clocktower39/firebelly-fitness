@@ -69,6 +69,7 @@ const UserSchema = new mongoose.Schema({
         default: "MONTHLY",
       },
     },
+    lastMeasurementReminderAt: { type: Date, default: null }, // internal: measurement reminder dedup
     customThemes: {
         type: [
             {

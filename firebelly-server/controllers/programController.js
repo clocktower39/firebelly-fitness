@@ -6,6 +6,7 @@ const Exercise = require("../models/exercise");
 const Product = require("../models/product");
 const Relationship = require("../models/relationship");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
+const { createNotification } = require("../services/notificationService");
 
 dayjs.extend(utc);
 
@@ -351,6 +352,13 @@ const assign_program = async (req, res, next) => {
     }
 
     const inserted = await Training.insertMany(newWorkouts);
+    createNotification({
+      userId: clientId,
+      type: "PROGRAM_ASSIGNED",
+      title: "New program assigned",
+      body: `Your trainer assigned you "${program.title || "a program"}".`,
+      link: "/calendar",
+    }).catch(() => {});
     return res.json({ status: "assigned", count: inserted.length });
   } catch (err) {
     return next(err);

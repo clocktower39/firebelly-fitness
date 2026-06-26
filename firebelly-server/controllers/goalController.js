@@ -4,6 +4,7 @@ const Training = require("../models/training");
 const mongoose = require("mongoose");
 const { sameId } = require("../services/accessControl");
 const { pick } = require("../utils/object");
+const { createNotification } = require("../services/notificationService");
 
 const GOAL_FIELDS = [
   "title",
@@ -179,6 +180,15 @@ const get_goals = async (req, res, next) => {
           goal.achievedDate = result.achievedDate;
           goal.achievementSeen = false;
           await goal.save();
+          if (res.locals.user.notificationPrefs?.goalMet !== false) {
+            createNotification({
+              userId: res.locals.user._id,
+              type: "GOAL_MET",
+              title: "Goal achieved! 🎉",
+              body: goal.title || `${goal.exercise?.exerciseTitle || "Your goal"} — nice work!`,
+              link: "/goals",
+            }).catch(() => {});
+          }
         }
       }
     }
