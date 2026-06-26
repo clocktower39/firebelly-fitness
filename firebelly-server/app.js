@@ -347,6 +347,8 @@ if (process.env.NODE_ENV !== "test") {
   });
   const { startPastDueJob } = require("./services/pastDueJob");
   startPastDueJob();
+  const { startReminderJob } = require("./services/reminderJob");
+  startReminderJob();
 }
 
 module.exports = {

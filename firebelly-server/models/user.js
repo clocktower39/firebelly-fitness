@@ -52,6 +52,23 @@ const UserSchema = new mongoose.Schema({
     workoutWeightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
     defaultSessionLengthMinutes: { type: Number, default: 60, min: 5, max: 480 },
     autoPaymentReminders: { type: Boolean, default: false },
+    timezone: { type: String, default: "" }, // IANA tz, e.g. "America/New_York"; for local-time reminders
+    notificationPrefs: {
+      clientWorkoutCompleted: { type: Boolean, default: true }, // trainer: client finished a workout
+      goalMet: { type: Boolean, default: true },
+      workoutReminder: { type: Boolean, default: true },
+      workoutReminderTime: { type: String, default: "08:00" }, // HH:MM in the user's local time
+      workoutOverdue: { type: Boolean, default: true },
+      workoutOverdueAfterMinutes: { type: Number, default: 180, min: 15, max: 1440 },
+      sessionReminder: { type: Boolean, default: true },
+      sessionReminderLeadMinutes: { type: Number, default: 120, min: 15, max: 1440 },
+      measurementReminder: { type: Boolean, default: false },
+      measurementCadence: {
+        type: String,
+        enum: ["WEEKLY", "MONTHLY", "QUARTERLY"],
+        default: "MONTHLY",
+      },
+    },
     customThemes: {
         type: [
             {

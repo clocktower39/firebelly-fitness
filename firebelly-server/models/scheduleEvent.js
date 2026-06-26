@@ -46,6 +46,7 @@ const scheduleEventSchema = new mongoose.Schema(
     priceCurrency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
     payoutAmount: { type: Number, default: null, min: 0 },
     payoutCurrency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
+    sessionReminderSentAt: { type: Date, default: null }, // dedup for the pre-session reminder
   },
   { timestamps: true }
 );
