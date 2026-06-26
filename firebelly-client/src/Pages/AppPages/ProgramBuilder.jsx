@@ -14,7 +14,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   FormControl,
   Grid,
   InputAdornment,
@@ -29,9 +28,18 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
+  Switch,
+  IconButton,
+  FormControlLabel,
 } from "@mui/material";
-import { Search as SearchIcon } from "@mui/icons-material";
+import {
+  Search as SearchIcon,
+  Add as AddIcon,
+  DeleteOutlined as DeleteOutlineIcon,
+  InfoOutlined as InfoOutlinedIcon,
+} from "@mui/icons-material";
 import { Alert } from "@mui/material";
 
 const DEFAULT_WEEKS = 4;
@@ -55,14 +63,85 @@ const buildWeeks = (weeksCount, daysPerWeek, existingWeeks = []) => {
   return weeks;
 };
 
-const formatWorkoutSummary = (workout) => {
-  if (!workout) return "Workout";
-  const title = workout.title || "Workout";
-  const totalExercises =
-    workout?.training?.reduce((count, circuit) => count + circuit.length, 0) || 0;
-  const exerciseLabel = totalExercises === 1 ? "exercise" : "exercises";
-  return `${title} • ${totalExercises} ${exerciseLabel}`;
+const BLOCK_TYPES = [
+  { value: "BASE", label: "Base / GPP" },
+  { value: "HYPERTROPHY", label: "Hypertrophy" },
+  { value: "STRENGTH", label: "Strength" },
+  { value: "POWER", label: "Power" },
+  { value: "PEAK", label: "Peak" },
+];
+const BLOCK_COLOR = {
+  BASE: "default",
+  HYPERTROPHY: "primary",
+  STRENGTH: "secondary",
+  POWER: "warning",
+  PEAK: "error",
+  DELOAD: "info",
 };
+const blockLabel = (type) => BLOCK_TYPES.find((b) => b.value === type)?.label || type || "Block";
+const PERIODIZATION_HELP =
+  "Macrocycle = your whole plan. Mesocycle = a training block (3–6 weeks) with a focus and an optional deload. Microcycle = one week.";
+
+// Per-week plan from the mesocycle blocks (mirrors the server's expandMesocycles).
+const expandMesocycles = (mesocycles = []) => {
+  const plan = [];
+  let week = 0;
+  (mesocycles || []).forEach((m, mi) => {
+    const count = Math.max(1, Number(m?.weeks) || 0);
+    for (let w = 0; w < count; w += 1) {
+      week += 1;
+      plan.push({
+        week,
+        mesocycleIndex: mi,
+        type: m?.type || "HYPERTROPHY",
+        name: m?.name || "",
+        weekInBlock: w + 1,
+        blockWeeks: count,
+        isDeload: Boolean(m?.deloadLastWeek) && w === count - 1,
+      });
+    }
+  });
+  return plan;
+};
+
+// Compact, clickable week strip colored by block, with deload weeks marked.
+const MacrocycleBar = ({ weekPlan, activeWeekIndex, onSelectWeek }) => (
+  <Stack direction="row" spacing={0.5} sx={{ overflowX: "auto", pb: 1 }}>
+    {weekPlan.map((wp, i) => (
+      <Tooltip
+        key={`wk-${i}`}
+        title={`${blockLabel(wp.type)} — week ${wp.weekInBlock} of ${wp.blockWeeks}${
+          wp.isDeload ? " · deload" : ""
+        }`}
+      >
+        <Box
+          onClick={() => onSelectWeek(i)}
+          sx={{
+            minWidth: 46,
+            px: 0.5,
+            py: 0.75,
+            borderRadius: 1.5,
+            cursor: "pointer",
+            textAlign: "center",
+            border: i === activeWeekIndex ? "2px solid" : "1px solid",
+            borderColor: i === activeWeekIndex ? "primary.main" : "divider",
+            bgcolor: wp.isDeload ? "action.hover" : "transparent",
+          }}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>
+            W{wp.week}
+          </Typography>
+          <Chip
+            size="small"
+            label={wp.isDeload ? "Deload" : blockLabel(wp.type).slice(0, 4)}
+            color={BLOCK_COLOR[wp.isDeload ? "DELOAD" : wp.type] || "default"}
+            sx={{ height: 18, "& .MuiChip-label": { px: 0.75, fontSize: 10 } }}
+          />
+        </Box>
+      </Tooltip>
+    ))}
+  </Stack>
+);
 
 export default function ProgramBuilder() {
   const user = useSelector((state) => state.user);
@@ -161,6 +240,7 @@ export default function ProgramBuilder() {
         description: program.description,
         weeksCount: program.weeksCount,
         daysPerWeek: program.daysPerWeek,
+        mesocycles: program.mesocycles || [],
       });
       if (data?.error) {
         throw new Error(data.error);
@@ -175,6 +255,30 @@ export default function ProgramBuilder() {
       setIsSaving(false);
     }
   }, [program, setErrorMessage, setSavedMessage]);
+
+  // Persist the mesocycle blocks. The server derives weeksCount + rebuilds the week grid
+  // from them, so we take its response as the source of truth and clamp the active week.
+  const saveMesocycles = useCallback(
+    async (nextBlocks) => {
+      if (!program?._id) return;
+      setProgram((prev) => ({ ...prev, mesocycles: nextBlocks }));
+      try {
+        const data = await programApi.updateProgram(program._id, {
+          title: program.title,
+          description: program.description,
+          daysPerWeek: program.daysPerWeek,
+          mesocycles: nextBlocks,
+        });
+        if (data?.error) throw new Error(data.error);
+        setProgram(data);
+        setDirty(false);
+        setActiveWeekIndex((i) => Math.min(i, Math.max(0, (data.weeksCount || 1) - 1)));
+      } catch (err) {
+        setErrorMessage(err.message || "Unable to save training blocks.");
+      }
+    },
+    [program, setErrorMessage]
+  );
 
   const publishProgram = useCallback(async () => {
     if (!program?._id || inFlightRef.current) return;
@@ -521,7 +625,36 @@ export default function ProgramBuilder() {
   const weeksCount = Number(program.weeksCount) || DEFAULT_WEEKS;
   const daysPerWeek = Number(program.daysPerWeek) || DEFAULT_DAYS;
   const weeks = program.weeks?.length ? program.weeks : buildWeeks(weeksCount, daysPerWeek);
-  const activeWeek = weeks[activeWeekIndex] || [];
+  const safeWeekIndex = Math.min(activeWeekIndex, Math.max(0, weeksCount - 1));
+  const activeWeek = weeks[safeWeekIndex] || [];
+  const blocks = program.mesocycles || [];
+  const weekPlan = expandMesocycles(blocks);
+  const activeWeekPlan = weekPlan[safeWeekIndex] || null;
+
+  // Block editor handlers. Text/number edits update locally then commit on blur; discrete
+  // edits (focus, deload, add, remove) persist immediately so the grid rebuilds at once.
+  const updateBlockLocal = (i, patch) =>
+    setProgram((prev) => ({
+      ...prev,
+      mesocycles: (prev.mesocycles || []).map((b, bi) => (bi === i ? { ...b, ...patch } : b)),
+    }));
+  const commitBlocks = () => saveMesocycles(program.mesocycles || []);
+  const setBlockField = (i, patch) =>
+    saveMesocycles((program.mesocycles || []).map((b, bi) => (bi === i ? { ...b, ...patch } : b)));
+  const addBlock = () =>
+    saveMesocycles([
+      ...(program.mesocycles || []),
+      {
+        name: "",
+        type: "HYPERTROPHY",
+        // First block inherits the current week count so converting a flat program to blocks
+        // doesn't trim already-built weeks.
+        weeks: (program.mesocycles || []).length === 0 ? Math.min(12, weeksCount) : 4,
+        deloadLastWeek: false,
+      },
+    ]);
+  const removeBlock = (i) =>
+    saveMesocycles((program.mesocycles || []).filter((_, bi) => bi !== i));
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
@@ -569,68 +702,210 @@ export default function ProgramBuilder() {
 
         <Card>
           <CardContent>
-            <Typography variant="h6">Settings</Typography>
-            <Divider sx={{ my: 2 }} />
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField
-                  label="Weeks"
-                  type="number"
-                  slotProps={{ htmlInput: { min: 1, max: 52 } }}
-                  value={weeksCount}
-                  onFocus={(event) => event.target.select()}
-                  onChange={(event) => {
-                    const next = Math.max(1, Math.min(52, Number(event.target.value)));
-                    setProgram((prev) => ({
-                      ...prev,
-                      weeksCount: next,
-                      weeks: buildWeeks(next, prev.daysPerWeek, prev.weeks),
-                    }));
-                    setActiveWeekIndex(0);
-                    setDirty(true);
-                  }}
-                  onBlur={() => saveDraft()}
-                  fullWidth
+            <Stack spacing={2}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                flexWrap="wrap"
+                gap={1}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="h6">Periodization</Typography>
+                  <Tooltip title={PERIODIZATION_HELP}>
+                    <InfoOutlinedIcon fontSize="small" color="action" />
+                  </Tooltip>
+                </Stack>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Typography variant="body2" color="text.secondary">
+                    {weeksCount} week{weeksCount === 1 ? "" : "s"}
+                    {blocks.length ? ` · ${blocks.length} block${blocks.length === 1 ? "" : "s"}` : ""}
+                  </Typography>
+                  <TextField
+                    label="Days / week"
+                    type="number"
+                    size="small"
+                    sx={{ width: 120 }}
+                    slotProps={{ htmlInput: { min: 1, max: 7 } }}
+                    value={daysPerWeek}
+                    onFocus={(event) => event.target.select()}
+                    onChange={(event) => {
+                      const next = Math.max(1, Math.min(7, Number(event.target.value)));
+                      setProgram((prev) => ({
+                        ...prev,
+                        daysPerWeek: next,
+                        weeks: buildWeeks(prev.weeksCount, next, prev.weeks),
+                      }));
+                      setDirty(true);
+                    }}
+                    onBlur={() => saveDraft()}
+                  />
+                </Stack>
+              </Stack>
+
+              {blocks.length > 0 && (
+                <MacrocycleBar
+                  weekPlan={weekPlan}
+                  activeWeekIndex={safeWeekIndex}
+                  onSelectWeek={setActiveWeekIndex}
                 />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField
-                  label="Days per week"
-                  type="number"
-                  slotProps={{ htmlInput: { min: 1, max: 7 } }}
-                  value={daysPerWeek}
-                  onFocus={(event) => event.target.select()}
-                  onChange={(event) => {
-                    const next = Math.max(1, Math.min(7, Number(event.target.value)));
-                    setProgram((prev) => ({
-                      ...prev,
-                      daysPerWeek: next,
-                      weeks: buildWeeks(prev.weeksCount, next, prev.weeks),
-                    }));
-                    setDirty(true);
-                  }}
-                  onBlur={() => saveDraft()}
-                  fullWidth
-                />
-              </Grid>
-            </Grid>
+              )}
+
+              {blocks.length > 0 ? (
+                <Stack spacing={1.5}>
+                  {blocks.map((block, i) => (
+                    <Stack
+                      key={`block-${i}`}
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      alignItems={{ sm: "center" }}
+                    >
+                      <TextField
+                        label={`Block ${i + 1} name`}
+                        size="small"
+                        placeholder="e.g. Base"
+                        value={block.name || ""}
+                        onChange={(e) => updateBlockLocal(i, { name: e.target.value })}
+                        onBlur={commitBlocks}
+                        sx={{ flex: 1 }}
+                      />
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel id={`block-type-${i}`}>Focus</InputLabel>
+                        <Select
+                          labelId={`block-type-${i}`}
+                          label="Focus"
+                          value={block.type || "HYPERTROPHY"}
+                          onChange={(e) => setBlockField(i, { type: e.target.value })}
+                        >
+                          {BLOCK_TYPES.map((t) => (
+                            <MenuItem key={t.value} value={t.value}>
+                              {t.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        label="Weeks"
+                        type="number"
+                        size="small"
+                        sx={{ width: 90 }}
+                        slotProps={{ htmlInput: { min: 1, max: 12 } }}
+                        value={block.weeks ?? 4}
+                        onFocus={(event) => event.target.select()}
+                        onChange={(e) =>
+                          updateBlockLocal(i, {
+                            weeks: Math.max(1, Math.min(12, Number(e.target.value) || 1)),
+                          })
+                        }
+                        onBlur={commitBlocks}
+                      />
+                      <Tooltip title="Final week of this block is a deload (lighter week)">
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={Boolean(block.deloadLastWeek)}
+                              onChange={(e) => setBlockField(i, { deloadLastWeek: e.target.checked })}
+                            />
+                          }
+                          label="Deload"
+                        />
+                      </Tooltip>
+                      <IconButton aria-label="Remove block" onClick={() => removeBlock(i)}>
+                        <DeleteOutlineIcon />
+                      </IconButton>
+                    </Stack>
+                  ))}
+                  <Button
+                    startIcon={<AddIcon />}
+                    variant="outlined"
+                    size="small"
+                    onClick={addBlock}
+                    sx={{ alignSelf: "flex-start" }}
+                  >
+                    Add block
+                  </Button>
+                </Stack>
+              ) : (
+                <Stack spacing={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Structure this program into <strong>mesocycles</strong> — blocks of weeks with a
+                    focus and an optional deload. The total week count then comes from your blocks.
+                    Or keep a simple flat week count.
+                  </Typography>
+                  <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" gap={1}>
+                    <Button
+                      startIcon={<AddIcon />}
+                      variant="contained"
+                      size="small"
+                      onClick={addBlock}
+                    >
+                      Add training block
+                    </Button>
+                    <TextField
+                      label="Weeks (flat)"
+                      type="number"
+                      size="small"
+                      sx={{ width: 130 }}
+                      slotProps={{ htmlInput: { min: 1, max: 52 } }}
+                      value={weeksCount}
+                      onFocus={(event) => event.target.select()}
+                      onChange={(event) => {
+                        const next = Math.max(1, Math.min(52, Number(event.target.value)));
+                        setProgram((prev) => ({
+                          ...prev,
+                          weeksCount: next,
+                          weeks: buildWeeks(next, prev.daysPerWeek, prev.weeks),
+                        }));
+                        setActiveWeekIndex(0);
+                        setDirty(true);
+                      }}
+                      onBlur={() => saveDraft()}
+                    />
+                  </Stack>
+                </Stack>
+              )}
+            </Stack>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent>
             <Stack spacing={2}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="h6">Week Structure</Typography>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                flexWrap="wrap"
+                gap={1}
+              >
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Typography variant="h6">Week {safeWeekIndex + 1}</Typography>
+                  {activeWeekPlan && (
+                    <>
+                      <Chip
+                        size="small"
+                        label={blockLabel(activeWeekPlan.type)}
+                        color={BLOCK_COLOR[activeWeekPlan.type] || "default"}
+                      />
+                      <Typography variant="body2" color="text.secondary">
+                        block week {activeWeekPlan.weekInBlock}/{activeWeekPlan.blockWeeks}
+                      </Typography>
+                      {activeWeekPlan.isDeload && (
+                        <Chip size="small" label="Deload" color="info" variant="outlined" />
+                      )}
+                    </>
+                  )}
+                </Stack>
                 <Stack direction="row" spacing={1}>
                   <Button
                     size="small"
                     variant="outlined"
                     onClick={() => {
-                      setProgressForm((f) => ({ ...f, baseWeek: activeWeekIndex }));
+                      setProgressForm((f) => ({ ...f, baseWeek: safeWeekIndex }));
                       setAutoProgressOpen(true);
                     }}
-                    disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
+                    disabled={!weeks[safeWeekIndex]?.some((day) => day.workoutId)}
                   >
                     Generate progression
                   </Button>
@@ -638,50 +913,83 @@ export default function ProgramBuilder() {
                     size="small"
                     variant="outlined"
                     onClick={() => setCopyWeekDialogOpen(true)}
-                    disabled={!weeks[activeWeekIndex]?.some((day) => day.workoutId)}
+                    disabled={!weeks[safeWeekIndex]?.some((day) => day.workoutId)}
                   >
                     Copy Week
                   </Button>
                 </Stack>
               </Stack>
               <Tabs
-                value={activeWeekIndex}
+                value={safeWeekIndex}
                 onChange={(event, value) => setActiveWeekIndex(value)}
                 variant="scrollable"
                 scrollButtons="auto"
               >
                 {Array.from({ length: weeksCount }, (_, index) => (
-                  <Tab key={`week-${index}`} label={`Week ${index + 1}`} />
+                  <Tab
+                    key={`week-${index}`}
+                    label={`Week ${index + 1}${weekPlan[index]?.isDeload ? " · DL" : ""}`}
+                  />
                 ))}
               </Tabs>
               <Grid container spacing={2}>
                 {activeWeek.map((day, dayIndex) => {
                   const workout = day.workoutId ? workoutCache[day.workoutId] : null;
-                  const summary = workout ? formatWorkoutSummary(workout) : "No workout assigned";
+                  const exerciseCount =
+                    workout?.training?.reduce((c, circuit) => c + circuit.length, 0) || 0;
+                  const muscleGroups = workout?.category || [];
                   return (
                     <Grid key={`day-${dayIndex}`} size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Card variant="outlined" sx={{ height: "100%" }}>
-                        <CardContent>
-                          <Typography variant="subtitle1">Day {dayIndex + 1}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {summary}
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          borderColor: day.workoutId ? "primary.light" : "divider",
+                        }}
+                      >
+                        <CardContent sx={{ flex: 1 }}>
+                          <Typography variant="overline" color="text.secondary">
+                            Day {dayIndex + 1}
                           </Typography>
+                          {day.workoutId ? (
+                            <>
+                              <Typography variant="subtitle2" noWrap title={workout?.title || ""}>
+                                {workout?.title || "Workout"}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {exerciseCount} exercise{exerciseCount === 1 ? "" : "s"}
+                              </Typography>
+                              {muscleGroups.length > 0 && (
+                                <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5, mt: 1 }}>
+                                  {muscleGroups.slice(0, 6).map((mg) => (
+                                    <Chip key={mg} size="small" variant="outlined" label={mg} />
+                                  ))}
+                                </Stack>
+                              )}
+                            </>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              Empty — add or import a workout
+                            </Typography>
+                          )}
                         </CardContent>
                         <CardActions sx={{ px: 2, pb: 2 }}>
                           <Button
                             size="small"
-                            variant="contained"
-                            onClick={() => handleEditDay(activeWeekIndex, dayIndex, day.workoutId)}
+                            variant={day.workoutId ? "outlined" : "contained"}
+                            onClick={() => handleEditDay(safeWeekIndex, dayIndex, day.workoutId)}
                           >
-                            {day.workoutId ? "Edit workout" : "Add workout"}
+                            {day.workoutId ? "Edit" : "Add workout"}
                           </Button>
                           {!day.workoutId && (
                             <Button
                               size="small"
-                              variant="outlined"
-                              onClick={() => handleOpenImportDialog(activeWeekIndex, dayIndex)}
+                              variant="text"
+                              onClick={() => handleOpenImportDialog(safeWeekIndex, dayIndex)}
                             >
-                              Import Workout
+                              Import
                             </Button>
                           )}
                           {day.workoutId && (
@@ -690,7 +998,7 @@ export default function ProgramBuilder() {
                               variant="text"
                               color="error"
                               onClick={() => {
-                                setClearTarget({ weekIndex: activeWeekIndex, dayIndex });
+                                setClearTarget({ weekIndex: safeWeekIndex, dayIndex });
                                 setClearConfirmOpen(true);
                               }}
                             >
