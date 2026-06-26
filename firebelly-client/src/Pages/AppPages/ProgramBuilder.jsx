@@ -228,6 +228,9 @@ export default function ProgramBuilder() {
   const createWorkoutForDay = useCallback(
     async (weekIndex, dayIndex) => {
       if (!program?._id || !user?._id) return;
+      // Flush any pending structure change (e.g. days-per-week) so the server has the new
+      // day slot — otherwise update_program_day rejects it as out of range and the day is lost.
+      if (dirty) await saveDraft();
       try {
         const data = await workoutApi.createTraining({
           userId: user._id,
@@ -251,7 +254,7 @@ export default function ProgramBuilder() {
         setErrorMessage(err.message || "Unable to create workout.");
       }
     },
-    [location.pathname, navigate, program, updateDaySlot, user]
+    [dirty, location.pathname, navigate, program, saveDraft, updateDaySlot, user]
   );
 
   const handleEditDay = useCallback(
@@ -297,6 +300,7 @@ export default function ProgramBuilder() {
       const { weekIndex, dayIndex } = importTarget;
       if (weekIndex === null || dayIndex === null) return;
       setImportDialogOpen(false);
+      if (dirty) await saveDraft();
       await updateDaySlot(weekIndex, dayIndex, templateId);
       setWorkoutCache((prev) => {
         const template = templates.find((t) => t._id === templateId);
@@ -306,7 +310,7 @@ export default function ProgramBuilder() {
         return prev;
       });
     },
-    [importTarget, templates, updateDaySlot]
+    [dirty, importTarget, saveDraft, templates, updateDaySlot]
   );
 
   const importCategories = useMemo(() => {
@@ -585,6 +589,7 @@ export default function ProgramBuilder() {
                     setActiveWeekIndex(0);
                     setDirty(true);
                   }}
+                  onBlur={() => saveDraft()}
                   fullWidth
                 />
               </Grid>
@@ -604,6 +609,7 @@ export default function ProgramBuilder() {
                     }));
                     setDirty(true);
                   }}
+                  onBlur={() => saveDraft()}
                   fullWidth
                 />
               </Grid>
