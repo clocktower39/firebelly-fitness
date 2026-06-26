@@ -42,6 +42,7 @@ export default function Workout({ socket }) {
   const isProgramBuilder = sourceView === "program";
 
   const user = useSelector((state) => state.user);
+  const exerciseList = useSelector((state) => state.progress.exerciseList) || [];
   const defaultWorkoutWeightUnit = normalizeWeightUnit(user.workoutWeightUnit);
   const training = useSelector((state) => {
     const workoutBuckets = Object.values(state.workouts || {});
@@ -60,6 +61,33 @@ export default function Workout({ socket }) {
 
   const [localTraining, setLocalTraining] = useState([]);
   const [trainingCategory, setTrainingCategory] = useState([]);
+
+  // Auto-add each exercise's primary muscle groups to the workout's categories (additive —
+  // never removes what the trainer set). Looks the exercise up in the library by id so it
+  // works for both freshly-picked and saved exercises (saved ones only carry _id + title).
+  useEffect(() => {
+    if (!exerciseList.length) return;
+    const byId = new Map(exerciseList.map((e) => [String(e._id), e]));
+    const groups = new Set();
+    (localTraining || []).forEach((circuit) =>
+      (circuit || []).forEach((ex) => {
+        const id = String(ex?.exercise?._id || ex?.exercise || "");
+        (byId.get(id)?.muscleGroups?.primary || []).forEach((mg) => mg && groups.add(mg));
+      })
+    );
+    if (!groups.size) return;
+    setTrainingCategory((prev) => {
+      const next = new Set(prev || []);
+      let changed = false;
+      groups.forEach((mg) => {
+        if (!next.has(mg)) {
+          next.add(mg);
+          changed = true;
+        }
+      });
+      return changed ? [...next] : prev;
+    });
+  }, [localTraining, exerciseList]);
   const [trainingTitle, setTrainingTitle] = useState("");
   const [workoutCompleteStatus, setWorkoutCompleteStatus] = useState(training?.complete || false);
   const [loading, setLoading] = useState(true);
@@ -203,6 +231,7 @@ export default function Workout({ socket }) {
     "Core",
     "Forearms",
     "Full Body",
+    "Glutes",
     "Hamstrings",
     "Legs",
     "Quadriceps",
