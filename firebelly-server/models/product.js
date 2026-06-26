@@ -15,6 +15,7 @@ const productSchema = new mongoose.Schema(
     taxable: { type: Boolean, default: true },
     active: { type: Boolean, default: true },
     sessionTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "SessionType", default: null },
+    programId: { type: mongoose.Schema.Types.ObjectId, ref: "Program", default: null, index: true },
     creditsPerUnit: { type: Number, default: 0, min: 0 },
     deliverableType: {
       type: String,

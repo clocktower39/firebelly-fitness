@@ -3,6 +3,7 @@ const utc = require("dayjs/plugin/utc");
 const Program = require("../models/program");
 const Training = require("../models/training");
 const Exercise = require("../models/exercise");
+const Product = require("../models/product");
 const Relationship = require("../models/relationship");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 
@@ -67,10 +68,12 @@ const update_program = async (req, res, next) => {
       weeksCount = program.weeksCount,
       daysPerWeek = program.daysPerWeek,
       mesocycles,
+      price,
     } = req.body;
 
     program.title = title;
     program.description = description;
+    if (price !== undefined) program.price = Number(price) || 0;
 
     // When mesocycles are provided they drive the total week count (the macrocycle length).
     let nextWeeksCount = Number(weeksCount);
@@ -93,6 +96,8 @@ const update_program = async (req, res, next) => {
     }
 
     const saved = await program.save();
+    // Keep the storefront product in sync once a program is published (price/title edits).
+    if (saved.status === "PUBLISHED") await syncProgramProduct(saved);
     return res.json(saved);
   } catch (err) {
     return next(err);
@@ -141,6 +146,44 @@ const update_program_day = async (req, res, next) => {
   }
 };
 
+// Keep a program in sync with a sellable Product (itemType PROGRAM) on the trainer's products
+// page. Best-effort — never throws, so publish/update succeed regardless of product issues.
+const syncProgramProduct = async (program) => {
+  if (!program?._id || !program.ownerId) return;
+  const onInsert = { currency: "USD", taxable: false, deliverableType: "NONE" };
+  const fields = {
+    trainerId: program.ownerId,
+    itemType: "PROGRAM",
+    programId: program._id,
+    name: (program.title && program.title.trim()) || "Untitled Program",
+    description: program.description || "",
+    price: Number(program.price) || 0,
+    active: program.status === "PUBLISHED",
+  };
+  try {
+    await Product.findOneAndUpdate(
+      { programId: program._id },
+      { $set: fields, $setOnInsert: onInsert },
+      { upsert: true, new: true }
+    );
+  } catch (err) {
+    if (err?.code === 11000) {
+      // Name collides with an existing product — disambiguate and retry once.
+      try {
+        await Product.findOneAndUpdate(
+          { programId: program._id },
+          { $set: { ...fields, name: `${fields.name} (Program)` }, $setOnInsert: onInsert },
+          { upsert: true, new: true }
+        );
+      } catch (e2) {
+        console.error("syncProgramProduct retry failed:", e2.message);
+      }
+    } else {
+      console.error("syncProgramProduct failed:", err.message);
+    }
+  }
+};
+
 const publish_program = async (req, res, next) => {
   try {
     const program = await Program.findOne({
@@ -162,6 +205,7 @@ const publish_program = async (req, res, next) => {
     program.equipmentNeeded = (await computeProgramEquipment(program)).equipment;
 
     const saved = await program.save();
+    await syncProgramProduct(saved); // list it on the trainer's products page for clients
     return res.json(saved);
   } catch (err) {
     return next(err);
