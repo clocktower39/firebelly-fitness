@@ -143,10 +143,109 @@ const progressExerciseGoals = (
   return g;
 };
 
+// --- Feedback autoregulation (Phase 3) ---
+
+// How the last session went versus its goal, and whether it was actually performed. Uses
+// reps when the goal is rep-based, else seconds (holds). repMiss is in reps (drives the
+// "missed by 2+" back-off); for time goals it stays 0 and the decision rests on difficulty.
+const assessSession = (goals, achieved) => {
+  const goalReps =
+    (goals.exactReps && goals.exactReps.length && goals.exactReps) ||
+    (goals.maxReps && goals.maxReps.length && goals.maxReps) ||
+    (goals.minReps && goals.minReps.length && goals.minReps) ||
+    [];
+  const goalSecs = (goals.seconds && goals.seconds.length && goals.seconds) || [];
+  const achReps = (achieved && achieved.reps) || [];
+  const achSecs = (achieved && achieved.seconds) || [];
+  const achWeight = (achieved && achieved.weight) || [];
+  const performed =
+    achReps.some((r) => num(r) > 0) ||
+    achWeight.some((w) => num(w) > 0) ||
+    achSecs.some((s) => num(s) > 0);
+  let repMiss = 0;
+  let hasGoal = false;
+  let completed = true;
+  if (goalReps.length) {
+    goalReps.forEach((g, i) => {
+      const gr = num(g);
+      if (!gr) return;
+      hasGoal = true;
+      const miss = gr - num(achReps[i]);
+      repMiss = Math.max(repMiss, miss);
+      if (miss > 0) completed = false;
+    });
+  } else if (goalSecs.length) {
+    goalSecs.forEach((g, i) => {
+      const gs = num(g);
+      if (!gs) return;
+      hasGoal = true;
+      if (num(achSecs[i]) < gs) completed = false;
+    });
+  } else {
+    completed = false;
+  }
+  return { performed, repMiss, completed: hasGoal && completed, hasGoal };
+};
+
+// Back-off: the session was too hard or missed by 2+. Drop intensity one step and raise the
+// rep target ("lower the weight and up the reps"); for holds/bodyweight, ease the target.
+const backoffGoals = (goals, ctx) => {
+  const g = goals;
+  const fam = familyOf(ctx.equipment);
+  const isTime = ctx.measurementType === "time" || ctx.exerciseType === "Time";
+  if (isTime) {
+    g.seconds = mapArr(g.seconds, (v) => Math.max(1, Math.round(v * 0.9)));
+    return g;
+  }
+  if (fam === "bodyweight") {
+    ["exactReps", "minReps", "maxReps"].forEach((k) => {
+      g[k] = mapArr(g[k], (v) => (num(v) ? Math.max(1, Math.round(v) - 2) : v));
+    });
+    return g;
+  }
+  g.weight = mapArr(g.weight, (w) =>
+    roundToLoadable(Math.max(0, w - weightIncrement(fam, ctx.movementComplexity, w)), fam)
+  );
+  ["exactReps", "minReps", "maxReps"].forEach((k) => {
+    g[k] = mapArr(g[k], (v) => (num(v) ? Math.max(1, Math.round(v) + 2) : v));
+  });
+  return g;
+};
+
+// Decide next-week goals from how the session actually went + the difficulty feedback
+// (0 easy / 1 right / 2 hard). Returns { goals, decision }.
+const autoregulateExerciseGoals = (
+  goals,
+  achieved,
+  ctx = {},
+  { scheme = "linear", difficulty = 1 } = {}
+) => {
+  const a = assessSession(goals, achieved);
+  // Not actually performed (e.g. a planned week with no logged results): progress normally.
+  if (!a.performed) {
+    return { goals: progressExerciseGoals(goals, ctx, { scheme, step: 1 }), decision: "progress" };
+  }
+  const d = Number(difficulty);
+  if (d === 2 || a.repMiss >= 2) {
+    return { goals: backoffGoals(clone(goals), ctx), decision: "backoff" };
+  }
+  if (a.completed && d === 0) {
+    return { goals: progressExerciseGoals(goals, ctx, { scheme, step: 2 }), decision: "push" };
+  }
+  if (a.completed) {
+    return { goals: progressExerciseGoals(goals, ctx, { scheme, step: 1 }), decision: "progress" };
+  }
+  // Missed by 1 and not too hard → earned-progression: hold the load and re-attempt.
+  return { goals: clone(goals), decision: "hold" };
+};
+
 module.exports = {
   familyOf,
   weightIncrement,
   roundToLoadable,
   deloadGoals,
   progressExerciseGoals,
+  assessSession,
+  backoffGoals,
+  autoregulateExerciseGoals,
 };

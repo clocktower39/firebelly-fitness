@@ -13,7 +13,10 @@ const {
   pick,
   reverseEventDebitEntry,
 } = require("./context");
-const { progressExerciseGoals } = require("../../services/progressionEngine");
+const {
+  progressExerciseGoals,
+  autoregulateExerciseGoals,
+} = require("../../services/progressionEngine");
 
 // Engine-driven progression: resolve each exercise's library classification, then apply
 // the per-exercise progression step. Supersedes the flat applyProgression for the program
@@ -53,6 +56,57 @@ const applyEngineProgression = async (
       );
     });
   });
+};
+
+// Feedback autoregulation: for each exercise, decide next goals from how it was actually
+// performed (achieved) + the difficulty feedback, then reset achieved/feedback for the new
+// copy. Returns a tally of decisions. Reads achieved BEFORE it is cleared.
+const applyAutoregulation = async (training, { scheme = "linear" } = {}) => {
+  const tally = { progress: 0, push: 0, hold: 0, backoff: 0 };
+  if (!Array.isArray(training)) return tally;
+  const ids = [];
+  training.forEach((circuit) => {
+    if (Array.isArray(circuit)) {
+      circuit.forEach((ex) => {
+        if (ex?.exercise) ids.push(String(ex.exercise));
+      });
+    }
+  });
+  if (!ids.length) return tally;
+  const libs = await Exercise.find({ _id: { $in: [...new Set(ids)] } })
+    .select("equipment movementComplexity measurementType")
+    .lean();
+  const byId = new Map(libs.map((l) => [String(l._id), l]));
+  training.forEach((circuit) => {
+    if (!Array.isArray(circuit)) return;
+    circuit.forEach((ex) => {
+      if (!ex?.goals) return;
+      const lib = byId.get(String(ex.exercise)) || {};
+      const difficulty = ex?.feedback?.difficulty;
+      const { goals, decision } = autoregulateExerciseGoals(
+        ex.goals,
+        ex.achieved,
+        {
+          equipment: lib.equipment,
+          movementComplexity: lib.movementComplexity,
+          measurementType: lib.measurementType,
+          exerciseType: ex.exerciseType,
+        },
+        { scheme, difficulty: difficulty == null ? 1 : difficulty }
+      );
+      ex.goals = goals;
+      if (tally[decision] != null) tally[decision] += 1;
+      if (ex.achieved) {
+        for (const prop in ex.achieved) {
+          if (Array.isArray(ex.achieved[prop])) {
+            ex.achieved[prop] = ex.achieved[prop].map(() => "0");
+          }
+        }
+      }
+      ex.feedback = { difficulty: null, comments: [] };
+    });
+  });
+  return tally;
 };
 
 const update_workout_date_by_id = async (req, res, next) => {
@@ -181,7 +235,15 @@ const copy_workout_by_id = async (req, res, next) => {
     copyData.workoutFeedback = { difficulty: 1, comments: [] };
     if (newTitle) copyData.title = newTitle;
 
-    if (Array.isArray(copyData.training)) {
+    // Feedback autoregulation reads achieved + feedback, so it must run before the option
+    // switch (which clears them). When on, it fully owns goal/achieved handling.
+    let autoregulationTally = null;
+    if (req.body.autoregulate && Array.isArray(copyData.training)) {
+      copyData.complete = false;
+      autoregulationTally = await applyAutoregulation(copyData.training, {
+        scheme: req.body.scheme || "linear",
+      });
+    } else if (Array.isArray(copyData.training)) {
       switch (option) {
         case "achievedToNewGoal":
           copyData.complete = false;
@@ -228,7 +290,7 @@ const copy_workout_by_id = async (req, res, next) => {
 
     // Progression (program builder). Prefer the engine (per-exercise, classification-aware);
     // fall back to the legacy flat rule if only `progression` was sent.
-    if (req.body.scheme && Array.isArray(copyData.training)) {
+    if (req.body.scheme && !req.body.autoregulate && Array.isArray(copyData.training)) {
       await applyEngineProgression(copyData.training, {
         scheme: req.body.scheme,
         step: req.body.step || 1,
@@ -253,6 +315,11 @@ const copy_workout_by_id = async (req, res, next) => {
         select: "_id firstName lastName profilePicture",
       });
 
+    if (autoregulationTally) {
+      const obj = workoutCopy.toObject ? workoutCopy.toObject() : workoutCopy;
+      obj.autoregulation = autoregulationTally;
+      return res.send(obj);
+    }
     return res.send(workoutCopy);
   } catch (err) {
     return next(err);
