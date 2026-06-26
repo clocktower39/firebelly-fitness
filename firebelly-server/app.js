@@ -26,6 +26,7 @@ const billingRoutes = require("./routes/billingRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const productRoutes = require("./routes/productRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const pushRoutes = require("./routes/pushRoutes");
 const GuardianLink = require("./models/guardianLink");
 const User = require("./models/user");
 const Training = require("./models/training");
@@ -133,6 +134,7 @@ app.use("/", billingRoutes);
 app.use("/", invoiceRoutes);
 app.use("/", productRoutes);
 app.use("/", notificationRoutes);
+app.use("/", pushRoutes);
 
 const connectedClients = {};
 const pagePresenceBySocket = new Map();

@@ -1,4 +1,5 @@
 const Notification = require("../models/notification");
+const { sendPushToUser } = require("./pushService");
 
 // Create a persisted notification and push it in real time to the recipient's
 // socket room (sockets join a room named by their userId on connect). Never throws
@@ -18,6 +19,8 @@ const createNotification = async ({ userId, type, title, body, link }) => {
     } catch (emitErr) {
       // realtime is optional; the client also polls
     }
+    // Web push so it reaches the user even when the app is closed (best-effort).
+    sendPushToUser(userId, { title, body: body || "", link: link || "" }).catch(() => {});
     return notification;
   } catch (err) {
     return null;
