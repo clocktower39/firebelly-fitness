@@ -14,12 +14,20 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { notificationApi } from "../api/notificationApi";
+import {
+  pushSupported,
+  isPushSubscribed,
+  enablePush,
+  disablePush,
+} from "../utils/pushManager";
 
 export default function NotificationBell() {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -73,6 +81,27 @@ export default function NotificationBell() {
     }
     setItems((prev) => prev.map((x) => ({ ...x, read: true })));
     setUnread(0);
+  };
+
+  useEffect(() => {
+    if (pushSupported()) isPushSubscribed().then(setPushOn);
+  }, []);
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    try {
+      if (pushOn) {
+        await disablePush();
+        setPushOn(false);
+      } else {
+        await enablePush();
+        setPushOn(true);
+      }
+    } catch (err) {
+      /* permission denied / unsupported — leave the toggle as-is */
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   return (
@@ -132,6 +161,20 @@ export default function NotificationBell() {
               </Box>
             </MenuItem>
           ))
+        )}
+        {pushSupported() && (
+          <Box>
+            <Divider />
+            <MenuItem onClick={togglePush} disabled={pushBusy}>
+              <Typography variant="body2" color={pushOn ? "success.main" : "primary"}>
+                {pushBusy
+                  ? "Working…"
+                  : pushOn
+                  ? "Push notifications on — tap to turn off"
+                  : "Enable push notifications"}
+              </Typography>
+            </MenuItem>
+          </Box>
         )}
       </Menu>
     </>

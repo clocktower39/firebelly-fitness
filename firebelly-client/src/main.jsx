@@ -6,6 +6,7 @@ import "./styles/tailwind.css";
 import { Provider } from "react-redux";
 import { store } from "./Redux/store";
 import { initializeAuthTokenSync } from "./api/client";
+import { registerServiceWorker } from "./utils/pushManager";
 
 // Temporary remove <React.StrictMode> parent container for react-beautiful-dnd, will replace with @dnd-kit/core
 /*
@@ -14,6 +15,8 @@ import { initializeAuthTokenSync } from "./api/client";
 */
 
 initializeAuthTokenSync();
+// Register the service worker (no permission prompt — that happens when the user opts in).
+registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
     <Provider store={store}>
