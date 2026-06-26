@@ -3,7 +3,7 @@ const utc = require("dayjs/plugin/utc");
 const Program = require("../models/program");
 const Training = require("../models/training");
 const Relationship = require("../models/relationship");
-const { buildProgramWeeks, validatePublish } = require("../services/programs");
+const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 
 dayjs.extend(utc);
 
@@ -65,17 +65,27 @@ const update_program = async (req, res, next) => {
       description = program.description,
       weeksCount = program.weeksCount,
       daysPerWeek = program.daysPerWeek,
+      mesocycles,
     } = req.body;
 
     program.title = title;
     program.description = description;
 
-    const weeksChanged =
-      Number(weeksCount) !== Number(program.weeksCount) ||
-      Number(daysPerWeek) !== Number(program.daysPerWeek);
+    // When mesocycles are provided they drive the total week count (the macrocycle length).
+    let nextWeeksCount = Number(weeksCount);
+    if (mesocycles !== undefined) {
+      program.mesocycles = mesocycles;
+      const blockWeeks = mesocycleWeeks(mesocycles);
+      if (blockWeeks > 0) nextWeeksCount = blockWeeks;
+    }
+    const nextDaysPerWeek = Number(daysPerWeek);
 
-    program.weeksCount = Number(weeksCount);
-    program.daysPerWeek = Number(daysPerWeek);
+    const weeksChanged =
+      nextWeeksCount !== Number(program.weeksCount) ||
+      nextDaysPerWeek !== Number(program.daysPerWeek);
+
+    program.weeksCount = nextWeeksCount;
+    program.daysPerWeek = nextDaysPerWeek;
 
     if (weeksChanged) {
       program.weeks = buildProgramWeeks(program.weeksCount, program.daysPerWeek, program.weeks);

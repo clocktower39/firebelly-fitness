@@ -9,6 +9,23 @@ const programDaySchema = new mongoose.Schema(
   { _id: false }
 );
 
+// A mesocycle = a training block of N microcycles (weeks) with a focus and an optional
+// deload on its last week. The ordered list of mesocycles is the macrocycle; weeksCount
+// derives from their sum. Empty = a legacy flat program (one implicit block).
+const mesocycleSchema = new mongoose.Schema(
+  {
+    name: { type: String, default: "" },
+    type: {
+      type: String,
+      enum: ["BASE", "HYPERTROPHY", "STRENGTH", "POWER", "PEAK", "DELOAD"],
+      default: "HYPERTROPHY",
+    },
+    weeks: { type: Number, default: 4, min: 1, max: 12 },
+    deloadLastWeek: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const programSchema = new mongoose.Schema(
   {
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -27,6 +44,7 @@ const programSchema = new mongoose.Schema(
     tags: { type: [String], default: [] },
     category: { type: String, default: null },
     weeks: { type: [[programDaySchema]], default: [] },
+    mesocycles: { type: [mesocycleSchema], default: [] },
   },
   { timestamps: true, minimize: false }
 );

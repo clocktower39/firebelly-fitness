@@ -15,6 +15,33 @@ const buildProgramWeeks = (weeksCount, daysPerWeek, existingWeeks = []) => {
   return weeks;
 };
 
+// Total microcycles (weeks) across all mesocycle blocks.
+const mesocycleWeeks = (mesocycles = []) =>
+  (mesocycles || []).reduce((sum, m) => sum + (Math.max(1, Number(m?.weeks) || 0)), 0);
+
+// Per-week metadata derived from the mesocycle blocks: which block each week belongs to,
+// and whether it is that block's deload week. Used by the builder UI + progression.
+const expandMesocycles = (mesocycles = []) => {
+  const plan = [];
+  let week = 0;
+  (mesocycles || []).forEach((m, mi) => {
+    const count = Math.max(1, Number(m?.weeks) || 0);
+    for (let w = 0; w < count; w += 1) {
+      week += 1;
+      plan.push({
+        week,
+        mesocycleIndex: mi,
+        type: m?.type || "HYPERTROPHY",
+        name: m?.name || "",
+        weekInBlock: w + 1,
+        blockWeeks: count,
+        isDeload: Boolean(m?.deloadLastWeek) && w === count - 1,
+      });
+    }
+  });
+  return plan;
+};
+
 const validatePublish = (program, { requireWorkout = true } = {}) => {
   const errors = [];
   if (!program.title || !program.title.trim()) {
@@ -39,5 +66,7 @@ const validatePublish = (program, { requireWorkout = true } = {}) => {
 
 module.exports = {
   buildProgramWeeks,
+  mesocycleWeeks,
+  expandMesocycles,
   validatePublish,
 };
