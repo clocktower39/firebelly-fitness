@@ -105,6 +105,7 @@ export function ModalAction(props) {
     const [previewWorkouts, setPreviewWorkouts] = useState([]);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [copyOption, setCopyOption] = useState(null);
+    const [autoSummary, setAutoSummary] = useState("");
     const [newAccount, setNewAccount] = useState({
       label: `${training?.user?.lastName}, ${training?.user?.firstName}`,
       value: training?.user?._id,
@@ -200,10 +201,31 @@ export function ModalAction(props) {
     };
   
     const handleCopy = () => {
+      const isAuto = copyOption.value === "autoregulate";
       dispatch(
-        copyWorkoutById(training._id, newDate, copyOption.value, newTitle, newAccount?.value)
-      ).then(() => {
+        copyWorkoutById(
+          training._id,
+          newDate,
+          isAuto ? "copyGoalOnly" : copyOption.value,
+          newTitle,
+          newAccount?.value,
+          isAuto ? { autoregulate: true, scheme: "linear" } : {}
+        )
+      ).then((res) => {
+        if (res?.error) {
+          setActionError(res.error);
+          return;
+        }
         setActionError(false);
+        // For an autoregulated copy, keep the modal open and show what changed so the
+        // trainer can see the per-exercise decisions before moving on.
+        if (isAuto && res?.autoregulation) {
+          const t = res.autoregulation;
+          setAutoSummary(
+            `Next session created — ${t.progress} progressed, ${t.push} pushed harder, ${t.hold} held, ${t.backoff} backed off.`
+          );
+          return;
+        }
         handleModalToggle();
         !isPersonalWorkout()
           ? navigate("/clients")
@@ -549,6 +571,13 @@ export function ModalAction(props) {
           { label: "Copy achieved as the new goal", value: "achievedToNewGoal" },
           { label: "Copy goal only", value: "copyGoalOnly" },
         ];
+        // Autoregulation needs logged results + feedback, so only offer it on a completed workout.
+        if (training?.complete) {
+          copyOptions.push({
+            label: "Auto-adjust from results (autoregulate)",
+            value: "autoregulate",
+          });
+        }
   
         let accountOptions = clients.map((client) => ({
           label: `${client.client.lastName}, ${client.client.firstName}`,
@@ -701,6 +730,15 @@ export function ModalAction(props) {
                 />
               </Grid>
 
+              {copyOption?.value === "autoregulate" && (
+                <Grid container size={12} sx={{ justifyContent: "center", pb: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                    Each exercise is adjusted from last session&apos;s results + your difficulty
+                    feedback: progress when earned, hold a near miss, back off if it was too hard.
+                  </Typography>
+                </Grid>
+              )}
+
               <Grid container size={12} sx={{ justifyContent: "center" }}>
                 {moveMode === "single" ? (
                   <Button variant="contained" onClick={handleCopy} disabled={!copyOption}>
@@ -733,6 +771,13 @@ export function ModalAction(props) {
                 <Grid container size={12} sx={{ justifyContent: "center" }}>
                   <Typography variant="caption" sx={{ color: "red" }}>
                     {actionError}
+                  </Typography>
+                </Grid>
+              )}
+              {autoSummary && (
+                <Grid container size={12} sx={{ justifyContent: "center", mt: 1 }}>
+                  <Typography variant="caption" sx={{ color: "success.main", textAlign: "center" }}>
+                    {autoSummary}
                   </Typography>
                 </Grid>
               )}

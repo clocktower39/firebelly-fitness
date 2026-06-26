@@ -314,7 +314,14 @@ export function updateWorkoutDateById(training, newDate, newTitle) {
 }
 
 // Updates training date
-export function copyWorkoutById(trainingId, newDate, copyOption = "exact", newTitle, newAccount) {
+export function copyWorkoutById(
+  trainingId,
+  newDate,
+  copyOption = "exact",
+  newTitle,
+  newAccount,
+  extra = {}
+) {
   return async (dispatch) => {
     const data = await workoutApi.copyWorkoutById({
       _id: trainingId,
@@ -322,21 +329,24 @@ export function copyWorkoutById(trainingId, newDate, copyOption = "exact", newTi
       newTitle,
       option: copyOption,
       newAccount,
+      autoregulate: extra.autoregulate || undefined,
+      scheme: extra.scheme || undefined,
     });
 
     if (data.error) {
-      return dispatch({
+      dispatch({
         type: ERROR,
         error: data.error,
       });
-    } else {
-      const accountId = data.user;
-      return dispatch({
-        type: ADD_WORKOUT,
-        accountId,
-        workout: data,
-      });
+      return data;
     }
+    const accountId = data.user;
+    dispatch({
+      type: ADD_WORKOUT,
+      accountId,
+      workout: data,
+    });
+    return data;
   };
 }
 
