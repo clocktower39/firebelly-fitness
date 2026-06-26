@@ -18,7 +18,10 @@ const { progressExerciseGoals } = require("../../services/progressionEngine");
 // Engine-driven progression: resolve each exercise's library classification, then apply
 // the per-exercise progression step. Supersedes the flat applyProgression for the program
 // builder. See docs/program-progression-roadmap.md.
-const applyEngineProgression = async (training, { scheme = "linear", step = 1 } = {}) => {
+const applyEngineProgression = async (
+  training,
+  { scheme = "linear", step = 1, deload = false } = {}
+) => {
   if (!Array.isArray(training)) return;
   const ids = [];
   training.forEach((circuit) => {
@@ -46,7 +49,7 @@ const applyEngineProgression = async (training, { scheme = "linear", step = 1 } 
           measurementType: lib.measurementType,
           exerciseType: ex.exerciseType,
         },
-        { scheme, step }
+        { scheme, step, deload }
       );
     });
   });
@@ -229,6 +232,7 @@ const copy_workout_by_id = async (req, res, next) => {
       await applyEngineProgression(copyData.training, {
         scheme: req.body.scheme,
         step: req.body.step || 1,
+        deload: Boolean(req.body.deload),
       });
     } else if (req.body.progression && Array.isArray(copyData.training)) {
       applyProgression(copyData.training, req.body.progression);

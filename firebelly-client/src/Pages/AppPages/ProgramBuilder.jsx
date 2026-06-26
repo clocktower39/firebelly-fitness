@@ -529,11 +529,16 @@ export default function ProgramBuilder() {
       return;
     }
     const scheme = progressForm.scheme || "linear";
+    const plan = expandMesocycles(program.mesocycles || []);
 
     setIsAutoProgressing(true);
     try {
+      // Progression steps accumulate only on normal weeks; a deload week reuses the current
+      // level with a lighter cut (and doesn't advance the trajectory).
+      let step = 0;
       for (let target = baseWeekIndex + 1; target < weeksTotal; target++) {
-        const step = target - baseWeekIndex; // cumulative engine steps from the base week
+        const isDeload = Boolean(plan[target]?.isDeload);
+        if (!isDeload) step += 1;
         for (let dayIndex = 0; dayIndex < baseWeek.length; dayIndex++) {
           const day = baseWeek[dayIndex];
           if (!day.workoutId) continue;
@@ -547,6 +552,7 @@ export default function ProgramBuilder() {
             option: "copyGoalOnly",
             scheme,
             step,
+            deload: isDeload,
           });
           if (data?.error) throw new Error(data.error);
           setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
@@ -554,8 +560,12 @@ export default function ProgramBuilder() {
         }
       }
       setAutoProgressOpen(false);
+      const deloadCount = plan
+        .slice(baseWeekIndex + 1, weeksTotal)
+        .filter((p) => p?.isDeload).length;
       setSavedMessage(
-        `Progressed weeks ${baseWeekIndex + 2}–${weeksTotal} from week ${baseWeekIndex + 1}.`
+        `Progressed weeks ${baseWeekIndex + 2}–${weeksTotal} from week ${baseWeekIndex + 1}` +
+          (deloadCount ? ` · ${deloadCount} deload${deloadCount === 1 ? "" : "s"} applied.` : ".")
       );
     } catch (err) {
       setErrorMessage(err.message || "Unable to generate progression.");
@@ -1235,8 +1245,8 @@ export default function ProgramBuilder() {
               </Select>
             </FormControl>
             <Typography variant="caption" color="text.secondary">
-              Cumulative from the base week, rounded to loadable weights. Deloads &amp;
-              feedback-driven autoregulation come next.
+              Cumulative from the base week, rounded to loadable weights. Weeks flagged as a
+              deload in your blocks automatically get a lighter (~10%) recovery week.
             </Typography>
           </Stack>
         </DialogContent>

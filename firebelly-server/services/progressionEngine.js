@@ -108,12 +108,38 @@ const progressOneStep = (goals, ctx, scheme) => {
   return g;
 };
 
+// A deload: a lighter recovery week. Cuts intensity by ~10% (weight, or seconds for holds,
+// or reps for bodyweight), rounded to loadable. Volume (sets) is left for the trainer.
+const deloadGoals = (goals, ctx, factor = 0.9) => {
+  const g = goals;
+  const fam = familyOf(ctx.equipment);
+  const isTime = ctx.measurementType === "time" || ctx.exerciseType === "Time";
+  if (isTime) {
+    g.seconds = mapArr(g.seconds, (v) => Math.max(0, Math.round(v * factor)));
+    return g;
+  }
+  if (fam === "bodyweight") {
+    ["exactReps", "minReps", "maxReps"].forEach((k) => {
+      g[k] = mapArr(g[k], (v) => Math.max(1, Math.round(v * factor)));
+    });
+    return g;
+  }
+  g.weight = mapArr(g.weight, (w) => roundToLoadable(w * factor, fam));
+  return g;
+};
+
 // Progress an exercise's goals by `step` increments under `scheme`. Chained so per-step
-// rules (dumbbell 40lb threshold, rep-range fill) resolve correctly.
-const progressExerciseGoals = (goals, ctx = {}, { scheme = "linear", step = 1 } = {}) => {
+// rules (dumbbell 40lb threshold, rep-range fill) resolve correctly. When `deload` is set,
+// a recovery cut is applied after the progression (used for a block's deload week).
+const progressExerciseGoals = (
+  goals,
+  ctx = {},
+  { scheme = "linear", step = 1, deload = false } = {}
+) => {
   let g = clone(goals);
   const n = Math.max(0, Math.floor(Number(step) || 0));
   for (let s = 0; s < n; s += 1) g = progressOneStep(g, ctx, scheme);
+  if (deload) g = deloadGoals(g, ctx);
   return g;
 };
 
@@ -121,5 +147,6 @@ module.exports = {
   familyOf,
   weightIncrement,
   roundToLoadable,
+  deloadGoals,
   progressExerciseGoals,
 };
