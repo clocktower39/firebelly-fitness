@@ -110,8 +110,8 @@ export default function NavDrawer() {
       icon: <TrainersIcon />,
     },
     {
-      title: "Marketplace",
-      to: "/marketplace",
+      title: "Shop",
+      to: "/trainer-store",
       icon: <StorefrontIcon />,
     },
     {

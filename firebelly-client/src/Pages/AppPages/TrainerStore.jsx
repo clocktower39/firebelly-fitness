@@ -2,18 +2,29 @@ import React, { useEffect, useMemo, useState } from "react";
 import { billingApi } from "../../api/billingApi";
 import { useSearchParams, Link } from "react-router-dom";
 import {
+  Box,
   Button,
   Card,
   CardActions,
   CardContent,
+  Chip,
   Divider,
   Grid,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
+import { Storefront as StorefrontIcon } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
 import { requestMyTrainers } from "../../Redux/actions";
+
+const TYPE_LABELS = {
+  PROGRAM: "Program",
+  SESSION: "Session",
+  NUTRITION: "Nutrition",
+  MERCH: "Merch",
+  CUSTOM: "Item",
+};
 
 export default function TrainerStore() {
   const [searchParams] = useSearchParams();
@@ -50,10 +61,52 @@ export default function TrainerStore() {
   }, [trainerId]);
 
   if (!trainerId) {
+    const trainers = (myTrainers || []).filter((t) => t.accepted !== false);
     return (
-      <Typography color="text.secondary">
-        Select a trainer to view available sessions.
-      </Typography>
+      <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
+        <Stack spacing={2}>
+          <Stack spacing={1}>
+            <Typography variant="h4">Shop</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Browse the programs, sessions, and other offerings from your trainers.
+            </Typography>
+          </Stack>
+          {trainers.length === 0 ? (
+            <Typography color="text.secondary">
+              You&apos;re not connected to a trainer yet — add one from the Trainers page to see
+              their store.
+            </Typography>
+          ) : (
+            <Grid container spacing={2}>
+              {trainers.map((t) => (
+                <Grid key={t.trainer} size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Card variant="outlined" sx={{ height: "100%" }}>
+                    <CardContent>
+                      <Typography variant="h6">
+                        {`${t.firstName || ""} ${t.lastName || ""}`.trim() || "Trainer"}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        View programs &amp; offerings
+                      </Typography>
+                    </CardContent>
+                    <CardActions sx={{ px: 2, pb: 2 }}>
+                      <Button
+                        component={Link}
+                        to={`/trainer-store?trainer=${t.trainer}`}
+                        variant="contained"
+                        size="small"
+                        startIcon={<StorefrontIcon />}
+                      >
+                        Visit store
+                      </Button>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Stack>
+      </Box>
     );
   }
 
@@ -116,13 +169,19 @@ export default function TrainerStore() {
                   <Card key={product._id} variant="outlined">
                     <CardContent>
                       <Stack spacing={0.5}>
-                        <Typography variant="subtitle1">{product.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {product.itemType}
-                          {product.sessionTypeId?.name
-                            ? ` • ${product.sessionTypeId.name}`
-                            : ""}
-                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                          <Typography variant="subtitle1">{product.name}</Typography>
+                          <Chip
+                            size="small"
+                            label={TYPE_LABELS[product.itemType] || product.itemType}
+                            color={product.itemType === "PROGRAM" ? "primary" : "default"}
+                          />
+                        </Stack>
+                        {product.sessionTypeId?.name && (
+                          <Typography variant="body2" color="text.secondary">
+                            {product.sessionTypeId.name}
+                          </Typography>
+                        )}
                         <Typography variant="body2" color="text.secondary">
                           {product.currency} {Number(product.price || 0).toFixed(2)}
                           {product.itemType === "SESSION"
@@ -137,16 +196,31 @@ export default function TrainerStore() {
                       </Stack>
                     </CardContent>
                     <CardActions sx={{ px: 2, pb: 2 }}>
-                      <TextField
-                        label="Qty"
-                        type="number"
-                        value={quantities[product._id] || ""}
-                        onChange={(event) =>
-                          handleQuantityChange(product._id, event.target.value)
-                        }
-                        slotProps={{ htmlInput: { min: 0, step: "1" } }}
-                        sx={{ width: 120 }}
-                      />
+                      {product.itemType === "PROGRAM" ? (
+                        <Button
+                          variant={Number(quantities[product._id]) > 0 ? "contained" : "outlined"}
+                          size="small"
+                          onClick={() =>
+                            handleQuantityChange(
+                              product._id,
+                              Number(quantities[product._id]) > 0 ? 0 : 1
+                            )
+                          }
+                        >
+                          {Number(quantities[product._id]) > 0 ? "Added to request" : "Add to request"}
+                        </Button>
+                      ) : (
+                        <TextField
+                          label="Qty"
+                          type="number"
+                          value={quantities[product._id] || ""}
+                          onChange={(event) =>
+                            handleQuantityChange(product._id, event.target.value)
+                          }
+                          slotProps={{ htmlInput: { min: 0, step: "1" } }}
+                          sx={{ width: 120 }}
+                        />
+                      )}
                     </CardActions>
                   </Card>
                 ))}
