@@ -45,6 +45,8 @@ const programSchema = new mongoose.Schema(
     category: { type: String, default: null },
     weeks: { type: [[programDaySchema]], default: [] },
     mesocycles: { type: [mesocycleSchema], default: [] },
+    // Equipment needed to run the program, snapshotted at publish (shown to clients).
+    equipmentNeeded: { type: [String], default: [] },
   },
   { timestamps: true, minimize: false }
 );

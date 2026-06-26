@@ -2,6 +2,7 @@ const dayjs = require("dayjs");
 const utc = require("dayjs/plugin/utc");
 const Program = require("../models/program");
 const Training = require("../models/training");
+const Exercise = require("../models/exercise");
 const Relationship = require("../models/relationship");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 
@@ -157,6 +158,8 @@ const publish_program = async (req, res, next) => {
 
     program.status = "PUBLISHED";
     program.publishedAt = program.publishedAt || new Date();
+    // Snapshot the equipment so the marketplace can show it without per-card scans.
+    program.equipmentNeeded = (await computeProgramEquipment(program)).equipment;
 
     const saved = await program.save();
     return res.json(saved);
@@ -310,10 +313,61 @@ const assign_program = async (req, res, next) => {
   }
 };
 
+// Scan every exercise referenced across a program's workouts and return the distinct
+// equipment (sorted) plus the exercise count. Shared by the on-demand endpoint and publish.
+const computeProgramEquipment = async (program) => {
+  const workoutIds = [];
+  (program.weeks || []).forEach((week) => {
+    (week || []).forEach((day) => {
+      if (day.workoutId) workoutIds.push(day.workoutId);
+    });
+  });
+  if (!workoutIds.length) return { equipment: [], exerciseCount: 0 };
+
+  const workouts = await Training.find({ _id: { $in: workoutIds } }).select("training.exercise").lean();
+  const exerciseIds = new Set();
+  workouts.forEach((w) => {
+    (w.training || []).forEach((circuit) => {
+      (circuit || []).forEach((e) => {
+        if (e && e.exercise) exerciseIds.add(String(e.exercise));
+      });
+    });
+  });
+  if (!exerciseIds.size) return { equipment: [], exerciseCount: 0 };
+
+  const exercises = await Exercise.find({ _id: { $in: [...exerciseIds] } }).select("equipment").lean();
+  const equip = new Set();
+  exercises.forEach((ex) => {
+    (ex.equipment || []).forEach((eq) => {
+      if (eq && String(eq).trim()) equip.add(String(eq).trim());
+    });
+  });
+  return { equipment: [...equip].sort((a, b) => a.localeCompare(b)), exerciseCount: exerciseIds.size };
+};
+
+// On-demand equipment for the builder (always accurate). Owner, or anyone if published.
+const get_program_equipment = async (req, res, next) => {
+  try {
+    const program = await Program.findOne({ _id: req.params.id }).lean();
+    if (!program) {
+      return res.status(404).json({ error: "Program not found." });
+    }
+    const isOwner = String(program.ownerId) === String(res.locals.user._id);
+    if (!isOwner && program.status !== "PUBLISHED") {
+      return res.status(403).json({ error: "Unauthorized access." });
+    }
+    const result = await computeProgramEquipment(program);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_program,
   list_programs,
   get_program,
+  get_program_equipment,
   update_program,
   update_program_day,
   publish_program,

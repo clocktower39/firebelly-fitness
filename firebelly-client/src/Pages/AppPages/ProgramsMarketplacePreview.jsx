@@ -74,6 +74,18 @@ export default function ProgramsMarketplacePreview() {
                     <Typography variant="caption" color="text.secondary">
                       {program.weeksCount} weeks • {program.daysPerWeek} days/week
                     </Typography>
+                    {program.equipmentNeeded?.length > 0 && (
+                      <Box sx={{ pt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                          Equipment needed
+                        </Typography>
+                        <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                          {program.equipmentNeeded.map((eq) => (
+                            <Chip key={eq} label={eq} size="small" variant="outlined" />
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
                   </Stack>
                 </CardContent>
               </Card>

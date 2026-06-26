@@ -9,6 +9,9 @@ export const programApi = {
 
   getProgram: (programId) => apiFetch(`/programs/${encodeURIComponent(programId)}`),
 
+  getProgramEquipment: (programId) =>
+    apiFetch(`/programs/${encodeURIComponent(programId)}/equipment`),
+
   createProgram: (payload) =>
     apiFetch("/programs", {
       method: "POST",

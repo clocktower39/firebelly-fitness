@@ -39,6 +39,7 @@ import {
   Add as AddIcon,
   DeleteOutlined as DeleteOutlineIcon,
   InfoOutlined as InfoOutlinedIcon,
+  FitnessCenter as FitnessCenterIcon,
 } from "@mui/icons-material";
 import { Alert } from "@mui/material";
 
@@ -157,6 +158,7 @@ export default function ProgramBuilder() {
   const [saveError, setSaveError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [workoutCache, setWorkoutCache] = useState({});
+  const [equipment, setEquipment] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importTarget, setImportTarget] = useState({ weekIndex: null, dayIndex: null });
@@ -591,6 +593,23 @@ export default function ProgramBuilder() {
     return () => clearInterval(saveTimerRef.current);
   }, [dirty, program, saveDraft]);
 
+  // Equipment a client needs to run this program, auto-detected from every exercise. Re-fetched
+  // whenever the set of assigned workouts changes (add / import / generate / copy / blocks).
+  const equipmentSig = useMemo(
+    () => (program?.weeks || []).flat().map((d) => d.workoutId).filter(Boolean).join(","),
+    [program?.weeks]
+  );
+  useEffect(() => {
+    if (!program?._id) return undefined;
+    let cancelled = false;
+    programApi.getProgramEquipment(program._id).then((data) => {
+      if (!cancelled && data && !data.error) setEquipment(data.equipment || []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [program?._id, equipmentSig]);
+
   useEffect(() => {
     const handleBeforeUnload = (event) => {
       if (!dirty) return;
@@ -878,6 +897,28 @@ export default function ProgramBuilder() {
             </Stack>
           </CardContent>
         </Card>
+
+        {equipment.length > 0 && (
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                <FitnessCenterIcon fontSize="small" color="action" />
+                <Typography variant="h6">Equipment needed</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ({equipment.length} item{equipment.length === 1 ? "" : "s"})
+                </Typography>
+              </Stack>
+              <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.75 }}>
+                {equipment.map((eq) => (
+                  <Chip key={eq} label={eq} size="small" />
+                ))}
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+                Auto-detected from every exercise in this program — what a client needs to run it.
+              </Typography>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent>
