@@ -95,6 +95,8 @@ const trainingSchema = new mongoose.Schema(
     assignedAt: { type: Date, default: null },
     isTemplate: { type: Boolean, default: false },
     complete: { type: Boolean, default: false },
+    reminderSentAt: { type: Date, default: null }, // dedup: workout-day reminder
+    overdueSentAt: { type: Date, default: null }, // dedup: overdue nudge
   },
   { minimize: false }
 );
