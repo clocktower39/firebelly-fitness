@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate, useParams } from "rea
 import { ThemeProvider, GlobalStyles } from "@mui/material";
 import { theme } from "./theme";
 import { removeWorkouts, requestClients, serverURL, upsertWorkout } from "./Redux/actions";
+import { updateUserSettings } from "./Redux/actions/accountActions";
 import socketIOClient from "socket.io-client";
 import AuthRoute from "./Components/AuthRoute";
 const WebsiteNavbar = lazy(() => import("./Pages/WebsitePages/WebsiteNavbar"));
@@ -65,6 +66,7 @@ function App({ }) {
 
   const userId = useSelector((state) => state.user._id);
   const isTrainer = useSelector((state) => state.user.isTrainer);
+  const userTimezone = useSelector((state) => state.user.timezone);
   const workoutAccountIds = useSelector((state) => {
     const ids = new Set();
     if (state.user?._id) ids.add(String(state.user._id));
@@ -101,6 +103,17 @@ function App({ }) {
       dispatch(requestClients());
     }
   }, [dispatch, isTrainer]);
+
+  // Capture the user's timezone once (so local-time reminders fire correctly), if not set.
+  useEffect(() => {
+    if (!userId || userTimezone) return;
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) dispatch(updateUserSettings({ timezone: tz }));
+    } catch (e) {
+      /* ignore */
+    }
+  }, [userId, userTimezone, dispatch]);
 
   useEffect(() => {
     if (!socket) return;

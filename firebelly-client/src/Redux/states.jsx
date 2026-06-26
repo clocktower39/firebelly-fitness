@@ -5,6 +5,19 @@ export let user = {
     workoutWeightUnit: "lbs",
     defaultSessionLengthMinutes: 60,
     autoPaymentReminders: false,
+    timezone: "",
+    notificationPrefs: {
+        clientWorkoutCompleted: true,
+        goalMet: true,
+        workoutReminder: true,
+        workoutReminderTime: "08:00",
+        workoutOverdue: true,
+        workoutOverdueAfterMinutes: 180,
+        sessionReminder: true,
+        sessionReminderLeadMinutes: 120,
+        measurementReminder: false,
+        measurementCadence: "MONTHLY",
+    },
 }
 
 export let exerciseLibrary = [];
