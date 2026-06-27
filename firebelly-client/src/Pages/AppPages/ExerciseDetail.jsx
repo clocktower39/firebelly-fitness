@@ -182,6 +182,9 @@ export default function ExerciseDetail() {
       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1, mb: 2 }}>
         {movementComplexity && <Chip label={movementComplexity} size="small" />}
         {measurementType && <Chip label={measurementType} size="small" variant="outlined" />}
+        {exercise.verified && (
+          <Chip label="Verified" size="small" color="success" variant="outlined" />
+        )}
       </Stack>
 
       <Button

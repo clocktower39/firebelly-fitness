@@ -9,11 +9,13 @@ import {
   Chip,
   Container,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   MenuItem,
   Select,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -34,6 +36,7 @@ export default function ExerciseLibrary() {
   const [secondaryMuscles, setSecondaryMuscles] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [type, setType] = useState("");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
@@ -57,6 +60,7 @@ export default function ExerciseLibrary() {
     return exerciseList
       .filter((e) => {
         if (!exerciseMatchesQuery(e, aliases, search)) return false;
+        if (verifiedOnly && !e.verified) return false;
         if (type && e.movementComplexity !== type) return false;
         if (primaryMuscles.length) {
           const pm = e.muscleGroups?.primary || [];
@@ -75,7 +79,7 @@ export default function ExerciseLibrary() {
       .sort((a, b) =>
         exerciseDisplayName(a, aliases).localeCompare(exerciseDisplayName(b, aliases))
       );
-  }, [exerciseList, aliases, search, type, primaryMuscles, secondaryMuscles, equipment]);
+  }, [exerciseList, aliases, search, type, primaryMuscles, secondaryMuscles, equipment, verifiedOnly]);
 
   return (
     <Container maxWidth="lg" sx={{ pt: 3, pb: 10 }}>
@@ -143,6 +147,17 @@ export default function ExerciseLibrary() {
         </Grid>
       </Grid>
 
+      <FormControlLabel
+        control={
+          <Switch
+            size="small"
+            checked={verifiedOnly}
+            onChange={(e) => setVerifiedOnly(e.target.checked)}
+          />
+        }
+        label="Verified only"
+        sx={{ mb: 0.5, display: "block" }}
+      />
       <Typography variant="caption" color="text.secondary">
         {filtered.length} exercise{filtered.length === 1 ? "" : "s"}
       </Typography>
@@ -170,6 +185,9 @@ export default function ExerciseLibrary() {
                     ))}
                     {ex.movementComplexity && (
                       <Chip label={ex.movementComplexity} size="small" variant="outlined" />
+                    )}
+                    {ex.verified && (
+                      <Chip label="Verified" size="small" color="success" variant="outlined" />
                     )}
                   </Stack>
                   {(ex.equipment || []).length > 0 && (
