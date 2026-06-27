@@ -272,6 +272,30 @@ export function updateTraining(trainingId, updatedTraining) {
   };
 }
 
+// Append an exercise to an existing workout as a new circuit, then save.
+export function addExerciseToWorkout({ exercise, workout, setCount = 4 }) {
+  return async (dispatch) => {
+    if (!exercise?._id || !workout?._id) return null;
+    const zeros = () => Array(setCount).fill(0);
+    const entry = {
+      exercise: exercise._id,
+      exerciseType: "Reps",
+      goals: {
+        sets: setCount,
+        minReps: zeros(),
+        maxReps: zeros(),
+        exactReps: zeros(),
+        weight: zeros(),
+        percent: zeros(),
+        seconds: zeros(),
+      },
+      achieved: { sets: 0, reps: zeros(), weight: zeros(), percent: zeros(), seconds: zeros() },
+    };
+    const newTraining = [...(workout.training || []), [entry]];
+    return dispatch(updateTraining(workout._id, { ...workout, training: newTraining }));
+  };
+}
+
 // Updates training date
 export function updateWorkoutDateById(training, newDate, newTitle) {
   return async (dispatch, getState) => {

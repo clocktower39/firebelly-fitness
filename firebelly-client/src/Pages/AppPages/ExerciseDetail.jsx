@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ArrowBack } from "@mui/icons-material";
+import { ArrowBack, AddCircleOutlined } from "@mui/icons-material";
 import {
   getExerciseList,
   getExerciseAliases,
@@ -21,8 +21,21 @@ import {
   setExerciseAlias,
 } from "../../Redux/actions";
 import { exerciseDisplayName } from "../../utils/exerciseName";
+import AddToWorkoutDialog from "../../features/exercise/AddToWorkoutDialog";
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+
+// Extra catalog attributes to surface (only shown when populated).
+const ATTRIBUTE_FIELDS = [
+  { key: "movementPattern", label: "Movement pattern" },
+  { key: "bodyPosition", label: "Body position" },
+  { key: "anatomicalHandPosition", label: "Grip" },
+  { key: "handSetup", label: "Hand setup" },
+  { key: "footSetup", label: "Foot setup" },
+  { key: "attachments", label: "Attachments" },
+  { key: "generalVariation", label: "Variation" },
+  { key: "tags", label: "Tags" },
+];
 
 // Render one logged session's sets, e.g. "135lbs × 8, 135lbs × 8" or "45s, 45s".
 const formatSets = (achieved, measurementType, unit) => {
@@ -52,6 +65,7 @@ export default function ExerciseDetail() {
   const exercise = exerciseList.find((e) => e._id === id);
   const unit = user.workoutWeightUnit || "lbs";
   const [aliasInput, setAliasInput] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
@@ -112,6 +126,15 @@ export default function ExerciseDetail() {
         {movementComplexity && <Chip label={movementComplexity} size="small" />}
         {measurementType && <Chip label={measurementType} size="small" variant="outlined" />}
       </Stack>
+
+      <Button
+        variant="contained"
+        startIcon={<AddCircleOutlined />}
+        onClick={() => setAddOpen(true)}
+        sx={{ mb: 2 }}
+      >
+        Add to workout
+      </Button>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -196,6 +219,33 @@ export default function ExerciseDetail() {
                 </Stack>
               </>
             )}
+            {ATTRIBUTE_FIELDS.some((f) => (exercise[f.key] || []).length > 0) && (
+              <>
+                <Divider sx={{ my: 1.5 }} />
+                {ATTRIBUTE_FIELDS.map((f) => {
+                  const vals = exercise[f.key] || [];
+                  if (!vals.length) return null;
+                  return (
+                    <Box key={f.key} sx={{ mb: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {f.label}
+                      </Typography>
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        flexWrap="wrap"
+                        useFlexGap
+                        sx={{ mt: 0.5 }}
+                      >
+                        {vals.map((v) => (
+                          <Chip key={v} label={v} size="small" variant="outlined" />
+                        ))}
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </>
+            )}
             {description && (
               <>
                 <Divider sx={{ my: 1.5 }} />
@@ -267,6 +317,8 @@ export default function ExerciseDetail() {
           </Paper>
         </Grid>
       </Grid>
+
+      <AddToWorkoutDialog open={addOpen} onClose={() => setAddOpen(false)} exercise={exercise} />
     </Container>
   );
 }
