@@ -28,6 +28,15 @@ import {
 import { exerciseDisplayName } from "../../utils/exerciseName";
 import AddToWorkoutDialog from "../../features/exercise/AddToWorkoutDialog";
 import { findSubstitutes } from "../../utils/exerciseSubstitutes";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -93,13 +102,49 @@ export default function ExerciseDetail() {
     return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [exercise, user]);
 
-  const prWeight = useMemo(() => {
-    const weights = history
-      .flatMap((h) => h.achieved?.weight || [])
-      .map(Number)
-      .filter((n) => Number.isFinite(n) && n > 0);
-    return weights.length ? Math.max(...weights) : null;
-  }, [history]);
+  const historyStats = useMemo(() => {
+    if (!history.length) return null;
+    const asc = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const anyWeight = asc.some((h) => (h.achieved?.weight || []).some((w) => Number(w) > 0));
+    const anySeconds = asc.some((h) => (h.achieved?.seconds || []).some((s) => Number(s) > 0));
+    const metric = anyWeight
+      ? "weight"
+      : exercise?.measurementType === "time" || anySeconds
+      ? "seconds"
+      : "reps";
+    const suffix = metric === "weight" ? unit : metric === "seconds" ? "s" : "";
+    const bestLabel = metric === "weight" ? "Heaviest" : metric === "seconds" ? "Longest" : "Most reps";
+    const sessionBest = (h) => {
+      const vals = (h.achieved?.[metric] || []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+      return vals.length ? Math.max(...vals) : 0;
+    };
+    const chartData = asc.map((h) => ({
+      label: new Date(h.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      value: sessionBest(h),
+    }));
+    let bestE1RM = 0;
+    if (metric === "weight") {
+      asc.forEach((h) => {
+        const w = h.achieved?.weight || [];
+        const r = h.achieved?.reps || [];
+        w.forEach((wi, i) => {
+          const W = Number(wi);
+          const R = Number(r[i]);
+          if (W > 0 && R > 0) bestE1RM = Math.max(bestE1RM, W * (1 + R / 30)); // Epley estimate
+        });
+      });
+    }
+    return {
+      metric,
+      suffix,
+      bestLabel,
+      chartData,
+      best: chartData.reduce((mx, d) => Math.max(mx, d.value), 0),
+      bestE1RM: Math.round(bestE1RM),
+      sessions: asc.length,
+      last: asc[asc.length - 1].date,
+    };
+  }, [history, exercise, unit]);
 
   const substitutes = useMemo(
     () => findSubstitutes(exercise, exerciseList, { limit: 8, differentEquipmentOnly: diffEquipOnly }),
@@ -284,32 +329,74 @@ export default function ExerciseDetail() {
                 You haven't logged this exercise yet.
               </Typography>
             )}
-            {historyLoaded && history.length > 0 && (
+            {historyLoaded && history.length > 0 && historyStats && (
               <>
-                <Stack direction="row" spacing={3} sx={{ mb: 1.5 }}>
-                  {prWeight != null && (
+                <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {historyStats.best}
+                      {historyStats.suffix}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {historyStats.bestLabel}
+                    </Typography>
+                  </Box>
+                  {historyStats.bestE1RM > 0 && (
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {prWeight}
+                        {historyStats.bestE1RM}
                         {unit}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Heaviest
+                        Est. 1RM
                       </Typography>
                     </Box>
                   )}
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {history.length}
+                      {historyStats.sessions}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Sessions
                     </Typography>
                   </Box>
                 </Stack>
+
+                {historyStats.chartData.length >= 2 && (
+                  <Box sx={{ width: "100%", height: 180, mb: 1.5 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={historyStats.chartData}
+                        margin={{ top: 5, right: 8, left: -16, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={20} />
+                        <YAxis tick={{ fontSize: 11 }} width={36} domain={["auto", "auto"]} />
+                        <Tooltip />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          name={historyStats.bestLabel}
+                          stroke="#10b981"
+                          fill="#10b981"
+                          fillOpacity={0.2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </Box>
+                )}
+
                 <Divider sx={{ mb: 1 }} />
-                <Stack spacing={1}>
-                  {history.slice(0, 20).map((h, i) => (
+                <Typography variant="caption" color="text.secondary">
+                  Last performed{" "}
+                  {new Date(historyStats.last).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </Typography>
+                <Stack spacing={1} sx={{ mt: 1 }}>
+                  {history.slice(0, 12).map((h, i) => (
                     <Box key={`${h.date}-${i}`}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {new Date(h.date).toLocaleDateString(undefined, {
