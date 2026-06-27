@@ -7,9 +7,14 @@ import {
   Chip,
   Container,
   Divider,
+  FormControlLabel,
   Grid,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -22,6 +27,7 @@ import {
 } from "../../Redux/actions";
 import { exerciseDisplayName } from "../../utils/exerciseName";
 import AddToWorkoutDialog from "../../features/exercise/AddToWorkoutDialog";
+import { findSubstitutes } from "../../utils/exerciseSubstitutes";
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -66,6 +72,7 @@ export default function ExerciseDetail() {
   const unit = user.workoutWeightUnit || "lbs";
   const [aliasInput, setAliasInput] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [diffEquipOnly, setDiffEquipOnly] = useState(false);
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
@@ -93,6 +100,11 @@ export default function ExerciseDetail() {
       .filter((n) => Number.isFinite(n) && n > 0);
     return weights.length ? Math.max(...weights) : null;
   }, [history]);
+
+  const substitutes = useMemo(
+    () => findSubstitutes(exercise, exerciseList, { limit: 8, differentEquipmentOnly: diffEquipOnly }),
+    [exercise, exerciseList, diffEquipOnly]
+  );
 
   if (!exercise) {
     return (
@@ -317,6 +329,52 @@ export default function ExerciseDetail() {
           </Paper>
         </Grid>
       </Grid>
+
+      <Paper sx={{ p: 2, mt: 2 }}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          useFlexGap
+          sx={{ mb: 1 }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            Similar exercises
+          </Typography>
+          {(exercise.equipment || []).length > 0 && (
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={diffEquipOnly}
+                  onChange={(e) => setDiffEquipOnly(e.target.checked)}
+                />
+              }
+              label="Different equipment"
+            />
+          )}
+        </Stack>
+        {substitutes.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No similar exercises found{diffEquipOnly ? " with different equipment" : ""}.
+          </Typography>
+        ) : (
+          <List disablePadding>
+            {substitutes.map((s) => (
+              <ListItemButton key={s._id} onClick={() => navigate(`/exercise-library/${s._id}`)}>
+                <ListItemText
+                  primary={exerciseDisplayName(s, aliases)}
+                  secondary={
+                    (s.equipment || []).join(" · ") ||
+                    (s.muscleGroups?.primary || []).join(" · ")
+                  }
+                />
+              </ListItemButton>
+            ))}
+          </List>
+        )}
+      </Paper>
 
       <AddToWorkoutDialog open={addOpen} onClose={() => setAddOpen(false)} exercise={exercise} />
     </Container>
