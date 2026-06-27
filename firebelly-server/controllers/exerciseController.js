@@ -16,6 +16,7 @@ const EXERCISE_FIELDS = [
   "muscleGroups",
   "equipment",
   "description",
+  "mediaUrl",
   "tags",
   "generalVariation",
   "attachments",

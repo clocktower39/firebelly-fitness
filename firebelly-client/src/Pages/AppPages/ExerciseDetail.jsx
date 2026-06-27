@@ -31,6 +31,7 @@ import {
 import { exerciseDisplayName } from "../../utils/exerciseName";
 import AddToWorkoutDialog from "../../features/exercise/AddToWorkoutDialog";
 import { findSubstitutes } from "../../utils/exerciseSubstitutes";
+import ExerciseMedia from "../../features/exercise/ExerciseMedia";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -207,6 +208,10 @@ export default function ExerciseDetail() {
           {favorites.includes(exercise._id) ? <Star color="warning" /> : <StarBorder />}
         </IconButton>
       </Stack>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <ExerciseMedia exercise={exercise} />
+      </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>

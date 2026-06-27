@@ -9,6 +9,7 @@ const exerciseSchema = new mongoose.Schema(
     },
     equipment: { type: Array, required: true, default: [], },
     description: { type: String, required: false, default: '', },
+    mediaUrl: { type: String, required: false, default: '', }, // demo media: GIF / MP4 / image / YouTube URL
     tags: { type: Array, required: true, default: [], },
 
     generalVariation: { type: Array },

@@ -17,6 +17,9 @@ import {
   FormControlLabel,
   Grid,
   InputLabel,
+  List,
+  ListItemButton,
+  ListItemText,
   MenuItem,
   Select,
   Switch,
@@ -25,6 +28,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { resolveAnimationKey } from "../../features/exercise/ExerciseAnimation";
 
 export default function Exercises() {
   const dispatch = useDispatch();
@@ -78,6 +82,12 @@ export default function Exercises() {
     user?._id
   );
 
+  // Exercises with neither a demo URL nor a built-in animation — these need a manual upload.
+  const needsMedia = exerciseList
+    .filter((ex) => !(ex.mediaUrl || "").trim() && !resolveAnimationKey(ex))
+    .slice()
+    .sort((a, b) => a.exerciseTitle.localeCompare(b.exerciseTitle));
+
   return (
     <Container maxWidth="md" sx={{ height: "100%", padding: "15px 0px" }}>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -85,6 +95,7 @@ export default function Exercises() {
           <Tab label="Edit" {...a11yProps(0)} />
           <Tab label="Add" {...a11yProps(1)} disabled={!isExerciseAdmin} />
           <Tab label="Merge" {...a11yProps(2)} disabled={!isExerciseAdmin} />
+          <Tab label="Needs media" {...a11yProps(3)} disabled={!isExerciseAdmin} />
         </Tabs>
       </Box>
 
@@ -124,6 +135,32 @@ export default function Exercises() {
           <ExerciseMergeSection />
         ) : (
           <Typography variant="body2">Only the business owner can merge exercises.</Typography>
+        )}
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={3}>
+        {isExerciseAdmin ? (
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {needsMedia.length} exercise{needsMedia.length === 1 ? "" : "s"} have no demo media and
+              no auto-animation. Add a media URL (GIF / MP4 / image / YouTube) to each — click one to
+              edit it.
+            </Typography>
+            <List dense>
+              {needsMedia.map((ex) => (
+                <ListItemButton
+                  key={ex._id}
+                  onClick={() => {
+                    setSelectedExercise(ex);
+                    setValue(0);
+                  }}
+                >
+                  <ListItemText primary={ex.exerciseTitle} />
+                </ListItemButton>
+              ))}
+            </List>
+          </Box>
+        ) : (
+          <Typography variant="body2">Only the business owner can manage exercise media.</Typography>
         )}
       </CustomTabPanel>
     </Container>
@@ -242,6 +279,7 @@ const exercisePropertyOptions = [
 const createEmptyExercise = () => ({
   exerciseTitle: "",
   description: "",
+  mediaUrl: "",
   muscleGroups: { primary: [], secondary: [] },
   equipment: [],
   tags: [],
@@ -319,6 +357,17 @@ const ExerciseLibrarySection = ({ selectedExercise }) => {
               variant="outlined"
               multiline
               rows={4}
+            />
+          </Grid>
+          <Grid size={12}>
+            <TextField
+              fullWidth
+              label="Demo media URL (GIF / MP4 / image / YouTube)"
+              name="mediaUrl"
+              value={exercise.mediaUrl || ""}
+              onChange={handleChange}
+              variant="outlined"
+              placeholder="https://…"
             />
           </Grid>
           <Grid size={12}>
