@@ -48,6 +48,7 @@ import {
   Login as LoginIcon,
   QrCodeScanner as QrCodeScannerIcon,
   Storefront as StorefrontIcon,
+  FitnessCenter as ExerciseLibraryIcon,
 } from "@mui/icons-material";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
@@ -103,6 +104,11 @@ export default function NavDrawer() {
       title: "Progress",
       to: "/progress",
       icon: <ProgressIcon />,
+    },
+    {
+      title: "Exercise Library",
+      to: "/exercise-library",
+      icon: <ExerciseLibraryIcon />,
     },
     {
       title: "Trainers",

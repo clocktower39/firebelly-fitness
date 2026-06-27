@@ -28,6 +28,8 @@ const ProgramsMarketplacePreview = lazy(() => import("./Pages/AppPages/ProgramsM
 const WorkoutTemplates = lazy(() => import("./Pages/AppPages/WorkoutTemplates"));
 const WorkoutHistory = lazy(() => import("./Pages/AppPages/WorkoutHistory"));
 const Exercises = lazy(() => import("./Pages/AppPages/Exercises"));
+const ExerciseLibrary = lazy(() => import("./Pages/AppPages/ExerciseLibrary"));
+const ExerciseDetail = lazy(() => import("./Pages/AppPages/ExerciseDetail"));
 const Clients = lazy(() => import("./Pages/AppPages/Clients"));
 const Groups = lazy(() => import("./Pages/AppPages/Groups"));
 const GroupDetail = lazy(() => import("./Pages/AppPages/GroupDetail"));
@@ -248,6 +250,8 @@ function App({ }) {
                     <Route exact path="/progress" element={<Progress />} />
                     <Route exact path="/goals" element={<Goals />} />
                     <Route exact path="/exercises" element={<Exercises />} />
+                    <Route exact path="/exercise-library" element={<ExerciseLibrary />} />
+                    <Route exact path="/exercise-library/:id" element={<ExerciseDetail />} />
                     <Route exact path="/invoices" element={<Invoices />} />
                     <Route exact path="/session-counter" element={<Navigate to="/invoices" replace />} />
                     <Route exact path="/products" element={<Products />} />
