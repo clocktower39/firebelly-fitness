@@ -368,16 +368,16 @@ const light = {
       contrastText: "#ffffff",
     },
     background: {
-      default: "#f8fafc", // Slate 50
+      default: "#eceff3", // soft neutral grey — gives white cards relief, cuts the white glare
       paper: "#ffffff",
-      NavDrawer: "linear-gradient(90deg, #f1f5f9, #e2e8f0)",
+      NavDrawer: "linear-gradient(90deg, #e2e8f0, #cbd5e1)",
       ATCPaperBackground: "#ffffff",
       DashboardCard: "#ffffff",
       ChartToopTip: "#334155",
       Footer: "#e2e8f0",
     },
     text: {
-      primary: "#0f172a",   // Slate 900
+      primary: "#1e293b",   // Slate 800 — softer than near-black, less harsh contrast
       secondary: "#475569", // Slate 600
     },
     divider: "rgba(15, 23, 42, 0.12)",
@@ -403,16 +403,16 @@ const light = {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: "#f8fafc",
-          scrollbarColor: "#cbd5f5 #f8fafc",
+          backgroundColor: "#eceff3",
+          scrollbarColor: "#cbd5e1 #eceff3",
           "&::-webkit-scrollbar, & *::-webkit-scrollbar": {
-            backgroundColor: "#f8fafc",
+            backgroundColor: "#eceff3",
             width: "8px",
           },
           "&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb": {
             borderRadius: 8,
             backgroundColor: "#cbd5e1",
-            border: "2px solid #f8fafc",
+            border: "2px solid #eceff3",
           },
         },
       },

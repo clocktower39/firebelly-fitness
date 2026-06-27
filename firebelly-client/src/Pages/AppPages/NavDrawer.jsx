@@ -313,10 +313,14 @@ export default function NavDrawer() {
       <AppBar
         position="sticky"
         elevation={0}
+        color="transparent"
         sx={{
-          background: "background.NavDrawer",
-          backgroundColor: "background.NavDrawer",
-          borderBottom: "1px solid rgba(148, 163, 184, 0.35)",
+          // Callback form so the gradient actually applies (backgroundColor can't take a
+          // gradient, which is why the bar previously fell back to emerald = the logo color).
+          background: (t) => t.palette.background.NavDrawer,
+          color: "text.primary",
+          borderBottom: "1px solid",
+          borderColor: "divider",
           mb: 1,
         }}
       >
@@ -337,9 +341,9 @@ export default function NavDrawer() {
                 onClick={toggleDrawer}
                 sx={{
                   borderRadius: 2,
-                  backgroundColor: "background.NavDrawer",
+                  backgroundColor: "transparent",
                   "&:hover": {
-                    backgroundColor: "primary.main",
+                    backgroundColor: "action.hover",
                   },
                 }}
               >
