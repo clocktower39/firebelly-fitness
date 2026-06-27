@@ -30,7 +30,8 @@ export default function ExerciseLibrary() {
   const aliases = useSelector((s) => s.progress.exerciseAliases) || {};
 
   const [search, setSearch] = useState("");
-  const [muscles, setMuscles] = useState([]);
+  const [primaryMuscles, setPrimaryMuscles] = useState([]);
+  const [secondaryMuscles, setSecondaryMuscles] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [type, setType] = useState("");
 
@@ -39,14 +40,12 @@ export default function ExerciseLibrary() {
     dispatch(getExerciseAliases());
   }, [dispatch, exerciseList.length]);
 
-  const muscleOptions = useMemo(
-    () =>
-      uniqSorted(
-        exerciseList.flatMap((e) => [
-          ...(e.muscleGroups?.primary || []),
-          ...(e.muscleGroups?.secondary || []),
-        ])
-      ),
+  const primaryMuscleOptions = useMemo(
+    () => uniqSorted(exerciseList.flatMap((e) => e.muscleGroups?.primary || [])),
+    [exerciseList]
+  );
+  const secondaryMuscleOptions = useMemo(
+    () => uniqSorted(exerciseList.flatMap((e) => e.muscleGroups?.secondary || [])),
     [exerciseList]
   );
   const equipmentOptions = useMemo(
@@ -59,9 +58,13 @@ export default function ExerciseLibrary() {
       .filter((e) => {
         if (!exerciseMatchesQuery(e, aliases, search)) return false;
         if (type && e.movementComplexity !== type) return false;
-        if (muscles.length) {
-          const m = [...(e.muscleGroups?.primary || []), ...(e.muscleGroups?.secondary || [])];
-          if (!muscles.every((sel) => m.includes(sel))) return false;
+        if (primaryMuscles.length) {
+          const pm = e.muscleGroups?.primary || [];
+          if (!primaryMuscles.every((sel) => pm.includes(sel))) return false;
+        }
+        if (secondaryMuscles.length) {
+          const sm = e.muscleGroups?.secondary || [];
+          if (!secondaryMuscles.every((sel) => sm.includes(sel))) return false;
         }
         if (equipment.length) {
           const eq = e.equipment || [];
@@ -72,7 +75,7 @@ export default function ExerciseLibrary() {
       .sort((a, b) =>
         exerciseDisplayName(a, aliases).localeCompare(exerciseDisplayName(b, aliases))
       );
-  }, [exerciseList, aliases, search, type, muscles, equipment]);
+  }, [exerciseList, aliases, search, type, primaryMuscles, secondaryMuscles, equipment]);
 
   return (
     <Container maxWidth="lg" sx={{ pt: 3, pb: 10 }}>
@@ -84,7 +87,7 @@ export default function ExerciseLibrary() {
       </Typography>
 
       <Grid container spacing={2} sx={{ mb: 1 }}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={12}>
           <TextField
             fullWidth
             size="small"
@@ -97,10 +100,20 @@ export default function ExerciseLibrary() {
           <Autocomplete
             multiple
             size="small"
-            options={muscleOptions}
-            value={muscles}
-            onChange={(e, v) => setMuscles(v)}
-            renderInput={(p) => <TextField {...p} label="Muscle group" />}
+            options={primaryMuscleOptions}
+            value={primaryMuscles}
+            onChange={(e, v) => setPrimaryMuscles(v)}
+            renderInput={(p) => <TextField {...p} label="Primary muscle" />}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Autocomplete
+            multiple
+            size="small"
+            options={secondaryMuscleOptions}
+            value={secondaryMuscles}
+            onChange={(e, v) => setSecondaryMuscles(v)}
+            renderInput={(p) => <TextField {...p} label="Secondary muscle" />}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -113,7 +126,7 @@ export default function ExerciseLibrary() {
             renderInput={(p) => <TextField {...p} label="Equipment" />}
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 2 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <FormControl fullWidth size="small">
             <InputLabel id="type-label">Type</InputLabel>
             <Select
