@@ -7,6 +7,12 @@ export const workoutApi = {
       body: { _id, client },
     }),
 
+  getNextWorkout: ({ _id }) =>
+    apiFetch("/nextWorkout", {
+      method: "POST",
+      body: { _id },
+    }),
+
   getWorkoutsByDate: ({ date, client = null }) =>
     apiFetch("/workouts", {
       method: "POST",

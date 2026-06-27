@@ -14,6 +14,7 @@ import WorkoutTrainerSessionDialog from "../../Components/TrainingComponents/Wor
 import { WorkoutOptionModalView } from "../../Components/WorkoutOptionModal";
 import AddExercisesDialog from "../../features/workout/components/AddExercisesDialog";
 import { requestTraining, updateTraining, getExerciseList } from "../../Redux/actions";
+import { workoutApi } from "../../api/workoutApi";
 import Loading from "../../Components/Loading";
 import CardioDetailsEditor from "../../features/workout/components/cardio/CardioDetailsEditor";
 import StrengthWorkoutEditor from "../../features/workout/components/StrengthWorkoutEditor";
@@ -94,6 +95,7 @@ export default function Workout({ socket }) {
   const [workoutFeedback, setWorkoutFeedback] = useState(training?.workoutFeedback || { difficulty: 1, comments: [] });
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
+  const [nextWorkout, setNextWorkout] = useState(null);
   const [openTrainerSessionDialog, setOpenTrainerSessionDialog] = useState(false);
   const [workoutType, setWorkoutType] = useState(training?.workoutType || "Strength");
   const [activeWorkoutWeightUnit, setActiveWorkoutWeightUnit] = useState(defaultWorkoutWeightUnit);
@@ -400,6 +402,19 @@ export default function Workout({ socket }) {
     });
   }, [dispatch, params._id]);
 
+  // Pre-fetch the next workout (for the "Next workout" button) + reset to the first step
+  // whenever we move to a different workout.
+  useEffect(() => {
+    setNextWorkout(null);
+    setActiveStep(0);
+    workoutApi
+      .getNextWorkout({ _id: params._id })
+      .then((data) => {
+        if (data && !data.error) setNextWorkout(data.next || null);
+      })
+      .catch(() => {});
+  }, [params._id]);
+
   return (
     <>
       {loading ? (
@@ -523,6 +538,18 @@ export default function Workout({ socket }) {
                   Save
                 </Button>
               </Grid>
+
+              {nextWorkout && activeStep >= localTraining.length && (
+                <Grid container size={12} sx={{ paddingBottom: "5px" }}>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => navigate(`/workout/${nextWorkout._id}`)}
+                  >
+                    Next workout: {nextWorkout.title || "Untitled"} &rarr;
+                  </Button>
+                </Grid>
+              )}
 
               <AddExercisesDialog
                 user={training.user}

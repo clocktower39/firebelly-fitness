@@ -194,6 +194,51 @@ const get_training_by_id = (req, res, next) => {
     .catch((err) => next(err));
 };
 
+// The next dated workout (after the current one) that the viewer can access — their own for
+// clients, or any of their clients' for trainers — so you can move straight to the next one.
+const get_next_workout = async (req, res, next) => {
+  try {
+    const current = await Training.findOne({ _id: req.body._id }).select("user date isTemplate").lean();
+    if (!current) return res.status(404).json({ error: "Training not found." });
+    if (current.isTemplate) return res.json({ next: null }); // templates aren't part of a dated flow
+
+    // Access: must own it or be an accepted trainer of the owner.
+    if (String(res.locals.user._id) !== String(current.user)) {
+      const rel = await Relationship.findOne({
+        trainer: res.locals.user._id,
+        client: current.user,
+        accepted: true,
+      });
+      if (!rel) return res.status(403).json({ error: "Unauthorized access." });
+    }
+
+    // Accessible owners: self, plus (for trainers) every accepted client.
+    const accessibleIds = [res.locals.user._id];
+    if (res.locals.user.isTrainer) {
+      const rels = await Relationship.find({ trainer: res.locals.user._id, accepted: true })
+        .select("client")
+        .lean();
+      rels.forEach((r) => accessibleIds.push(r.client));
+    }
+
+    const next = await Training.findOne({
+      user: { $in: accessibleIds },
+      isTemplate: { $ne: true },
+      $or: [
+        { date: { $gt: current.date } },
+        { date: current.date, _id: { $gt: current._id } },
+      ],
+    })
+      .sort({ date: 1, _id: 1 })
+      .select("_id title date")
+      .lean();
+
+    return res.json({ next: next || null });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 const get_workout_queue = async (req, res, next) => {
   try {
     const clientId = req.query.clientId;
@@ -505,6 +550,7 @@ module.exports = {
   create_training,
   update_training,
   get_training_by_id,
+  get_next_workout,
   get_workout_queue,
   get_workouts_by_date,
   get_weekly_training,
