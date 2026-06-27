@@ -17,7 +17,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { getExerciseList } from "../../Redux/actions";
+import { getExerciseList, getExerciseAliases } from "../../Redux/actions";
+import { exerciseDisplayName, exerciseMatchesQuery } from "../../utils/exerciseName";
 
 const uniqSorted = (arr) =>
   [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
@@ -26,6 +27,7 @@ export default function ExerciseLibrary() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const exerciseList = useSelector((s) => s.progress.exerciseList) || [];
+  const aliases = useSelector((s) => s.progress.exerciseAliases) || {};
 
   const [search, setSearch] = useState("");
   const [muscles, setMuscles] = useState([]);
@@ -34,6 +36,7 @@ export default function ExerciseLibrary() {
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
+    dispatch(getExerciseAliases());
   }, [dispatch, exerciseList.length]);
 
   const muscleOptions = useMemo(
@@ -52,10 +55,9 @@ export default function ExerciseLibrary() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return exerciseList
       .filter((e) => {
-        if (q && !e.exerciseTitle?.toLowerCase().includes(q)) return false;
+        if (!exerciseMatchesQuery(e, aliases, search)) return false;
         if (type && e.movementComplexity !== type) return false;
         if (muscles.length) {
           const m = [...(e.muscleGroups?.primary || []), ...(e.muscleGroups?.secondary || [])];
@@ -67,8 +69,10 @@ export default function ExerciseLibrary() {
         }
         return true;
       })
-      .sort((a, b) => (a.exerciseTitle || "").localeCompare(b.exerciseTitle || ""));
-  }, [exerciseList, search, type, muscles, equipment]);
+      .sort((a, b) =>
+        exerciseDisplayName(a, aliases).localeCompare(exerciseDisplayName(b, aliases))
+      );
+  }, [exerciseList, aliases, search, type, muscles, equipment]);
 
   return (
     <Container maxWidth="lg" sx={{ pt: 3, pb: 10 }}>
@@ -140,8 +144,13 @@ export default function ExerciseLibrary() {
               >
                 <CardContent sx={{ width: "100%" }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {ex.exerciseTitle}
+                    {exerciseDisplayName(ex, aliases)}
                   </Typography>
+                  {aliases[ex._id] && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      {ex.exerciseTitle}
+                    </Typography>
+                  )}
                   <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                     {(ex.muscleGroups?.primary || []).slice(0, 3).map((m) => (
                       <Chip key={m} label={m} size="small" color="primary" variant="outlined" />

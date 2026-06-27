@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -10,10 +10,17 @@ import {
   Grid,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
-import { getExerciseList, requestExerciseProgress } from "../../Redux/actions";
+import {
+  getExerciseList,
+  getExerciseAliases,
+  requestExerciseProgress,
+  setExerciseAlias,
+} from "../../Redux/actions";
+import { exerciseDisplayName } from "../../utils/exerciseName";
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -41,12 +48,19 @@ export default function ExerciseDetail() {
   const { id } = useParams();
   const user = useSelector((s) => s.user);
   const exerciseList = useSelector((s) => s.progress.exerciseList) || [];
+  const aliases = useSelector((s) => s.progress.exerciseAliases) || {};
   const exercise = exerciseList.find((e) => e._id === id);
   const unit = user.workoutWeightUnit || "lbs";
+  const [aliasInput, setAliasInput] = useState("");
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
+    dispatch(getExerciseAliases());
   }, [dispatch, exerciseList.length]);
+
+  useEffect(() => {
+    if (exercise) setAliasInput(aliases[exercise._id] || "");
+  }, [exercise, aliases]);
 
   useEffect(() => {
     if (exercise && user?._id) dispatch(requestExerciseProgress(exercise, user));
@@ -87,12 +101,55 @@ export default function ExerciseDetail() {
         Library
       </Button>
       <Typography variant="h5" sx={{ fontWeight: 700, color: "text.primary" }}>
-        {exercise.exerciseTitle}
+        {exerciseDisplayName(exercise, aliases)}
       </Typography>
+      {aliases[exercise._id] && (
+        <Typography variant="body2" color="text.secondary">
+          Catalog name: {exercise.exerciseTitle}
+        </Typography>
+      )}
       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1, mb: 2 }}>
         {movementComplexity && <Chip label={movementComplexity} size="small" />}
         {measurementType && <Chip label={measurementType} size="small" variant="outlined" />}
       </Stack>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+          Your name for this exercise
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          Rename it to whatever you call it — it shows for you everywhere, and search still finds the catalog name.
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <TextField
+            size="small"
+            placeholder={exercise.exerciseTitle}
+            value={aliasInput}
+            onChange={(e) => setAliasInput(e.target.value)}
+            sx={{ minWidth: 240 }}
+          />
+          <Button
+            variant="contained"
+            disabled={aliasInput.trim() === (aliases[exercise._id] || "")}
+            onClick={() =>
+              dispatch(setExerciseAlias({ exerciseId: exercise._id, customName: aliasInput.trim() }))
+            }
+          >
+            Save
+          </Button>
+          {aliases[exercise._id] && (
+            <Button
+              color="inherit"
+              onClick={() => {
+                setAliasInput("");
+                dispatch(setExerciseAlias({ exerciseId: exercise._id, customName: "" }));
+              }}
+            >
+              Reset
+            </Button>
+          )}
+        </Stack>
+      </Paper>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>

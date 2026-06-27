@@ -3,6 +3,7 @@ import {
   EDIT_EXERCISE_LIBRARY,
   EDIT_PROGRESS_EXERCISE_LIST,
   EDIT_PROGRESS_EXERCISE_SUMMARIES,
+  EDIT_PROGRESS_EXERCISE_ALIASES,
   EDIT_PROGRESS_TARGET_EXERCISE_HISTORY,
   ERROR,
 } from "../actionTypes";
@@ -26,6 +27,33 @@ export function getExerciseList() {
       type: EDIT_PROGRESS_EXERCISE_LIST,
       exerciseList,
     });
+  };
+}
+
+// The current user's custom exercise names, as a map { exerciseId: customName }.
+export function getExerciseAliases() {
+  return async (dispatch, getState) => {
+    if (getState().progress.exerciseAliasesLoaded) return;
+    const aliases = await exerciseApi.getExerciseAliases();
+    return dispatch({
+      type: EDIT_PROGRESS_EXERCISE_ALIASES,
+      exerciseAliases: aliases && !aliases.error ? aliases : {},
+    });
+  };
+}
+
+// Set or clear (empty name) the current user's custom name for one exercise.
+export function setExerciseAlias({ exerciseId, customName }) {
+  return async (dispatch, getState) => {
+    const result = await exerciseApi.setExerciseAlias({ exerciseId, customName });
+    if (result?.error) {
+      return dispatch({ type: ERROR, error: result.error });
+    }
+    const next = { ...(getState().progress.exerciseAliases || {}) };
+    const name = (customName || "").trim();
+    if (name) next[exerciseId] = name;
+    else delete next[exerciseId];
+    return dispatch({ type: EDIT_PROGRESS_EXERCISE_ALIASES, exerciseAliases: next });
   };
 }
 

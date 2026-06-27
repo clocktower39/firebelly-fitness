@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.post('/createExercise', verifyAccessToken, ensureWriteAccess, exerciseController.create_exercise);
 router.get('/exerciseLibrary', verifyAccessToken, exerciseController.get_exercise_library);
+router.get('/exerciseAliases', verifyAccessToken, exerciseController.get_exercise_aliases);
+router.post('/setExerciseAlias', verifyAccessToken, exerciseController.set_exercise_alias);
 router.post('/search_exercise', verifyAccessToken, exerciseController.search_exercise);
 router.post('/updateExercise', verifyAccessToken, ensureWriteAccess, exerciseController.update_exercise);
 router.post('/mergeExercises', verifyAccessToken, ensureWriteAccess, exerciseController.merge_exercises);

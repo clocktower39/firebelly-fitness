@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Exercise = require("../models/exercise");
 const Training = require("../models/training");
+const ExerciseAlias = require("../models/exerciseAlias");
 const { pick } = require("../utils/object");
 
 const exerciseAdminIds = (
@@ -52,6 +53,45 @@ const get_exercise_library = (req, res, next) => {
       res.send(data);
     })
     .catch((err) => next(err));
+};
+
+// The current user's custom exercise names, returned as a map { exerciseId: customName }.
+const get_exercise_aliases = async (req, res, next) => {
+  try {
+    const aliases = await ExerciseAlias.find({ user: res.locals.user._id })
+      .select("exercise customName")
+      .lean();
+    const map = {};
+    aliases.forEach((a) => {
+      map[String(a.exercise)] = a.customName;
+    });
+    return res.send(map);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Set (upsert) or clear (empty name) the current user's custom name for one exercise.
+const set_exercise_alias = async (req, res, next) => {
+  try {
+    const { exerciseId, customName } = req.body;
+    if (!exerciseId || !mongoose.Types.ObjectId.isValid(exerciseId)) {
+      return res.status(400).send({ error: "A valid exerciseId is required." });
+    }
+    const name = typeof customName === "string" ? customName.trim() : "";
+    if (!name) {
+      await ExerciseAlias.deleteOne({ user: res.locals.user._id, exercise: exerciseId });
+      return res.send({ status: "cleared", exerciseId });
+    }
+    await ExerciseAlias.findOneAndUpdate(
+      { user: res.locals.user._id, exercise: exerciseId },
+      { $set: { customName: name } },
+      { upsert: true, new: true }
+    );
+    return res.send({ status: "success", exerciseId, customName: name });
+  } catch (err) {
+    return next(err);
+  }
 };
 
 const search_exercise = (req, res, next) => {
@@ -142,6 +182,8 @@ const merge_exercises = async (req, res, next) => {
 module.exports = {
   create_exercise,
   get_exercise_library,
+  get_exercise_aliases,
+  set_exercise_alias,
   search_exercise,
   update_exercise,
   merge_exercises,

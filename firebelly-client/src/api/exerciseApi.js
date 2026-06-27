@@ -9,6 +9,14 @@ export const exerciseApi = {
 
   getExerciseList: () => apiFetch("/exerciseLibrary"),
 
+  getExerciseAliases: () => apiFetch("/exerciseAliases"),
+
+  setExerciseAlias: ({ exerciseId, customName }) =>
+    apiFetch("/setExerciseAlias", {
+      method: "POST",
+      body: { exerciseId, customName },
+    }),
+
   getExerciseHistory: ({ targetExercise, user }) =>
     apiFetch("/exerciseHistory", {
       method: "POST",

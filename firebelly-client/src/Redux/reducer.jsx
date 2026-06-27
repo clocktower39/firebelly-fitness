@@ -11,6 +11,7 @@ import {
   EDIT_PROGRESS_EXERCISE_LIST,
   EDIT_PROGRESS_TARGET_EXERCISE_HISTORY,
   EDIT_PROGRESS_EXERCISE_SUMMARIES,
+  EDIT_PROGRESS_EXERCISE_ALIASES,
   UPDATE_MY_TRAINERS,
   GET_TRAINERS,
   GET_CLIENTS,
@@ -295,6 +296,15 @@ export let reducer = (
             ...(state.progress.exerciseSummariesByUser || {}),
             [action.userId]: action.exerciseSummaries,
           },
+        },
+      };
+    case EDIT_PROGRESS_EXERCISE_ALIASES:
+      return {
+        ...state,
+        progress: {
+          ...state.progress,
+          exerciseAliases: action.exerciseAliases,
+          exerciseAliasesLoaded: true,
         },
       };
     case UPDATE_MY_TRAINERS:

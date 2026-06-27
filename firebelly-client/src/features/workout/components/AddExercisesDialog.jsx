@@ -24,8 +24,9 @@ import {
   Typography,
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
-import { requestExerciseProgress } from "../../../Redux/actions";
+import { getExerciseAliases, requestExerciseProgress } from "../../../Redux/actions";
 import { displayWeightUnit, formatWeightList, normalizeWeightUnit } from "../../../utils/weightUnits";
+import { exerciseDisplayName } from "../../../utils/exerciseName";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -33,7 +34,12 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 
 export const ExerciseListAutocomplete = ({ exerciseList, selectedExercises, setSelectedExercises, disableCloseOnSelect = false, }) => {
   const user = useSelector((state) => state.user);
+  const aliases = useSelector((state) => state.progress.exerciseAliases) || {};
   const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(getExerciseAliases());
+  }, [dispatch]);
 
   const matchWords = (option, inputValue) => {
     if (!option) return false;
@@ -46,11 +52,11 @@ export const ExerciseListAutocomplete = ({ exerciseList, selectedExercises, setS
       multiple
       fullWidth
       value={selectedExercises}
-      options={exerciseList
-        .sort((a, b) => a.exerciseTitle.localeCompare(b.exerciseTitle))
-        .map((option) => option)}
+      options={[...exerciseList].sort((a, b) =>
+        exerciseDisplayName(a, aliases).localeCompare(exerciseDisplayName(b, aliases))
+      )}
       isOptionEqualToValue={(option, value) => option._id === value._id}
-      getOptionLabel={(option) => option.exerciseTitle}
+      getOptionLabel={(option) => exerciseDisplayName(option, aliases)}
       onChange={(e, newSelection) => {
         setSelectedExercises(newSelection);
 
@@ -64,14 +70,18 @@ export const ExerciseListAutocomplete = ({ exerciseList, selectedExercises, setS
         }
       }}
       filterOptions={(options, { inputValue }) =>
-        options.filter((option) => matchWords(option.exerciseTitle, inputValue))
+        options.filter(
+          (option) =>
+            matchWords(option.exerciseTitle, inputValue) ||
+            matchWords(aliases[option._id] || "", inputValue)
+        )
       }
       renderValue={(value, getTagProps) =>
         value.map((option, index) => (
           <Chip
             key={option._id}
             variant="outlined"
-            label={option.exerciseTitle}
+            label={exerciseDisplayName(option, aliases)}
             {...getTagProps({ index })}
           />
         ))

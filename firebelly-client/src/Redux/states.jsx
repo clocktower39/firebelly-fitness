@@ -40,6 +40,8 @@ export let training = {
 export let progress = {
     exerciseList: [],
     exerciseSummariesByUser: {},
+    exerciseAliases: {},
+    exerciseAliasesLoaded: false,
 }
 
 export let clients = [];
