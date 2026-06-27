@@ -1,6 +1,40 @@
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
 const ScheduleEvent = require("../models/scheduleEvent");
 const SessionType = require("../models/sessionType");
+const User = require("../models/user");
+const { createNotification } = require("./notificationService");
+
+// When a session debit leaves the client with exactly one session remaining (aggregate
+// balance, matching the app's "remainingSessions"), alert both the client and the trainer.
+// Best-effort. Fires once per transition to 1 (a later debit to 0 won't re-fire).
+const notifyIfLowSessions = async (trainerId, clientId) => {
+  try {
+    if (!trainerId || !clientId) return;
+    const agg = await BillingLedgerEntry.aggregate([
+      { $match: { trainerId, clientId } },
+      { $group: { _id: null, balance: { $sum: "$delta" } } },
+    ]);
+    if ((agg[0]?.balance || 0) !== 1) return;
+    const client = await User.findById(clientId).select("firstName lastName").lean();
+    const clientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Your client";
+    await createNotification({
+      userId: clientId,
+      type: "SESSIONS_LOW",
+      title: "1 session left",
+      body: "You have 1 training session remaining — book or purchase more to keep going.",
+      link: "/sessions",
+    });
+    await createNotification({
+      userId: trainerId,
+      type: "SESSIONS_LOW",
+      title: `${clientName} has 1 session left`,
+      body: `${clientName} is down to their last training session.`,
+      link: "/clients",
+    });
+  } catch (err) {
+    console.error("low-sessions notify failed:", err.message);
+  }
+};
 
 const getEventLedgerNet = async (eventId) => {
   if (!eventId) return 0;
@@ -38,6 +72,7 @@ const createEventDebitEntry = async ({ event, userId, source }) => {
   });
   const saved = await entry.save();
   await ScheduleEvent.findByIdAndUpdate(event._id, { billingLedgerEntryId: saved._id });
+  await notifyIfLowSessions(event.trainerId, event.clientId);
   return saved;
 };
 
