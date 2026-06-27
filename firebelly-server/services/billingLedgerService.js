@@ -4,35 +4,61 @@ const SessionType = require("../models/sessionType");
 const User = require("../models/user");
 const { createNotification } = require("./notificationService");
 
-// When a session debit leaves the client with exactly one session remaining (aggregate
-// balance, matching the app's "remainingSessions"), alert both the client and the trainer.
-// Best-effort. Fires once per transition to 1 (a later debit to 0 won't re-fire).
-const notifyIfLowSessions = async (trainerId, clientId) => {
+// After a session debit, alert the client + trainer on the aggregate balance (the app's
+// "remainingSessions"): "1 session left" when it lands on exactly 1, or "out of sessions"
+// when this debit crosses from positive to <= 0 (covers running out, incl. multi-credit
+// jumps over 1). Best-effort; fires once per crossing.
+const notifySessionBalance = async (trainerId, clientId, debitDelta) => {
   try {
     if (!trainerId || !clientId) return;
     const agg = await BillingLedgerEntry.aggregate([
       { $match: { trainerId, clientId } },
       { $group: { _id: null, balance: { $sum: "$delta" } } },
     ]);
-    if ((agg[0]?.balance || 0) !== 1) return;
+    const post = agg[0]?.balance || 0;
+    const pre = post - (Number(debitDelta) || 0); // balance before this debit
+
+    let kind = null;
+    if (post === 1) kind = "LOW";
+    else if (pre > 0 && post <= 0) kind = "OUT";
+    if (!kind) return;
+
     const client = await User.findById(clientId).select("firstName lastName").lean();
     const clientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Your client";
-    await createNotification({
-      userId: clientId,
-      type: "SESSIONS_LOW",
-      title: "1 session left",
-      body: "You have 1 training session remaining — book or purchase more to keep going.",
-      link: "/sessions",
-    });
-    await createNotification({
-      userId: trainerId,
-      type: "SESSIONS_LOW",
-      title: `${clientName} has 1 session left`,
-      body: `${clientName} is down to their last training session.`,
-      link: "/clients",
-    });
+
+    if (kind === "LOW") {
+      await createNotification({
+        userId: clientId,
+        type: "SESSIONS_LOW",
+        title: "1 session left",
+        body: "You have 1 training session remaining — book or purchase more to keep going.",
+        link: "/sessions",
+      });
+      await createNotification({
+        userId: trainerId,
+        type: "SESSIONS_LOW",
+        title: `${clientName} has 1 session left`,
+        body: `${clientName} is down to their last training session.`,
+        link: "/clients",
+      });
+    } else {
+      await createNotification({
+        userId: clientId,
+        type: "SESSIONS_OUT",
+        title: "You're out of sessions",
+        body: "You've used your last training session — purchase more to keep training.",
+        link: "/sessions",
+      });
+      await createNotification({
+        userId: trainerId,
+        type: "SESSIONS_OUT",
+        title: `${clientName} is out of sessions`,
+        body: `${clientName} has used their last training session.`,
+        link: "/clients",
+      });
+    }
   } catch (err) {
-    console.error("low-sessions notify failed:", err.message);
+    console.error("session-balance notify failed:", err.message);
   }
 };
 
@@ -72,7 +98,7 @@ const createEventDebitEntry = async ({ event, userId, source }) => {
   });
   const saved = await entry.save();
   await ScheduleEvent.findByIdAndUpdate(event._id, { billingLedgerEntryId: saved._id });
-  await notifyIfLowSessions(event.trainerId, event.clientId);
+  await notifySessionBalance(event.trainerId, event.clientId, saved.delta);
   return saved;
 };
 

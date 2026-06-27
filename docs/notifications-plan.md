@@ -15,6 +15,7 @@ in services/pushService.js + services/notificationService.js.
 | SESSION_CONFIRMED | client | session booked/confirmed | yes | confirmation when a session is set on a day |
 | PROGRAM_ASSIGNED | client | trainer assigns a program | yes | |
 | SESSIONS_LOW | client + trainer | a session debit leaves the aggregate balance at exactly 1 | no (always-on) | **built**; hooked in billingLedgerService.createEventDebitEntry |
+| SESSIONS_OUT | client + trainer | a session debit crosses the balance from positive to <= 0 (ran out) | no (always-on) | **built**; same hook (covers multi-credit jumps over 1) |
 | MESSAGE_RECEIVED | either | new chat message | yes | **depends on messaging system (separate project)** |
 | (existing) BOOKING_REQUEST / PACKAGE_REQUEST / INVOICE_PAST_DUE | trainer | already wired | — | |
 
