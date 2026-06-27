@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Exercise = require("../models/exercise");
 const Training = require("../models/training");
 const ExerciseAlias = require("../models/exerciseAlias");
+const ExerciseFavorite = require("../models/exerciseFavorite");
 const { pick } = require("../utils/object");
 
 const exerciseAdminIds = (
@@ -89,6 +90,38 @@ const set_exercise_alias = async (req, res, next) => {
       { upsert: true, new: true }
     );
     return res.send({ status: "success", exerciseId, customName: name });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// The current user's favorited exercise ids.
+const get_exercise_favorites = async (req, res, next) => {
+  try {
+    const favs = await ExerciseFavorite.find({ user: res.locals.user._id }).select("exercise").lean();
+    return res.send(favs.map((f) => String(f.exercise)));
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Toggle an exercise as a favorite for the current user.
+const toggle_exercise_favorite = async (req, res, next) => {
+  try {
+    const { exerciseId } = req.body;
+    if (!exerciseId || !mongoose.Types.ObjectId.isValid(exerciseId)) {
+      return res.status(400).send({ error: "A valid exerciseId is required." });
+    }
+    const existing = await ExerciseFavorite.findOne({
+      user: res.locals.user._id,
+      exercise: exerciseId,
+    });
+    if (existing) {
+      await ExerciseFavorite.deleteOne({ _id: existing._id });
+      return res.send({ favorited: false, exerciseId });
+    }
+    await ExerciseFavorite.create({ user: res.locals.user._id, exercise: exerciseId });
+    return res.send({ favorited: true, exerciseId });
   } catch (err) {
     return next(err);
   }
@@ -184,6 +217,8 @@ module.exports = {
   get_exercise_library,
   get_exercise_aliases,
   set_exercise_alias,
+  get_exercise_favorites,
+  toggle_exercise_favorite,
   search_exercise,
   update_exercise,
   merge_exercises,

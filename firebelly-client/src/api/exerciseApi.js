@@ -17,6 +17,14 @@ export const exerciseApi = {
       body: { exerciseId, customName },
     }),
 
+  getExerciseFavorites: () => apiFetch("/exerciseFavorites"),
+
+  toggleExerciseFavorite: ({ exerciseId }) =>
+    apiFetch("/toggleExerciseFavorite", {
+      method: "POST",
+      body: { exerciseId },
+    }),
+
   getExerciseHistory: ({ targetExercise, user }) =>
     apiFetch("/exerciseHistory", {
       method: "POST",

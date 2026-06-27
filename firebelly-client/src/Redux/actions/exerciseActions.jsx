@@ -4,6 +4,7 @@ import {
   EDIT_PROGRESS_EXERCISE_LIST,
   EDIT_PROGRESS_EXERCISE_SUMMARIES,
   EDIT_PROGRESS_EXERCISE_ALIASES,
+  EDIT_PROGRESS_EXERCISE_FAVORITES,
   EDIT_PROGRESS_TARGET_EXERCISE_HISTORY,
   ERROR,
 } from "../actionTypes";
@@ -54,6 +55,33 @@ export function setExerciseAlias({ exerciseId, customName }) {
     if (name) next[exerciseId] = name;
     else delete next[exerciseId];
     return dispatch({ type: EDIT_PROGRESS_EXERCISE_ALIASES, exerciseAliases: next });
+  };
+}
+
+// The current user's favorited exercise ids.
+export function getExerciseFavorites() {
+  return async (dispatch, getState) => {
+    if (getState().progress.exerciseFavoritesLoaded) return;
+    const favs = await exerciseApi.getExerciseFavorites();
+    return dispatch({
+      type: EDIT_PROGRESS_EXERCISE_FAVORITES,
+      exerciseFavorites: Array.isArray(favs) ? favs : [],
+    });
+  };
+}
+
+// Toggle an exercise as a favorite.
+export function toggleExerciseFavorite(exerciseId) {
+  return async (dispatch, getState) => {
+    const result = await exerciseApi.toggleExerciseFavorite({ exerciseId });
+    if (result?.error) {
+      return dispatch({ type: ERROR, error: result.error });
+    }
+    const current = getState().progress.exerciseFavorites || [];
+    const next = result.favorited
+      ? [...new Set([...current, exerciseId])]
+      : current.filter((id) => id !== exerciseId);
+    return dispatch({ type: EDIT_PROGRESS_EXERCISE_FAVORITES, exerciseFavorites: next });
   };
 }
 

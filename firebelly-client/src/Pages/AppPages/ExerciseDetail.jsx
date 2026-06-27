@@ -9,6 +9,7 @@ import {
   Divider,
   FormControlLabel,
   Grid,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
@@ -18,12 +19,14 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ArrowBack, AddCircleOutlined } from "@mui/icons-material";
+import { ArrowBack, AddCircleOutlined, Star, StarBorder } from "@mui/icons-material";
 import {
   getExerciseList,
   getExerciseAliases,
+  getExerciseFavorites,
   requestExerciseProgress,
   setExerciseAlias,
+  toggleExerciseFavorite,
 } from "../../Redux/actions";
 import { exerciseDisplayName } from "../../utils/exerciseName";
 import AddToWorkoutDialog from "../../features/exercise/AddToWorkoutDialog";
@@ -77,6 +80,7 @@ export default function ExerciseDetail() {
   const user = useSelector((s) => s.user);
   const exerciseList = useSelector((s) => s.progress.exerciseList) || [];
   const aliases = useSelector((s) => s.progress.exerciseAliases) || {};
+  const favorites = useSelector((s) => s.progress.exerciseFavorites) || [];
   const exercise = exerciseList.find((e) => e._id === id);
   const unit = user.workoutWeightUnit || "lbs";
   const [aliasInput, setAliasInput] = useState("");
@@ -86,6 +90,7 @@ export default function ExerciseDetail() {
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
     dispatch(getExerciseAliases());
+    dispatch(getExerciseFavorites());
   }, [dispatch, exerciseList.length]);
 
   useEffect(() => {
@@ -187,14 +192,21 @@ export default function ExerciseDetail() {
         )}
       </Stack>
 
-      <Button
-        variant="contained"
-        startIcon={<AddCircleOutlined />}
-        onClick={() => setAddOpen(true)}
-        sx={{ mb: 2 }}
-      >
-        Add to workout
-      </Button>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddCircleOutlined />}
+          onClick={() => setAddOpen(true)}
+        >
+          Add to workout
+        </Button>
+        <IconButton
+          aria-label="favorite"
+          onClick={() => dispatch(toggleExerciseFavorite(exercise._id))}
+        >
+          {favorites.includes(exercise._id) ? <Star color="warning" /> : <StarBorder />}
+        </IconButton>
+      </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>

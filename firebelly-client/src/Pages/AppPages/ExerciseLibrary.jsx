@@ -11,6 +11,7 @@ import {
   FormControl,
   FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -19,7 +20,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { getExerciseList, getExerciseAliases } from "../../Redux/actions";
+import { Star, StarBorder } from "@mui/icons-material";
+import {
+  getExerciseList,
+  getExerciseAliases,
+  getExerciseFavorites,
+  toggleExerciseFavorite,
+} from "../../Redux/actions";
 import { exerciseDisplayName, exerciseMatchesQuery } from "../../utils/exerciseName";
 
 const uniqSorted = (arr) =>
@@ -30,6 +37,7 @@ export default function ExerciseLibrary() {
   const navigate = useNavigate();
   const exerciseList = useSelector((s) => s.progress.exerciseList) || [];
   const aliases = useSelector((s) => s.progress.exerciseAliases) || {};
+  const favorites = useSelector((s) => s.progress.exerciseFavorites) || [];
 
   const [search, setSearch] = useState("");
   const [primaryMuscles, setPrimaryMuscles] = useState([]);
@@ -37,10 +45,12 @@ export default function ExerciseLibrary() {
   const [equipment, setEquipment] = useState([]);
   const [type, setType] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
     dispatch(getExerciseAliases());
+    dispatch(getExerciseFavorites());
   }, [dispatch, exerciseList.length]);
 
   const primaryMuscleOptions = useMemo(
@@ -60,6 +70,7 @@ export default function ExerciseLibrary() {
     return exerciseList
       .filter((e) => {
         if (!exerciseMatchesQuery(e, aliases, search)) return false;
+        if (favoritesOnly && !favorites.includes(e._id)) return false;
         if (verifiedOnly && !e.verified) return false;
         if (type && e.movementComplexity !== type) return false;
         if (primaryMuscles.length) {
@@ -79,7 +90,7 @@ export default function ExerciseLibrary() {
       .sort((a, b) =>
         exerciseDisplayName(a, aliases).localeCompare(exerciseDisplayName(b, aliases))
       );
-  }, [exerciseList, aliases, search, type, primaryMuscles, secondaryMuscles, equipment, verifiedOnly]);
+  }, [exerciseList, aliases, favorites, search, type, primaryMuscles, secondaryMuscles, equipment, verifiedOnly, favoritesOnly]);
 
   return (
     <Container maxWidth="lg" sx={{ pt: 3, pb: 10 }}>
@@ -147,17 +158,28 @@ export default function ExerciseLibrary() {
         </Grid>
       </Grid>
 
-      <FormControlLabel
-        control={
-          <Switch
-            size="small"
-            checked={verifiedOnly}
-            onChange={(e) => setVerifiedOnly(e.target.checked)}
-          />
-        }
-        label="Verified only"
-        sx={{ mb: 0.5, display: "block" }}
-      />
+      <Stack direction="row" flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={favoritesOnly}
+              onChange={(e) => setFavoritesOnly(e.target.checked)}
+            />
+          }
+          label="Favorites only"
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={verifiedOnly}
+              onChange={(e) => setVerifiedOnly(e.target.checked)}
+            />
+          }
+          label="Verified only"
+        />
+      </Stack>
       <Typography variant="caption" color="text.secondary">
         {filtered.length} exercise{filtered.length === 1 ? "" : "s"}
       </Typography>
@@ -165,13 +187,28 @@ export default function ExerciseLibrary() {
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         {filtered.map((ex) => (
           <Grid key={ex._id} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card sx={{ height: "100%" }}>
+            <Card sx={{ height: "100%", position: "relative" }}>
+              <IconButton
+                size="small"
+                aria-label="favorite"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch(toggleExerciseFavorite(ex._id));
+                }}
+                sx={{ position: "absolute", top: 4, right: 4, zIndex: 1 }}
+              >
+                {favorites.includes(ex._id) ? (
+                  <Star fontSize="small" color="warning" />
+                ) : (
+                  <StarBorder fontSize="small" />
+                )}
+              </IconButton>
               <CardActionArea
                 sx={{ height: "100%", alignItems: "flex-start" }}
                 onClick={() => navigate(`/exercise-library/${ex._id}`)}
               >
                 <CardContent sx={{ width: "100%" }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, pr: 3 }}>
                     {exerciseDisplayName(ex, aliases)}
                   </Typography>
                   {aliases[ex._id] && (

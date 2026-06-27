@@ -12,6 +12,7 @@ import {
   EDIT_PROGRESS_TARGET_EXERCISE_HISTORY,
   EDIT_PROGRESS_EXERCISE_SUMMARIES,
   EDIT_PROGRESS_EXERCISE_ALIASES,
+  EDIT_PROGRESS_EXERCISE_FAVORITES,
   UPDATE_MY_TRAINERS,
   GET_TRAINERS,
   GET_CLIENTS,
@@ -305,6 +306,15 @@ export let reducer = (
           ...state.progress,
           exerciseAliases: action.exerciseAliases,
           exerciseAliasesLoaded: true,
+        },
+      };
+    case EDIT_PROGRESS_EXERCISE_FAVORITES:
+      return {
+        ...state,
+        progress: {
+          ...state.progress,
+          exerciseFavorites: action.exerciseFavorites,
+          exerciseFavoritesLoaded: true,
         },
       };
     case UPDATE_MY_TRAINERS:

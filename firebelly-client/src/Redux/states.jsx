@@ -42,6 +42,8 @@ export let progress = {
     exerciseSummariesByUser: {},
     exerciseAliases: {},
     exerciseAliasesLoaded: false,
+    exerciseFavorites: [],
+    exerciseFavoritesLoaded: false,
 }
 
 export let clients = [];
