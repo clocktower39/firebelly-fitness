@@ -156,8 +156,15 @@ export default function ExerciseAnimation({ animationKey, size = 140 }) {
   return (
     <Box sx={{ textAlign: "center" }}>
       <Box sx={{ width: size, height: size, mx: "auto", color: "primary.main" }}>{guide}</Box>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
         Animated guide · {animationLabel(animationKey)}
+      </Typography>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "block", fontStyle: "italic" }}
+      >
+        Video demonstration coming soon
       </Typography>
     </Box>
   );

@@ -56,7 +56,7 @@ export default function ExerciseMedia({ exercise }) {
 
   return (
     <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 2 }}>
-      No demo available yet.
+      Video demonstration coming soon.
     </Typography>
   );
 }
