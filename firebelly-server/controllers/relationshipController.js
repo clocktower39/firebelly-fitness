@@ -3,6 +3,7 @@ const User = require("../models/user");
 const userController = require("./userController");
 const mongoose = require("mongoose");
 const { createAccessToken } = require("../services/tokenService");
+const { createNotification } = require("../services/notificationService");
 
 const normalizeServiceTags = (serviceTags = []) =>
   Array.from(new Set((Array.isArray(serviceTags) ? serviceTags : []).filter(Boolean)));
@@ -38,6 +39,15 @@ const manage_relationship = (req, res, next) => {
         return relationship
           .save()
           .then((savedRelationship) => {
+            const clientName =
+              [clientData.firstName, clientData.lastName].filter(Boolean).join(" ") || "A client";
+            createNotification({
+              userId: req.body.trainer,
+              type: "CLIENT_REQUEST",
+              title: "New client request",
+              body: `${clientName} requested to train with you.`,
+              link: "/clients",
+            }).catch(() => {});
             res.send({
               status: "success",
               relationship: savedRelationship,
