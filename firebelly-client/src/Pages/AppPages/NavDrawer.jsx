@@ -55,6 +55,7 @@ import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
 import BrandLogo from "../../Components/BrandLogo";
 import NotificationBell from "../../Components/NotificationBell";
+import NotificationToast from "../../Components/NotificationToast";
 
 export default function NavDrawer() {
   const user = useSelector((state) => state.user);
@@ -326,6 +327,7 @@ export default function NavDrawer() {
 
   return (
     <>
+      <NotificationToast />
       <AppBar
         position="sticky"
         elevation={0}
