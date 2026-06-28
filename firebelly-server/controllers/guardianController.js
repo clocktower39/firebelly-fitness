@@ -197,9 +197,20 @@ const issue_child_view_token = async (req, res, next) => {
       return res.status(404).json({ error: "Child not found." });
     }
 
+    // Guardians manage their child's account (like a trainer manages a client), so this is a
+    // write-enabled delegation rather than a view-only token — it lets the guardian add a trainer,
+    // edit settings, etc. on the child's behalf.
     const accessToken = createAccessToken(
       child,
-      { viewOnly: true, guardianId },
+      {
+        isTrainer: false,
+        guardianId,
+        actingUserId: guardianId,
+        actingUserRole: "guardian",
+        delegationMode: "guardian_child",
+        canModifyViewedAccount: true,
+        viewedUserId: child._id,
+      },
       { expiresIn: "60m" }
     );
 
