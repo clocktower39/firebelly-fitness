@@ -49,6 +49,7 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Storefront as StorefrontIcon,
   FitnessCenter as ExerciseLibraryIcon,
+  Chat as MessagesIcon,
 } from "@mui/icons-material";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
@@ -58,6 +59,7 @@ import NotificationBell from "../../Components/NotificationBell";
 export default function NavDrawer() {
   const user = useSelector((state) => state.user);
   const goals = useSelector((state) => state.goals);
+  const conversations = useSelector((state) => state.conversations);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const viewAsTrainer = hasDelegatedReturnAccessToken("trainer");
@@ -77,6 +79,8 @@ export default function NavDrawer() {
   const unseenAchievements = goals?.filter(
     (goal) => goal.achievedDate && !goal.achievementSeen
   )?.length || 0;
+
+  const unreadMessages = (conversations || []).reduce((sum, c) => sum + (c.unread || 0), 0);
 
   const pages = [
     {
@@ -99,6 +103,12 @@ export default function NavDrawer() {
       to: "/goals",
       icon: <GoalsIcon />,
       badge: unseenAchievements,
+    },
+    {
+      title: "Messages",
+      to: "/messages",
+      icon: <MessagesIcon />,
+      badge: unreadMessages,
     },
     {
       title: "Progress",

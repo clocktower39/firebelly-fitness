@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { billingApi } from "../../api/billingApi";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Avatar,
@@ -26,7 +26,6 @@ import {
 import { AddCircle, Delete, Done, Message as MessageIcon, PendingActions } from "@mui/icons-material";
 import { requestMyTrainers, removeRelationship, updateMetricsApproval, serverURL } from "../../Redux/actions";
 import SearchTrainerDialog from "./SearchTrainerDialog";
-import Messages from "../Messages";
 import TrainerConnections from "./TrainerConnections";
 
 
@@ -110,10 +109,8 @@ export default function Trainers({ socket }) {
   const RelationshipTrainerCard = (props) => {
     const { trainer } = props;
     const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
-    const [openMessageDrawer, setOpenMessageDrawer] = useState(false);
+    const navigate = useNavigate();
   
-    const handleMessageDrawerOpen = () => setOpenMessageDrawer(true)
-    const handleMessageDrawerClose = () => setOpenMessageDrawer(false)
 
     const handleDeleteConfirmationOpen = () => setDeleteConfirmationOpen(true);
     const handleDeleteConfirmationClose = () => setDeleteConfirmationOpen(false);
@@ -139,7 +136,7 @@ export default function Trainers({ socket }) {
             }
             action={
               <>
-                <IconButton onClick={handleMessageDrawerOpen}>
+                <IconButton onClick={() => navigate(`/messages?u=${trainer.trainer}`)}>
                   <MessageIcon />
                 </IconButton>
                 <IconButton aria-label="status" disableRipple>
@@ -259,7 +256,6 @@ export default function Trainers({ socket }) {
             </Grid>
           </DialogContent>
         </Dialog>
-        <Messages open={openMessageDrawer} handleClose={handleMessageDrawerClose} socket={socket} />
       </Grid>
     );
   };

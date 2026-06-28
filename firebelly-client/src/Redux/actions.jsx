@@ -14,3 +14,4 @@ export * from "./actions/workoutActions";
 export * from "./actions/exerciseActions";
 export * from "./actions/goalMetricConversationActions";
 export * from "./actions/readinessActions";
+export * from "./actions/messagingActions";

@@ -35,7 +35,7 @@ import {
   Delete as DeleteIcon,
   Message as MessageIcon,
 } from "@mui/icons-material";
-import Messages from "../Messages";
+import { useNavigate } from "react-router-dom";
 
 const DEFAULT_PERMISSION_STORAGE_KEY = "TRAINER_CONNECTION_DEFAULT_PERMISSIONS";
 const DEFAULT_PERMISSIONS = { templates: true, programs: true };
@@ -92,7 +92,7 @@ export default function TrainerConnections({ embedded = false, socket = null }) 
   const [searching, setSearching] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [defaultPermissions, setDefaultPermissions] = useState(loadDefaultPermissions);
-  const [openMessageDrawer, setOpenMessageDrawer] = useState(false);
+  const navigate = useNavigate();
 
   const loadConnections = useCallback(async () => {
     try {
@@ -435,7 +435,7 @@ export default function TrainerConnections({ embedded = false, socket = null }) 
                         />
                         <ListItemSecondaryAction>
                           <IconButton
-                            onClick={() => setOpenMessageDrawer(true)}
+                            onClick={() => navigate(`/messages?u=${otherUser._id}`)}
                             title="Message"
                           >
                             <MessageIcon />
@@ -595,8 +595,6 @@ export default function TrainerConnections({ embedded = false, socket = null }) 
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Messages open={openMessageDrawer} handleClose={() => setOpenMessageDrawer(false)} socket={socket} />
     </Box>
   );
 }

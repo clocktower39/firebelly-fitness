@@ -1,18 +1,25 @@
 import { apiFetch } from "./client";
 
 export const conversationApi = {
-  getConversations: () => apiFetch("/conversation/getConversations"),
+  getConversations: () => apiFetch("/conversations"),
 
-  sendMessage: ({ conversationId, message }) =>
-    apiFetch("/conversation/message/send", {
-      method: "POST",
-      body: { conversationId, message },
-    }),
+  getOrCreateDirect: (userId) =>
+    apiFetch("/conversations/direct", { method: "POST", body: { userId } }),
 
-  deleteMessage: ({ conversationId, messageId }) =>
-    apiFetch("/conversation/message/delete", {
-      method: "POST",
-      body: { conversationId, messageId },
-    }),
+  getMessages: (conversationId, { before, limit } = {}) => {
+    const qs = new URLSearchParams();
+    if (before) qs.set("before", before);
+    if (limit) qs.set("limit", String(limit));
+    const q = qs.toString();
+    return apiFetch(`/conversations/${conversationId}/messages${q ? `?${q}` : ""}`);
+  },
+
+  sendMessage: (conversationId, body) =>
+    apiFetch(`/conversations/${conversationId}/messages`, { method: "POST", body: { body } }),
+
+  markRead: (conversationId) =>
+    apiFetch(`/conversations/${conversationId}/read`, { method: "POST", body: {} }),
+
+  deleteMessage: (messageId) =>
+    apiFetch(`/messages/${messageId}/delete`, { method: "POST", body: {} }),
 };
-

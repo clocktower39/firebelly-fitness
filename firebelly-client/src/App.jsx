@@ -4,7 +4,15 @@ import { shallowEqual, useDispatch, useSelector } from "react-redux";
 import { BrowserRouter as Router, Route, Routes, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider, GlobalStyles } from "@mui/material";
 import { theme } from "./theme";
-import { removeWorkouts, requestClients, serverURL, upsertWorkout } from "./Redux/actions";
+import {
+  getConversations,
+  receiveSocketMessage,
+  receiveSocketDeletedMessage,
+  removeWorkouts,
+  requestClients,
+  serverURL,
+  upsertWorkout,
+} from "./Redux/actions";
 import { updateUserSettings } from "./Redux/actions/accountActions";
 import socketIOClient from "socket.io-client";
 import AuthRoute from "./Components/AuthRoute";
@@ -18,6 +26,7 @@ const Login = lazy(() => import("./Pages/Login"));
 const SignUp = lazy(() => import("./Pages/SignUp"));
 const VerifyEmail = lazy(() => import("./Pages/VerifyEmail"));
 const Home = lazy(() => import("./Pages/AppPages/Home"));
+const Messages = lazy(() => import("./Pages/AppPages/Messages"));
 const Coverage = lazy(() => import("./Pages/AppPages/Coverage"));
 const Workout = lazy(() => import("./Pages/AppPages/Workout"));
 const Calendar = lazy(() => import("./Pages/AppPages/Calendar"));
@@ -113,6 +122,11 @@ function App({ }) {
     }
   }, [dispatch, isTrainer]);
 
+  // Load conversations on boot so the unread badge is accurate app-wide.
+  useEffect(() => {
+    if (userId) dispatch(getConversations());
+  }, [dispatch, userId]);
+
   // Capture the user's timezone once (so local-time reminders fire correctly), if not set.
   // Skipped in delegated/view-only sessions (see sessionIsDelegated above).
   useEffect(() => {
@@ -143,13 +157,24 @@ function App({ }) {
       window.dispatchEvent(new CustomEvent("fb:notification", { detail: notification }));
     };
 
+    const handleMessageNew = (payload) => {
+      if (payload?.conversationId) dispatch(receiveSocketMessage(payload));
+    };
+    const handleMessageDeleted = (payload) => {
+      if (payload?.conversationId) dispatch(receiveSocketDeletedMessage(payload));
+    };
+
     socket.on("workoutUpdated", handleWorkoutUpdated);
     socket.on("workoutDeleted", handleWorkoutDeleted);
     socket.on("notification", handleNotification);
+    socket.on("message:new", handleMessageNew);
+    socket.on("message:deleted", handleMessageDeleted);
     return () => {
       socket.off("workoutUpdated", handleWorkoutUpdated);
       socket.off("workoutDeleted", handleWorkoutDeleted);
       socket.off("notification", handleNotification);
+      socket.off("message:new", handleMessageNew);
+      socket.off("message:deleted", handleMessageDeleted);
     };
   }, [dispatch, socket]);
 
@@ -256,6 +281,7 @@ function App({ }) {
                     <Route exact path="/workout/:_id" element={<Workout socket={socket} />} />
                     <Route exact path="/progress" element={<Progress />} />
                     <Route exact path="/goals" element={<Goals />} />
+                    <Route exact path="/messages" element={<Messages />} />
                     <Route exact path="/exercises" element={<Exercises />} />
                     <Route exact path="/exercise-library" element={<ExerciseLibrary />} />
                     <Route exact path="/exercise-library/:id" element={<ExerciseDetail />} />

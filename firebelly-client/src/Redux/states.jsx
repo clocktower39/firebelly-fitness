@@ -55,6 +55,8 @@ export let goals = [];
 
 export let conversations = [];
 
+export let messagesByConversation = {};
+
 export let metrics = {
     entriesByUser: {},
     pendingByUser: {},
