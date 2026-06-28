@@ -73,3 +73,8 @@ export let workoutQueue = {
 };
 
 export let lastBulkOperation = null;
+
+export let readiness = {
+    entries: [],
+    loaded: false,
+};

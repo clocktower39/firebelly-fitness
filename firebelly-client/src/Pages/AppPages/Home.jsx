@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import Loading from "../../Components/Loading";
+import DailyCheckinCard from "../../Components/DailyCheckinCard";
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
@@ -200,6 +201,11 @@ function Home() {
         setVisibleDateLocked={setWeeklyStatusDateLocked}
         workouts={workouts}
       />
+      {isPersonalWorkout() && (
+        <Grid container size={12} sx={{ p: 1 }}>
+          <DailyCheckinCard />
+        </Grid>
+      )}
       {latestMetric && (
         <Grid container size={12} sx={{ marginTop: "10px" }}>
           <Paper elevation={5} sx={{ width: "100%", padding: "5px", margin: "5px" }}>

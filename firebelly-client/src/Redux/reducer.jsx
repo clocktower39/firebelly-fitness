@@ -35,6 +35,7 @@ import {
   SET_LAST_BULK_OPERATION,
   CLEAR_LAST_BULK_OPERATION,
   REMOVE_WORKOUTS,
+  EDIT_READINESS,
 } from "./actions";
 import {
   user,
@@ -52,6 +53,7 @@ import {
   sessionSummary,
   workoutQueue,
   lastBulkOperation,
+  readiness,
 } from "./states";
 
 const getId = (value) => {
@@ -120,6 +122,7 @@ export let reducer = (
     sessionSummary,
     workoutQueue,
     lastBulkOperation,
+    readiness,
   },
   action
 ) => {
@@ -315,6 +318,15 @@ export let reducer = (
           ...state.progress,
           exerciseFavorites: action.exerciseFavorites,
           exerciseFavoritesLoaded: true,
+        },
+      };
+    case EDIT_READINESS:
+      return {
+        ...state,
+        readiness: {
+          ...state.readiness,
+          entries: action.entries,
+          loaded: true,
         },
       };
     case UPDATE_MY_TRAINERS:
