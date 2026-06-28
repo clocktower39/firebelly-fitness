@@ -67,6 +67,8 @@ const updateUserValidate = {
           sessionReminderLeadMinutes: Joi.number().integer().min(15).max(1440),
           measurementReminder: Joi.boolean(),
           measurementCadence: Joi.string().valid("WEEKLY", "MONTHLY", "QUARTERLY"),
+          readinessReminder: Joi.boolean(),
+          readinessReminderTime: Joi.string().allow(""),
         }).unknown(false),
         customThemes: Joi.object().unknown(true),
         weeklyFrequency: Joi.number(),

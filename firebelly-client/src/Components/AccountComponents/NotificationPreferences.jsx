@@ -34,6 +34,8 @@ const DEFAULTS = {
   sessionReminderLeadMinutes: 120,
   measurementReminder: false,
   measurementCadence: "MONTHLY",
+  readinessReminder: false,
+  readinessReminderTime: "08:00",
 };
 
 export default function NotificationPreferences() {
@@ -187,6 +189,21 @@ export default function NotificationPreferences() {
                   <MenuItem value="QUARTERLY">Quarterly</MenuItem>
                 </Select>
               </FormControl>
+            </Grid>
+          )}
+
+          <Toggle field="readinessReminder" label="Daily check-in reminder" />
+          {prefs.readinessReminder && (
+            <Grid container size={12} sx={{ pl: 6 }}>
+              <TextField
+                type="time"
+                size="small"
+                label="Reminder time"
+                value={prefs.readinessReminderTime || "08:00"}
+                onChange={(e) => set("readinessReminderTime", e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{ width: 170 }}
+              />
             </Grid>
           )}
 

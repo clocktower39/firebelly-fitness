@@ -18,6 +18,7 @@ import {
   readinessBand,
   dayKey,
 } from "../utils/readiness";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
 
 // Fast daily readiness / fatigue check-in (sleep, mood, energy, soreness, joint pain).
 export default function DailyCheckinCard() {
@@ -56,6 +57,23 @@ export default function DailyCheckinCard() {
   const band = readinessBand(score);
   const canSave = READINESS_FACTORS.some((f) => values[f.key]);
 
+  const trendData = useMemo(
+    () =>
+      [...(readiness.entries || [])]
+        .map((e) => ({ date: e.date, score: computeReadinessScore(e) }))
+        .filter((d) => d.score != null)
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .slice(-14)
+        .map((d) => ({
+          label: new Date(d.date).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          }),
+          score: d.score,
+        })),
+    [readiness.entries]
+  );
+
   const handleSave = async () => {
     setSaving(true);
     await dispatch(saveReadiness({ ...values, note, date: todayKey }));
@@ -82,6 +100,25 @@ export default function DailyCheckinCard() {
             </Button>
           </Stack>
         </Stack>
+        {trendData.length >= 2 && (
+          <Box sx={{ width: "100%", height: 90, mt: 1.5 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 4, right: 6, left: -28, bottom: 0 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} minTickGap={20} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} />
+                <Tooltip />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  name="Readiness"
+                  stroke="#10b981"
+                  fill="#10b981"
+                  fillOpacity={0.2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Box>
+        )}
       </Paper>
     );
   }

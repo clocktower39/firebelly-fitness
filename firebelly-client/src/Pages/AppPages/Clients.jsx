@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { readinessApi } from "../../api/readinessApi";
+import { readinessBand } from "../../utils/readiness";
 import {
   requestClients,
   changeRelationshipStatus,
@@ -110,6 +112,18 @@ export default function Clients({ socket }) {
     const f = searchParams.get("filter");
     if (f && filterOptions.some((o) => o.value === f)) setEngagementFilter(f);
   }, [searchParams]);
+
+  // Trainer at-a-glance readiness per client (latest/avg score).
+  const [clientReadiness, setClientReadiness] = useState({});
+  useEffect(() => {
+    if (!user?.isTrainer) return;
+    readinessApi
+      .getClientsReadiness()
+      .then((data) => {
+        if (data && !data.error) setClientReadiness(data);
+      })
+      .catch(() => {});
+  }, [user?.isTrainer]);
 
   const handleOpenCalendar = (client) => {
     setSelectedClient(client);
@@ -349,6 +363,16 @@ export default function Clients({ socket }) {
                     )}`}
                   />
                 )}
+                {clientRelationship.accepted &&
+                  clientReadiness[clientRelationship.client?._id]?.avgScore != null && (
+                    <Chip
+                      size="small"
+                      color={
+                        readinessBand(clientReadiness[clientRelationship.client._id].avgScore).color
+                      }
+                      label={`Readiness ${clientReadiness[clientRelationship.client._id].avgScore}`}
+                    />
+                  )}
                 {clientRelationship.accepted && (
                   <Chip
                     size="small"

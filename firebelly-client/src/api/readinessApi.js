@@ -5,4 +5,5 @@ export const readinessApi = {
   saveReadiness: (payload) => apiFetch("/readiness", { method: "POST", body: payload }),
   getClientReadiness: (client) =>
     apiFetch("/readiness/client", { method: "POST", body: { client } }),
+  getClientsReadiness: () => apiFetch("/readiness/clients"),
 };

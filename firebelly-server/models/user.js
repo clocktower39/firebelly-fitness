@@ -70,8 +70,12 @@ const UserSchema = new mongoose.Schema({
         enum: ["WEEKLY", "MONTHLY", "QUARTERLY"],
         default: "MONTHLY",
       },
+      readinessReminder: { type: Boolean, default: false }, // daily fatigue check-in reminder
+      readinessReminderTime: { type: String, default: "08:00" },
     },
     lastMeasurementReminderAt: { type: Date, default: null }, // internal: measurement reminder dedup
+    lastReadinessReminderAt: { type: Date, default: null }, // internal: readiness reminder dedup
+    lastReadinessFlagAt: { type: Date, default: null }, // internal: low-readiness deload flag dedup
     customThemes: {
         type: [
             {

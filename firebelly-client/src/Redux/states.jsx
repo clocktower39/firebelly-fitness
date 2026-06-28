@@ -19,6 +19,8 @@ export let user = {
         sessionReminderLeadMinutes: 120,
         measurementReminder: false,
         measurementCadence: "MONTHLY",
+        readinessReminder: false,
+        readinessReminderTime: "08:00",
     },
 }
 

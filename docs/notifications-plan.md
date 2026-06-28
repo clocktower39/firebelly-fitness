@@ -22,6 +22,7 @@ in services/pushService.js + services/notificationService.js.
 | SESSION_DECLINED | client | trainer declines a still-REQUESTED session | no | **built** (cancel of a REQUESTED event) |
 | SESSION_RESCHEDULED | client | trainer changes a session's start time | no | **built** |
 | WORKOUT_COMMENT | client or trainer(s) | a comment is added to a workout | no | **built**; comment-count diff in update_training |
+| READINESS_LOW | trainer(s) | a client's last 3 readiness check-ins average into the low band | no | **built**; flag in readinessController on upsert (7-day cooldown) |
 | MESSAGE_RECEIVED | either | new chat message | yes | **depends on messaging system (separate project)** |
 | (existing) BOOKING_REQUEST / PACKAGE_REQUEST / INVOICE_PAST_DUE | trainer | already wired | — | |
 
@@ -32,6 +33,7 @@ in services/pushService.js + services/notificationService.js.
 | WORKOUT_OVERDUE | client | workout not completed N min/hours after its scheduled start | "how long after start" threshold, opt-in |
 | SESSION_REMINDER | client | N hours before a session | "how early" lead time (default ~2h), opt-in |
 | MEASUREMENT_REMINDER | client | weekly / monthly / quarterly / custom cadence | cadence + day/time, opt-in |
+| READINESS_REMINDER | client | daily check-in, if not logged yet today | reminder time-of-day, opt-in |
 
 ## Notification settings (design around the full list)
 Per-user (JWT-settings pattern: user model + tokenService + allowlist + Joi validator + client):

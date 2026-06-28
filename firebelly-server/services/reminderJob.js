@@ -6,6 +6,7 @@ const timezone = require("dayjs/plugin/timezone");
 const ScheduleEvent = require("../models/scheduleEvent");
 const Training = require("../models/training");
 const MetricEntry = require("../models/metricEntry");
+const ReadinessEntry = require("../models/readinessEntry");
 const User = require("../models/user");
 const { createNotification } = require("./notificationService");
 
@@ -169,16 +170,60 @@ const runMeasurementReminderSweep = async () => {
   return sent;
 };
 
+// Daily readiness check-in reminder (opt-in), in each user's local timezone, once per day, and
+// only if they haven't already logged today.
+const runReadinessReminderSweep = async () => {
+  const now = new Date();
+  const users = await User.find({ "notificationPrefs.readinessReminder": true })
+    .select("notificationPrefs timezone lastReadinessReminderAt")
+    .lean();
+  if (!users.length) return 0;
+  let sent = 0;
+  for (const u of users) {
+    const tz = u.timezone || "UTC";
+    const localNow = dayjs(now).tz(tz);
+    const todayKey = localNow.format("YYYY-MM-DD");
+    if (
+      u.lastReadinessReminderAt &&
+      dayjs(u.lastReadinessReminderAt).tz(tz).format("YYYY-MM-DD") === todayKey
+    ) {
+      continue; // already reminded today
+    }
+    const [rh, rm] = String(u.notificationPrefs?.readinessReminderTime || "08:00")
+      .split(":")
+      .map((n) => Number(n) || 0);
+    if (localNow.hour() * 60 + localNow.minute() < rh * 60 + rm) continue;
+    const start = dayjs.utc(todayKey).startOf("day").toDate();
+    const end = dayjs.utc(todayKey).endOf("day").toDate();
+    const logged = await ReadinessEntry.findOne({ user: u._id, date: { $gte: start, $lte: end } })
+      .select("_id")
+      .lean();
+    if (logged) continue;
+    await createNotification({
+      userId: u._id,
+      type: "READINESS_REMINDER",
+      title: "Daily check-in",
+      body: "How are you feeling today? Take a few seconds to log your check-in.",
+      link: "/",
+    });
+    await User.updateOne({ _id: u._id }, { $set: { lastReadinessReminderAt: now } });
+    sent += 1;
+  }
+  return sent;
+};
+
 const runReminderSweep = async () => {
   try {
     const sessions = await runSessionReminderSweep();
     const workout = await runWorkoutReminderSweep();
     const measurements = await runMeasurementReminderSweep();
+    const readiness = await runReadinessReminderSweep();
     const parts = [];
     if (sessions) parts.push(`${sessions} session`);
     if (workout.reminders) parts.push(`${workout.reminders} workout`);
     if (workout.overdue) parts.push(`${workout.overdue} overdue`);
     if (measurements) parts.push(`${measurements} measurement`);
+    if (readiness) parts.push(`${readiness} readiness`);
     if (parts.length) console.log(`reminderJob: sent ${parts.join(", ")} reminder(s)`);
   } catch (err) {
     console.error("reminderJob sweep failed:", err.message);
@@ -196,4 +241,5 @@ module.exports = {
   runSessionReminderSweep,
   runWorkoutReminderSweep,
   runMeasurementReminderSweep,
+  runReadinessReminderSweep,
 };
