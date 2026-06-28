@@ -65,6 +65,18 @@ const change_relationship_status = (req, res, next) => {
   Relationship.findOneAndUpdate({ client, trainer: res.locals.user._id }, { accepted })
     .then((data) => {
       if (!data) return res.status(404).send({ message: "Relationship not found." });
+      if (accepted === true || accepted === "true") {
+        const trainerName =
+          [res.locals.user.firstName, res.locals.user.lastName].filter(Boolean).join(" ") ||
+          "Your trainer";
+        createNotification({
+          userId: client,
+          type: "TRAINER_REQUEST_ACCEPTED",
+          title: "Trainer request accepted",
+          body: `${trainerName} accepted your request — you're now connected.`,
+          link: "/account/trainers",
+        }).catch(() => {});
+      }
       res.sendStatus(204);
     })
     .catch((err) => next(err));

@@ -48,6 +48,18 @@ const create_training = async (req, res, next) => {
   }
 };
 
+// Total comments across a workout (workout-level + per-exercise), for detecting newly added ones.
+const countComments = (doc) => {
+  if (!doc) return 0;
+  let n = doc.workoutFeedback?.comments?.length || 0;
+  (doc.training || []).forEach((circuit) => {
+    (Array.isArray(circuit) ? circuit : []).forEach((ex) => {
+      n += ex?.feedback?.comments?.length || 0;
+    });
+  });
+  return n;
+};
+
 const update_training = async (req, res, next) => {
   try {
     const existing = await Training.findById(req.body._id).lean();
@@ -146,6 +158,51 @@ const update_training = async (req, res, next) => {
       } catch (err) {
         console.error("workout-complete notification failed:", err.message);
       }
+    }
+
+    // Notify the other party when a comment is added to the workout (best-effort).
+    try {
+      if (countComments(req.body.training) > countComments(existing)) {
+        const ownerId = String(training.user?._id || training.user);
+        const actorId = String(res.locals.user._id);
+        const actorName =
+          [res.locals.user.firstName, res.locals.user.lastName].filter(Boolean).join(" ") ||
+          "Someone";
+        const workoutTitle = training.title || "a workout";
+        if (actorId === ownerId) {
+          // The client commented → notify their active trainers.
+          const rels = await Relationship.find({
+            client: ownerId,
+            accepted: true,
+            engagementStatus: "active",
+          })
+            .select("trainer")
+            .lean();
+          rels
+            .map((r) => String(r.trainer))
+            .filter((trainerId) => trainerId !== actorId)
+            .forEach((trainerId) =>
+              createNotification({
+                userId: trainerId,
+                type: "WORKOUT_COMMENT",
+                title: `${actorName} commented`,
+                body: `New comment on "${workoutTitle}".`,
+                link: `/workout/${training._id}`,
+              }).catch(() => {})
+            );
+        } else {
+          // A trainer (or other) commented → notify the workout owner.
+          createNotification({
+            userId: ownerId,
+            type: "WORKOUT_COMMENT",
+            title: "New comment on your workout",
+            body: `${actorName} commented on "${workoutTitle}".`,
+            link: `/workout/${training._id}`,
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error("workout-comment notification failed:", err.message);
     }
 
     const accountId = String(training.user?._id || training.user);
