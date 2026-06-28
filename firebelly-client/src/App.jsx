@@ -70,6 +70,12 @@ function App({ }) {
   const userId = useSelector((state) => state.user._id);
   const isTrainer = useSelector((state) => state.user.isTrainer);
   const userTimezone = useSelector((state) => state.user.timezone);
+  // In a view-only (guardian→child) or delegated (trainer→client) session we must NOT auto-write
+  // settings: the write would 403 and bounce the session back to the parent, and it would set the
+  // wrong user's timezone anyway.
+  const sessionIsDelegated = useSelector(
+    (state) => Boolean(state.user.viewOnly) || Boolean(state.user.delegationMode)
+  );
   const workoutAccountIds = useSelector((state) => {
     const ids = new Set();
     if (state.user?._id) ids.add(String(state.user._id));
@@ -108,15 +114,16 @@ function App({ }) {
   }, [dispatch, isTrainer]);
 
   // Capture the user's timezone once (so local-time reminders fire correctly), if not set.
+  // Skipped in delegated/view-only sessions (see sessionIsDelegated above).
   useEffect(() => {
-    if (!userId || userTimezone) return;
+    if (!userId || userTimezone || sessionIsDelegated) return;
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (tz) dispatch(updateUserSettings({ timezone: tz }));
     } catch (e) {
       /* ignore */
     }
-  }, [userId, userTimezone, dispatch]);
+  }, [userId, userTimezone, sessionIsDelegated, dispatch]);
 
   useEffect(() => {
     if (!socket) return;
