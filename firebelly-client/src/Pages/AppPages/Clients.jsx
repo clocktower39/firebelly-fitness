@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   requestClients,
   changeRelationshipStatus,
@@ -103,6 +103,13 @@ export default function Clients({ socket }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [engagementFilter, setEngagementFilter] = useState("all");
   const [sortKey, setSortKey] = useState("firstName");
+  const [searchParams] = useSearchParams();
+
+  // Deep link from the "new client request" notification: /clients?filter=pending
+  useEffect(() => {
+    const f = searchParams.get("filter");
+    if (f && filterOptions.some((o) => o.value === f)) setEngagementFilter(f);
+  }, [searchParams]);
 
   const handleOpenCalendar = (client) => {
     setSelectedClient(client);
@@ -172,6 +179,12 @@ export default function Clients({ socket }) {
       }
     });
 
+    // Pending requests: newest first (most recent request at the top).
+    if (engagementFilter === "pending") {
+      return [...filtered].sort(
+        (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+      );
+    }
     return sortClientRelationships(filtered, sortKey);
   }, [clientRelationships, clientStatuses, engagementFilter, searchTerm, showOnlyOnline, sortKey]);
 
@@ -326,6 +339,16 @@ export default function Clients({ socket }) {
                   variant="outlined"
                   label={clientRelationship.accepted ? "Connected" : "Pending"}
                 />
+                {!clientRelationship.accepted && clientRelationship.createdAt && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`Requested ${new Date(clientRelationship.createdAt).toLocaleDateString(
+                      undefined,
+                      { month: "short", day: "numeric", year: "numeric" }
+                    )}`}
+                  />
+                )}
                 {clientRelationship.accepted && (
                   <Chip
                     size="small"

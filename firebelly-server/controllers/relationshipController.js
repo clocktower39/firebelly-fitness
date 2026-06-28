@@ -46,7 +46,7 @@ const manage_relationship = (req, res, next) => {
               type: "CLIENT_REQUEST",
               title: "New client request",
               body: `${clientName} requested to train with you.`,
-              link: "/clients",
+              link: "/clients?filter=pending",
             }).catch(() => {});
             res.send({
               status: "success",
