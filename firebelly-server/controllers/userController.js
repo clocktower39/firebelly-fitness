@@ -371,12 +371,18 @@ const update_user = async (req, res, next) => {
       });
     }
 
-    const accessToken = createAccessToken(user);
-    return res.send({
-      status: "success",
-      user,
-      accessToken,
-    });
+    // In a delegated (view-as) session the token carries delegation context (viewedUserId,
+    // delegationMode, ...). Re-issuing a plain token for the viewed user would strip that and
+    // corrupt the session, so only mint a fresh token for a normal first-person session.
+    const isDelegated = Boolean(
+      res.locals.user.delegationMode ||
+        res.locals.user.viewedUserId ||
+        res.locals.user.viewOnly ||
+        res.locals.user.actingUserId
+    );
+    const responseBody = { status: "success", user };
+    if (!isDelegated) responseBody.accessToken = createAccessToken(user);
+    return res.send(responseBody);
   } catch (err) {
     return next(err);
   }

@@ -31,6 +31,13 @@ export function signupUser(user) {
   };
 }
 
+// True when the current session is "view as" someone else (guardian→child or trainer→client).
+// In those sessions the in-memory token is the viewed account's, so profile edits must not swap it.
+const inDelegatedSession = () =>
+  typeof localStorage !== "undefined" &&
+  (localStorage.getItem("JWT_VIEW_ONLY") === "true" ||
+    Boolean(localStorage.getItem("JWT_DELEGATED_SESSION")));
+
 export function enterClientAccount(clientId) {
   return async (dispatch) => {
     try {
@@ -86,19 +93,23 @@ export function editUser(user) {
   return async (dispatch) => {
     const data = await authApi.updateUser({ ...user });
 
-    if (data.status === "error") {
+    if (!data || data.error || data.status === "error") {
       return dispatch({
         type: ERROR,
-        error: "User not updated",
-      });
-    } else {
-      setAccessToken(data.accessToken);
-      const decodedAccessToken = jwt(data.accessToken);
-      return dispatch({
-        type: LOGIN_USER,
-        user: decodedAccessToken,
+        error: (data && data.error) || "User not updated",
       });
     }
+    // In a view-as (delegated) session the in-memory token belongs to the viewed account, and the
+    // server omits a fresh token. Never swap the auth token here — it would drop the delegation
+    // context, and on a failed/expired request would clear the session (signing you out).
+    if (inDelegatedSession() || !data.accessToken) {
+      return data;
+    }
+    setAccessToken(data.accessToken);
+    return dispatch({
+      type: LOGIN_USER,
+      user: jwt(data.accessToken),
+    });
   };
 }
 
@@ -107,19 +118,20 @@ export function editUser(user) {
 export function updateUserSettings(payload) {
   return async (dispatch) => {
     const data = await authApi.updateUser(payload);
-    if (data.error) {
+    if (!data || data.error || data.status === "error") {
       return dispatch({
         type: ERROR,
-        error: data.error,
+        error: (data && data.error) || "Settings not updated",
       });
     }
-    const accessToken = data.accessToken;
-    const decodedAccessToken = jwt(accessToken);
-
-    setAccessToken(accessToken);
+    // See editUser: don't swap the auth token in a view-as session or when none is returned.
+    if (inDelegatedSession() || !data.accessToken) {
+      return data;
+    }
+    setAccessToken(data.accessToken);
     return dispatch({
       type: LOGIN_USER,
-      user: decodedAccessToken,
+      user: jwt(data.accessToken),
     });
   };
 }
