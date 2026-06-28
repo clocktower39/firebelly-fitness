@@ -96,6 +96,16 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       port: 3000,
+      // Allow serving behind a reverse proxy under custom hostnames (e.g. dev.firebellyfitness.com).
+      // Defaults to the known dev host; VITE_ALLOWED_HOSTS can override. Dev-only — the production
+      // build ignores `server`.
+      allowedHosts: env.VITE_ALLOWED_HOSTS
+        ? env.VITE_ALLOWED_HOSTS.split(",")
+        : ["dev.firebellyfitness.com", "localhost"],
+      // Route HMR over the public TLS endpoint when behind Cloudflare/nginx.
+      ...(env.VITE_HMR_HOST
+        ? { hmr: { protocol: "wss", host: env.VITE_HMR_HOST, clientPort: 443 } }
+        : {}),
       proxy: {
         "/api": {
           target: env.VITE_PROXY_TARGET || "http://localhost:6969",
