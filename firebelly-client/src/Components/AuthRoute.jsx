@@ -52,7 +52,12 @@ export const AuthRoute = (props) => {
         return;
       }
 
-      if (!viewOnly && !delegatedSession) {
+      // A reload wipes the in-memory token. A guardian→child view is view-only with no refresh
+      // token of its own, so it can't survive a reload — clear the stale flag so it doesn't keep
+      // blocking the restore of the user's real session (a leftover flag was forcing a fresh
+      // sign-in on every refresh).
+      if (viewOnly) localStorage.removeItem("JWT_VIEW_ONLY");
+      if (!delegatedSession) {
         await dispatch(loginJWT(undefined, { clearOnFailure: Boolean(user._id) }));
       }
       finishLoading();
