@@ -177,8 +177,21 @@ export const authFetch = async (
 
   const token = accessToken || getAccessToken();
   let response = await nativeFetch(apiUrl(pathOrUrl), buildOptions(token));
+
+  // In a view-only (guardian→child) or delegated (trainer→client) session, the in-memory token is
+  // the delegated one, but /refresh-tokens uses the PARENT's httpOnly cookie — so refreshing here
+  // would swap the session back to the parent (silently exiting the child/client view). Never
+  // refresh-swap in those sessions; just surface the 401/403 to the caller.
+  const isDelegatedSession =
+    typeof localStorage !== "undefined" &&
+    (localStorage.getItem("JWT_VIEW_ONLY") === "true" ||
+      Boolean(localStorage.getItem("JWT_DELEGATED_SESSION")));
+
   const shouldRefresh =
-    auth && retryOnUnauthorized && (response.status === 401 || response.status === 403);
+    auth &&
+    retryOnUnauthorized &&
+    !isDelegatedSession &&
+    (response.status === 401 || response.status === 403);
 
   if (shouldRefresh) {
     const refreshedToken = await refreshAccessToken();
