@@ -2,10 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Avatar,
+  Button,
   Card,
   CardHeader,
   Dialog,
+  DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   Grid,
   IconButton,
@@ -19,6 +22,7 @@ export default function SearchTrainerDialog({ open, handleClose, currentRelation
   const trainers = useSelector(state => state.trainers);
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState(trainers.filter(trainer => currentRelationships.includes(trainer.trainer)));
+  const [confirmTrainer, setConfirmTrainer] = useState(null);
 
   const handleChange = (e, setter) => setter(e.target.value);
 
@@ -26,7 +30,7 @@ export default function SearchTrainerDialog({ open, handleClose, currentRelation
     const { trainer } = props;
 
     const handleRequestTrainer = () => {
-      dispatch(requestTrainer(trainer.trainer))
+      setConfirmTrainer(trainer);
     }
 
     return (
@@ -70,6 +74,7 @@ export default function SearchTrainerDialog({ open, handleClose, currentRelation
   }, [search, trainers, currentRelationships])
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={handleClose}
@@ -106,5 +111,27 @@ export default function SearchTrainerDialog({ open, handleClose, currentRelation
         </Grid>
       </DialogContent>
     </Dialog>
+    <Dialog open={Boolean(confirmTrainer)} onClose={() => setConfirmTrainer(null)}>
+      <DialogTitle>Add trainer?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Send a training request to{" "}
+          {confirmTrainer ? `${confirmTrainer.firstName} ${confirmTrainer.lastName}` : "this trainer"}?
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setConfirmTrainer(null)}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={() => {
+            if (confirmTrainer) dispatch(requestTrainer(confirmTrainer.trainer));
+            setConfirmTrainer(null);
+          }}
+        >
+          Add trainer
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }

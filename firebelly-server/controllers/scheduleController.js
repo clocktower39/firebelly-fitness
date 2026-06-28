@@ -9,6 +9,21 @@ const { createEventDebitEntry, reverseEventDebitEntry } = require("../services/b
 const { createNotification } = require("../services/notificationService");
 const { pick } = require("../utils/object");
 
+// Short human date/time for notifications (server locale; the in-app link shows exact details).
+const fmtWhen = (d) => {
+  try {
+    return new Date(d).toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch (e) {
+    return "the scheduled time";
+  }
+};
+
 const APPOINTMENT_STATUSES = ["REQUESTED", "BOOKED", "COMPLETED"];
 const BOOKING_INTERVAL_MINUTES = 15;
 const SCHEDULE_EVENT_UPDATE_FIELDS = [
@@ -407,6 +422,33 @@ const update_schedule_event = async (req, res, next) => {
       }
     }
 
+    // Notify the client when the trainer cancels or reschedules (best-effort).
+    if (updated?.eventType === "APPOINTMENT" && updated.clientId) {
+      const becameCancelledForNotify =
+        updated.status === "CANCELLED" && previousStatus !== "CANCELLED";
+      const timeChanged =
+        updates?.startDateTime &&
+        new Date(updates.startDateTime).getTime() !== new Date(existing.startDateTime).getTime() &&
+        updated.status !== "CANCELLED";
+      if (becameCancelledForNotify) {
+        createNotification({
+          userId: updated.clientId,
+          type: "SESSION_CANCELLED",
+          title: "Session canceled",
+          body: `Your session for ${fmtWhen(existing.startDateTime)} was canceled.`,
+          link: "/sessions",
+        }).catch(() => {});
+      } else if (timeChanged) {
+        createNotification({
+          userId: updated.clientId,
+          type: "SESSION_RESCHEDULED",
+          title: "Session rescheduled",
+          body: `Your session moved to ${fmtWhen(updated.startDateTime)}.`,
+          link: "/sessions",
+        }).catch(() => {});
+      }
+    }
+
     return res.json({ event: updated });
   } catch (err) {
     return next(err);
@@ -430,6 +472,7 @@ const cancel_schedule_event = async (req, res, next) => {
       return res.status(403).json({ error: "Unauthorized access." });
     }
 
+    const wasRequested = existing.status === "REQUESTED";
     existing.status = "CANCELLED";
     existing.cancelledBy = userId;
     if (billingStatus && String(existing.trainerId) === String(userId)) {
@@ -440,6 +483,21 @@ const cancel_schedule_event = async (req, res, next) => {
         : "NO_CHARGE";
     }
     const updated = await existing.save();
+
+    // Notify the other party of the cancellation / declined request (best-effort).
+    if (updated?.eventType === "APPOINTMENT") {
+      const recipientId = isTrainer ? updated.clientId : updated.trainerId;
+      if (recipientId && String(recipientId) !== String(userId)) {
+        const declined = wasRequested && isTrainer;
+        createNotification({
+          userId: recipientId,
+          type: declined ? "SESSION_DECLINED" : "SESSION_CANCELLED",
+          title: declined ? "Session request declined" : "Session canceled",
+          body: `Your ${declined ? "session request" : "session"} for ${fmtWhen(updated.startDateTime)} was ${declined ? "declined" : "canceled"}.`,
+          link: "/sessions",
+        }).catch(() => {});
+      }
+    }
 
     if (updated?.eventType === "APPOINTMENT" && updated.clientId) {
       if (updated.billingStatus === "CHARGED") {

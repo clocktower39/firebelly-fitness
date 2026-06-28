@@ -189,6 +189,33 @@ const get_goals = async (req, res, next) => {
               link: "/goals",
             }).catch(() => {});
           }
+          // Also notify the client's active trainers (best-effort).
+          try {
+            const clientName =
+              [res.locals.user.firstName, res.locals.user.lastName].filter(Boolean).join(" ") ||
+              "Your client";
+            const rels = await Relationship.find({
+              client: res.locals.user._id,
+              accepted: true,
+              engagementStatus: "active",
+            })
+              .select("trainer")
+              .lean();
+            rels
+              .map((r) => String(r.trainer))
+              .filter((trainerId) => trainerId !== String(res.locals.user._id))
+              .forEach((trainerId) =>
+                createNotification({
+                  userId: trainerId,
+                  type: "GOAL_MET",
+                  title: `${clientName} hit a goal! 🎉`,
+                  body: goal.title || `${goal.exercise?.exerciseTitle || "A goal"} achieved.`,
+                  link: "/clients",
+                }).catch(() => {})
+              );
+          } catch (e) {
+            /* ignore */
+          }
         }
       }
     }

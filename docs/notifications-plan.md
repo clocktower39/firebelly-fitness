@@ -16,6 +16,12 @@ in services/pushService.js + services/notificationService.js.
 | PROGRAM_ASSIGNED | client | trainer assigns a program | yes | |
 | SESSIONS_LOW | client + trainer | a session debit leaves the aggregate balance at exactly 1 | no (always-on) | **built**; hooked in billingLedgerService.createEventDebitEntry |
 | SESSIONS_OUT | client + trainer | a session debit crosses the balance from positive to <= 0 (ran out) | no (always-on) | **built**; same hook (covers multi-credit jumps over 1) |
+| CLIENT_REQUEST | trainer | client sends a trainer request (manage_relationship) | no | **built** |
+| TRAINER_REQUEST_ACCEPTED | client | trainer accepts the request (change_relationship_status) | no | **built** |
+| SESSION_CANCELLED | other party | a booked session is cancelled (cancel_schedule_event / update_schedule_event) | no | **built** |
+| SESSION_DECLINED | client | trainer declines a still-REQUESTED session | no | **built** (cancel of a REQUESTED event) |
+| SESSION_RESCHEDULED | client | trainer changes a session's start time | no | **built** |
+| WORKOUT_COMMENT | client or trainer(s) | a comment is added to a workout | no | **built**; comment-count diff in update_training |
 | MESSAGE_RECEIVED | either | new chat message | yes | **depends on messaging system (separate project)** |
 | (existing) BOOKING_REQUEST / PACKAGE_REQUEST / INVOICE_PAST_DUE | trainer | already wired | — | |
 
