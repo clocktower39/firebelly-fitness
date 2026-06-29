@@ -27,6 +27,7 @@ const invoiceRoutes = require("./routes/invoiceRoutes");
 const productRoutes = require("./routes/productRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const pushRoutes = require("./routes/pushRoutes");
+const { enforceDelegationScope } = require("./middleware/enforceDelegationScope");
 const readinessRoutes = require("./routes/readinessRoutes");
 const GuardianLink = require("./models/guardianLink");
 const User = require("./models/user");
@@ -117,6 +118,9 @@ app.use(
     legacyHeaders: false,
   })
 );
+
+// Restrict what a "view-as" (delegated) session can reach — must run before the route handlers.
+app.use(enforceDelegationScope);
 
 app.use("/", userRoutes);
 app.use("/", exerciseRoutes);

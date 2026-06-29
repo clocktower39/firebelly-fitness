@@ -5,7 +5,8 @@ const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const hasOverride = (overrides, key) =>
   Object.prototype.hasOwnProperty.call(overrides, key);
 
-const buildTokenPayload = (user, overrides = {}) => ({
+const buildTokenPayload = (user, overrides = {}) => {
+  const payload = {
   _id: user._id,
   email: user.email || null,
   username: user.username || null,
@@ -43,7 +44,18 @@ const buildTokenPayload = (user, overrides = {}) => ({
   delegationMode: overrides.delegationMode || null,
   canModifyViewedAccount: Boolean(overrides.canModifyViewedAccount),
   viewedUserId: overrides.viewedUserId || null,
-});
+  };
+  // For a delegated "view-as" token, don't expose the viewed account's PII to the acting user.
+  if (overrides.delegationMode) {
+    payload.email = null;
+    payload.phoneNumber = null;
+    payload.dateOfBirth = null;
+    payload.height = null;
+    payload.sex = null;
+    payload.gymBarcode = null;
+  }
+  return payload;
+};
 
 const createAccessToken = (user, overrides = {}, options = {}) => {
   const payload = buildTokenPayload(user, overrides);
