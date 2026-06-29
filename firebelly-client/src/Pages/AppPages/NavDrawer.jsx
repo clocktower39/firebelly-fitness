@@ -268,7 +268,16 @@ export default function NavDrawer() {
             </Box>
           )}
           <List>
-            {pages.map((page, index) => (
+            {pages
+              .filter(
+                (page) =>
+                  // Hide sensitive areas while a trainer is viewing a client (server also blocks them).
+                  !(
+                    viewAsTrainer &&
+                    ["/account", "/account/trainers", "/trainer-store", "/groups"].includes(page.to)
+                  )
+              )
+              .map((page, index) => (
               <ListItem key={page.title} disablePadding>
                 <ListItemButton component={Link} to={page.to}>
                   <ListItemIcon>{page.icon}</ListItemIcon>
@@ -384,7 +393,7 @@ export default function NavDrawer() {
               </Button>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              {user._id && <NotificationBell />}
+              {user._id && !viewAsTrainer && <NotificationBell />}
               {user._id && (
                 <Box sx={{ textAlign: "right", display: { xs: "none", sm: "block" } }}>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
