@@ -21,6 +21,7 @@ import {
   CardHeader,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -29,6 +30,7 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  Menu,
   MenuItem,
   Select,
   Stack,
@@ -254,6 +256,8 @@ export default function Clients({ socket }) {
     const [localWeeklyFrequency, setLocalWeeklyFrequency] = useState(
       clientRelationship.client.weeklyFrequency || ""
     );
+    const [menuAnchor, setMenuAnchor] = useState(null);
+    const [expanded, setExpanded] = useState(false);
 
     useEffect(() => {
       setLocalEngagementStatus(getRelationshipEngagementStatus(clientRelationship));
@@ -402,11 +406,9 @@ export default function Clients({ socket }) {
             title={`${clientRelationship.client.firstName} ${clientRelationship.client.lastName}`}
             subheader={
               <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px", mt: 0.5 }}>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={clientRelationship.accepted ? "Connected" : "Pending"}
-                />
+                {!clientRelationship.accepted && (
+                  <Chip size="small" variant="outlined" label="Pending" />
+                )}
                 {!clientRelationship.accepted && clientRelationship.createdAt && (
                   <Chip
                     size="small"
@@ -415,6 +417,13 @@ export default function Clients({ socket }) {
                       undefined,
                       { month: "short", day: "numeric", year: "numeric" }
                     )}`}
+                  />
+                )}
+                {clientRelationship.accepted && (
+                  <Chip
+                    size="small"
+                    color={getEngagementStatusColor(localEngagementStatus)}
+                    label={getEngagementStatusLabel(localEngagementStatus)}
                   />
                 )}
                 {clientRelationship.accepted &&
@@ -427,19 +436,6 @@ export default function Clients({ socket }) {
                       label={`Readiness ${clientReadiness[clientRelationship.client._id].avgScore}`}
                     />
                   )}
-                {clientRelationship.accepted && (
-                  <Chip
-                    size="small"
-                    color={getEngagementStatusColor(localEngagementStatus)}
-                    label={getEngagementStatusLabel(localEngagementStatus)}
-                  />
-                )}
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  color={isOnline ? "success" : "default"}
-                  label={isOnline ? "Online" : "Offline"}
-                />
               </Stack>
             }
           />
@@ -447,27 +443,89 @@ export default function Clients({ socket }) {
             <Stack spacing={2}>
               {clientRelationship.accepted ? (
                 <>
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
-                    <Button onClick={() => handleViewAsClient(clientRelationship.client)}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ flexWrap: "wrap", gap: "8px", alignItems: "center" }}
+                  >
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => handleViewAsClient(clientRelationship.client)}
+                    >
                       View Account
                     </Button>
-                    <Button onClick={() => handleOpenCalendar(clientRelationship.client)}>
-                      Calendar
+                    <Button size="small" onClick={(event) => setMenuAnchor(event.currentTarget)}>
+                      More
                     </Button>
-                    <Button onClick={() => handleOpenGoals(clientRelationship.client)}>Goals</Button>
-                    <Button component={Link} to={`/sessions?client=${clientRelationship.client._id}`}>
-                      Training Sessions
-                    </Button>
-                    <Button component={Link} to={`/invoices?client=${clientRelationship.client._id}`}>
-                      Invoices
-                    </Button>
-                    <Button component={Link} to={`/progress?client=${clientRelationship.client._id}`}>
-                      Progress
-                    </Button>
-                    <Button onClick={() => null} disabled>
-                      Programs
-                    </Button>
+                    <Menu
+                      anchorEl={menuAnchor}
+                      open={Boolean(menuAnchor)}
+                      onClose={() => setMenuAnchor(null)}
+                    >
+                      <MenuItem
+                        onClick={() => {
+                          setMenuAnchor(null);
+                          handleOpenCalendar(clientRelationship.client);
+                        }}
+                      >
+                        Calendar
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          setMenuAnchor(null);
+                          handleOpenGoals(clientRelationship.client);
+                        }}
+                      >
+                        Goals
+                      </MenuItem>
+                      <MenuItem
+                        component={Link}
+                        to={`/sessions?client=${clientRelationship.client._id}`}
+                        onClick={() => setMenuAnchor(null)}
+                      >
+                        Training Sessions
+                      </MenuItem>
+                      <MenuItem
+                        component={Link}
+                        to={`/invoices?client=${clientRelationship.client._id}`}
+                        onClick={() => setMenuAnchor(null)}
+                      >
+                        Invoices
+                      </MenuItem>
+                      <MenuItem
+                        component={Link}
+                        to={`/progress?client=${clientRelationship.client._id}`}
+                        onClick={() => setMenuAnchor(null)}
+                      >
+                        Progress
+                      </MenuItem>
+                      <MenuItem disabled>Programs</MenuItem>
+                    </Menu>
                   </Stack>
+
+                  <Typography
+                    variant="body2"
+                    color={localWorkoutDays.length ? "text.secondary" : "warning.main"}
+                  >
+                    {localWorkoutDays.length
+                      ? `Workout days: ${[...localWorkoutDays]
+                          .sort((a, b) => a - b)
+                          .map((d) => DAYS_OF_WEEK[d]?.label)
+                          .join(", ")}`
+                      : "No workout days set"}
+                  </Typography>
+
+                  <Button
+                    size="small"
+                    onClick={() => setExpanded((value) => !value)}
+                    sx={{ alignSelf: "flex-start" }}
+                  >
+                    {expanded ? "Hide settings" : "Manage settings"}
+                  </Button>
+
+                  <Collapse in={expanded} unmountOnExit>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
 
                   <Stack spacing={1}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
@@ -560,12 +618,9 @@ export default function Clients({ socket }) {
                         </Select>
                       </FormControl>
                     </Stack>
-                    {localWorkoutDays.length === 0 && (
-                      <Typography variant="caption" color="warning.main">
-                        No workout days set — this client won't show in daily coverage.
-                      </Typography>
-                    )}
-                  </Stack>
+                      </Stack>
+                    </Stack>
+                  </Collapse>
                 </>
               ) : (
                 <Typography variant="body2" color="text.secondary">
