@@ -149,7 +149,7 @@ const emailInvoiceValidate = {
 };
 
 router.post("/invoices", validate(createInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.create_invoice);
-router.post("/invoices/request", validate(requestInvoiceValidate, {}, {}), verifyAccessToken, invoiceController.request_invoice);
+router.post("/invoices/request", validate(requestInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.request_invoice);
 router.post("/invoices/list", validate(listInvoicesValidate, {}, {}), verifyAccessToken, invoiceController.list_invoices);
 router.post("/invoices/detail", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.get_invoice);
 router.post("/invoices/status", validate(updateInvoiceStatusValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.update_invoice_status);

@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
 
+const AuditLog = require("../models/auditLog");
+
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 // Central scope guard for "view-as" (delegated) sessions. Runs globally, decodes the bearer token
 // itself (it sits in front of per-route verifyAccessToken), and restricts what a delegated session
@@ -79,6 +82,20 @@ const enforceDelegationScope = (req, res, next) => {
     return res
       .status(403)
       .json({ error: "This action isn't available while managing a child account." });
+  }
+
+  // Allowed delegated action — audit any write (real actor acting on the viewed account).
+  if (MUTATING.has(req.method)) {
+    res.on("finish", () => {
+      AuditLog.create({
+        actor: claims.actingUserId || claims._id,
+        actorRole: claims.actingUserRole || null,
+        targetUser: claims.viewedUserId || claims._id,
+        method: req.method,
+        path,
+        status: res.statusCode,
+      }).catch(() => {});
+    });
   }
 
   return next();
