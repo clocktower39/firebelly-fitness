@@ -445,18 +445,22 @@ export default function NavDrawer() {
                 },
               }}
             >
-              <MenuItem component={Link} to="/account" onClick={handleMenuClose}>
-                <ListItemIcon>
-                  <AccountIcon fontSize="small" />
-                </ListItemIcon>
-                <Typography variant="inherit">Account Settings</Typography>
-              </MenuItem>
-              <MenuItem onClick={handleOpenGymBarCodeDialog}>
-                <ListItemIcon>
-                  <QrCodeScannerIcon fontSize="small" />
-                </ListItemIcon>
-                <Typography variant="inherit">Gym Barcode</Typography>
-              </MenuItem>
+              {!viewAsTrainer && (
+                <MenuItem component={Link} to="/account" onClick={handleMenuClose}>
+                  <ListItemIcon>
+                    <AccountIcon fontSize="small" />
+                  </ListItemIcon>
+                  <Typography variant="inherit">Account Settings</Typography>
+                </MenuItem>
+              )}
+              {!viewAsTrainer && (
+                <MenuItem onClick={handleOpenGymBarCodeDialog}>
+                  <ListItemIcon>
+                    <QrCodeScannerIcon fontSize="small" />
+                  </ListItemIcon>
+                  <Typography variant="inherit">Gym Barcode</Typography>
+                </MenuItem>
+              )}
             </Menu>
           </Toolbar>
         </Container>

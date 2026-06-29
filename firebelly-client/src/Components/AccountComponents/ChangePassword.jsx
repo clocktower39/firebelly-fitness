@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Button, Container, Grid, Paper, TextField, Typography } from "@mui/material";
 import { changePassword } from "../../Redux/actions";
 
@@ -47,6 +47,8 @@ const ChangePasswordInput = ({
 export default function ChangePassword() {
   const dispatch = useDispatch();
   const [successMessage, setSuccessMessage] = useState(false);
+  // A trainer viewing a client must never be able to change the client's password (guardians can).
+  const isTrainerView = useSelector((s) => s.user.delegationMode) === "trainer_client";
 
   const resetFormData = () => {
     const resetData = {};
@@ -133,6 +135,8 @@ export default function ChangePassword() {
     },
   });
   const fieldProperties = Object.keys(formData);
+
+  if (isTrainerView) return null;
 
   return (
     <Container maxWidth="md" sx={{ height: "100%" }}>
