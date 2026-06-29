@@ -89,16 +89,17 @@ const filterOptions = [
   { value: "paused", label: "Paused" },
   { value: "inactive", label: "Inactive" },
   { value: "pending", label: "Pending" },
+  { value: "needsDays", label: "Needs days" },
 ];
 
 const DAYS_OF_WEEK = [
-  { value: 0, label: "Su" },
-  { value: 1, label: "Mo" },
-  { value: 2, label: "Tu" },
-  { value: 3, label: "We" },
-  { value: 4, label: "Th" },
-  { value: 5, label: "Fr" },
-  { value: 6, label: "Sa" },
+  { value: 0, label: "Su", short: "Sun" },
+  { value: 1, label: "Mo", short: "Mon" },
+  { value: 2, label: "Tu", short: "Tue" },
+  { value: 3, label: "We", short: "Wed" },
+  { value: 4, label: "Th", short: "Thu" },
+  { value: 5, label: "Fr", short: "Fri" },
+  { value: 6, label: "Sa", short: "Sat" },
 ];
 
 const sortClientRelationships = (relationships, sortKey) =>
@@ -206,6 +207,12 @@ export default function Clients({ socket }) {
           return relationship?.accepted && engagementStatus === "inactive";
         case "pending":
           return !relationship?.accepted;
+        case "needsDays":
+          return (
+            relationship?.accepted &&
+            (!relationship.client?.preferredWorkoutDays ||
+              relationship.client.preferredWorkoutDays.length === 0)
+          );
         case "all":
         default:
           return true;
@@ -237,6 +244,12 @@ export default function Clients({ socket }) {
           relationship?.accepted && getRelationshipEngagementStatus(relationship) === "inactive"
       ).length,
       pending: clientRelationships.filter((relationship) => !relationship?.accepted).length,
+      needsDays: clientRelationships.filter(
+        (relationship) =>
+          relationship?.accepted &&
+          (!relationship.client?.preferredWorkoutDays ||
+            relationship.client.preferredWorkoutDays.length === 0)
+      ).length,
     }),
     [clientRelationships]
   );
@@ -350,6 +363,13 @@ export default function Clients({ socket }) {
       if (!ok) setLocalWeeklyFrequency(previous);
     };
 
+    const sortedWorkoutDays = [...localWorkoutDays].sort((a, b) => a - b);
+    const daysSummary = sortedWorkoutDays.length
+      ? `${localWeeklyFrequency ? `${localWeeklyFrequency}×/wk · ` : ""}${sortedWorkoutDays
+          .map((d) => DAYS_OF_WEEK[d]?.short)
+          .join(", ")}`
+      : "No workout days set";
+
     return (
       <Grid container size={12}>
         <Card
@@ -455,6 +475,12 @@ export default function Clients({ socket }) {
                     >
                       View Account
                     </Button>
+                    <Button
+                      size="small"
+                      onClick={() => navigate(`/messages?u=${clientRelationship.client._id}`)}
+                    >
+                      Message
+                    </Button>
                     <Button size="small" onClick={(event) => setMenuAnchor(event.currentTarget)}>
                       More
                     </Button>
@@ -500,7 +526,6 @@ export default function Clients({ socket }) {
                       >
                         Progress
                       </MenuItem>
-                      <MenuItem disabled>Programs</MenuItem>
                     </Menu>
                   </Stack>
 
@@ -508,12 +533,7 @@ export default function Clients({ socket }) {
                     variant="body2"
                     color={localWorkoutDays.length ? "text.secondary" : "warning.main"}
                   >
-                    {localWorkoutDays.length
-                      ? `Workout days: ${[...localWorkoutDays]
-                          .sort((a, b) => a - b)
-                          .map((d) => DAYS_OF_WEEK[d]?.label)
-                          .join(", ")}`
-                      : "No workout days set"}
+                    {daysSummary}
                   </Typography>
 
                   <Button
