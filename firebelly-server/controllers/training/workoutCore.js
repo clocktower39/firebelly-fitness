@@ -14,6 +14,7 @@ const {
   reverseEventDebitEntry,
 } = require("./context");
 const { createNotification } = require("../../services/notificationService");
+const { bridgeWorkoutComment } = require("../../services/messagingBridge");
 
 const create_training = async (req, res, next) => {
   try {
@@ -58,6 +59,22 @@ const countComments = (doc) => {
     });
   });
   return n;
+};
+
+// The most recent non-deleted comment by a given user across the whole workout (workout-level +
+// per-exercise), used to surface the just-added comment text into the chat bridge.
+const latestCommentText = (doc, actorId) => {
+  if (!doc) return "";
+  const all = [...(doc.workoutFeedback?.comments || [])];
+  (doc.training || []).forEach((circuit) => {
+    (Array.isArray(circuit) ? circuit : []).forEach((ex) => {
+      (ex?.feedback?.comments || []).forEach((c) => all.push(c));
+    });
+  });
+  const mine = all
+    .filter((c) => c && !c.deletedAt && String(c.user) === String(actorId))
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  return mine[0]?.text || "";
 };
 
 const update_training = async (req, res, next) => {
@@ -169,8 +186,15 @@ const update_training = async (req, res, next) => {
           [res.locals.user.firstName, res.locals.user.lastName].filter(Boolean).join(" ") ||
           "Someone";
         const workoutTitle = training.title || "a workout";
+        const commentText = latestCommentText(req.body.training, actorId);
+        const context = {
+          type: "workout",
+          id: training._id,
+          label: workoutTitle,
+          link: `/workout/${training._id}`,
+        };
         if (actorId === ownerId) {
-          // The client commented → notify their active trainers.
+          // The client commented → notify their active trainers + bridge into each chat.
           const rels = await Relationship.find({
             client: ownerId,
             accepted: true,
@@ -181,17 +205,24 @@ const update_training = async (req, res, next) => {
           rels
             .map((r) => String(r.trainer))
             .filter((trainerId) => trainerId !== actorId)
-            .forEach((trainerId) =>
+            .forEach((trainerId) => {
               createNotification({
                 userId: trainerId,
                 type: "WORKOUT_COMMENT",
                 title: `${actorName} commented`,
                 body: `New comment on "${workoutTitle}".`,
                 link: `/workout/${training._id}`,
-              }).catch(() => {})
-            );
+              }).catch(() => {});
+              bridgeWorkoutComment({
+                ownerId,
+                trainerId,
+                senderId: ownerId,
+                body: commentText,
+                context,
+              });
+            });
         } else {
-          // A trainer (or other) commented → notify the workout owner.
+          // A trainer (or other) commented → notify the workout owner + bridge into their chat.
           createNotification({
             userId: ownerId,
             type: "WORKOUT_COMMENT",
@@ -199,6 +230,13 @@ const update_training = async (req, res, next) => {
             body: `${actorName} commented on "${workoutTitle}".`,
             link: `/workout/${training._id}`,
           }).catch(() => {});
+          bridgeWorkoutComment({
+            ownerId,
+            trainerId: actorId,
+            senderId: actorId,
+            body: commentText,
+            context,
+          });
         }
       }
     } catch (err) {

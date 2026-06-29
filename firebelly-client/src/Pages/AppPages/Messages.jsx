@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Avatar,
   Badge,
@@ -76,6 +76,7 @@ export default function Messages() {
   const clients = useSelector((s) => s.clients) || [];
   const myTrainers = useSelector((s) => s.myTrainers) || [];
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [text, setText] = useState("");
   const [pendingAtts, setPendingAtts] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -427,6 +428,19 @@ export default function Messages() {
                         {fullName(m.sender)}
                         {guardianIds.has(String(m.sender?._id || m.sender)) ? " · parent" : ""}
                       </Typography>
+                    )}
+                    {m.context?.label && (
+                      <Chip
+                        size="small"
+                        label={`re: ${m.context.label}`}
+                        onClick={() => m.context.link && navigate(m.context.link)}
+                        sx={{
+                          mb: 0.5,
+                          maxWidth: "100%",
+                          height: "auto",
+                          "& .MuiChip-label": { whiteSpace: "normal", py: 0.25 },
+                        }}
+                      />
                     )}
                     {m.body && (
                       <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
