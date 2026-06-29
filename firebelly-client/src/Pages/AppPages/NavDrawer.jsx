@@ -270,8 +270,12 @@ export default function NavDrawer() {
         <>
           {isImpersonating && (
             <Box sx={{ px: 2, py: 1, backgroundColor: "rgba(234, 179, 8, 0.15)" }}>
-              <Typography variant="caption" color="text.primary">
-                {viewAsTrainer ? "Managing client account" : "Viewing child account"}
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                {viewAsTrainer ? "Managing client" : "Viewing child"}
+              </Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {`${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                  (viewAsTrainer ? "Client account" : "Child account")}
               </Typography>
               <Button size="small" onClick={handleReturnFromView} sx={{ mt: 1 }}>
                 {viewAsTrainer ? "Return to My Account" : "Return to Guardian"}
@@ -407,7 +411,7 @@ export default function NavDrawer() {
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
               {user._id && !viewAsTrainer && <NotificationBell />}
               {user._id && (
-                <Box sx={{ textAlign: "right", display: { xs: "none", sm: "block" } }}>
+                <Box sx={{ textAlign: "right", display: { xs: isImpersonating ? "block" : "none", sm: "block" } }}>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {user.firstName} {user.lastName}
                   </Typography>
@@ -432,7 +436,9 @@ export default function NavDrawer() {
                   }
                   sx={{ maxHeight: "36px", maxWidth: "36px" }}
                   alt={`${user.firstName} ${user.lastName}`}
-                />
+                >
+                  {(user.firstName?.[0] || "") + (user.lastName?.[0] || "")}
+                </Avatar>
               </IconButton>
             </Box>
             <Menu
