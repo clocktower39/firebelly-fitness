@@ -8,6 +8,10 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   Stack,
   ToggleButton,
@@ -19,6 +23,7 @@ import {
   CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
 } from "@mui/icons-material";
 import { enterClientAccount, requestClients, requestWorkoutsByDatesIfNeeded } from "../../Redux/actions";
+import { accountApi } from "../../api/accountApi";
 import {
   getRelationshipEngagementStatus,
   isRelationshipActivelyCoached,
@@ -29,6 +34,16 @@ dayjs.extend(utc);
 
 const formatClientName = (client) =>
   `${client?.firstName || ""} ${client?.lastName || ""}`.trim() || "Unnamed client";
+
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Su" },
+  { value: 1, label: "Mo" },
+  { value: 2, label: "Tu" },
+  { value: 3, label: "We" },
+  { value: 4, label: "Th" },
+  { value: 5, label: "Fr" },
+  { value: 6, label: "Sa" },
+];
 
 export default function WeeklyClientWorkoutTracker({
   selectedDate = dayjs().format("YYYY-MM-DD"),
@@ -403,6 +418,31 @@ export default function WeeklyClientWorkoutTracker({
     );
   };
 
+  const [daysDialogOpen, setDaysDialogOpen] = useState(false);
+  const [daysByClient, setDaysByClient] = useState({});
+
+  const openDaysDialog = () => {
+    const map = {};
+    acceptedClients.forEach((c) => {
+      map[String(c._id)] = (c.preferredWorkoutDays || []).map(Number);
+    });
+    setDaysByClient(map);
+    setDaysDialogOpen(true);
+  };
+
+  const handleSetClientDays = async (clientId, newDays) => {
+    setDaysByClient((prev) => ({ ...prev, [clientId]: newDays }));
+    await accountApi.setClientWorkoutPreferences(clientId, { preferredWorkoutDays: newDays });
+    dispatch(requestClients());
+  };
+
+  // Clients needing days first, then alphabetical, so missing setups surface at the top.
+  const daysDialogClients = [...acceptedClients].sort(
+    (a, b) =>
+      (a.preferredWorkoutDays?.length ? 1 : 0) - (b.preferredWorkoutDays?.length ? 1 : 0) ||
+      formatClientName(a).localeCompare(formatClientName(b))
+  );
+
   if (!user?.isTrainer) return null;
 
   return (
@@ -475,6 +515,8 @@ export default function WeeklyClientWorkoutTracker({
               size="small"
               variant="outlined"
               color="info"
+              clickable
+              onClick={openDaysDialog}
               label={`${unscheduledClients.length} need preferred days`}
             />
           )}
@@ -493,6 +535,9 @@ export default function WeeklyClientWorkoutTracker({
               label={mode === "day" ? "Refreshing day" : "Refreshing week"}
             />
           )}
+          <Button size="small" onClick={openDaysDialog}>
+            Set workout days
+          </Button>
         </Stack>
 
         {unscheduledClients.length > 0 && (
@@ -539,6 +584,58 @@ export default function WeeklyClientWorkoutTracker({
         workouts={sessionDialogWorkouts}
         initialWorkoutId={sessionDialogInitialWorkoutId}
       />
+      <Dialog open={daysDialogOpen} onClose={() => setDaysDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Client workout days</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Set the days each client trains. These populate the coverage chart and pre-fill the days
+            when you add programs.
+          </Typography>
+          <Stack spacing={1.5}>
+            {daysDialogClients.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No active clients.
+              </Typography>
+            )}
+            {daysDialogClients.map((c) => {
+              const id = String(c._id);
+              const days = daysByClient[id] || [];
+              return (
+                <Box key={id}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                    {formatClientName(c)}
+                    {days.length === 0 && (
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="warning.main"
+                        sx={{ ml: 1 }}
+                      >
+                        no days set
+                      </Typography>
+                    )}
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={days}
+                    onChange={(e, next) => handleSetClientDays(id, next)}
+                    size="small"
+                    sx={{ flexWrap: "wrap" }}
+                  >
+                    {DAYS_OF_WEEK.map((d) => (
+                      <ToggleButton key={d.value} value={d.value} sx={{ px: 1.25 }}>
+                        {d.label}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                </Box>
+              );
+            })}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDaysDialogOpen(false)}>Done</Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 }
