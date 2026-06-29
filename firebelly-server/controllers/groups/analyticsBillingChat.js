@@ -2,6 +2,7 @@ const {
   ACTIVE_STATUS,
   ASSIGN_ROLES,
   Conversation,
+  Message,
   Group,
   GroupInvite,
   GroupMembership,
@@ -179,36 +180,70 @@ const update_group_billing = async (req, res, next) => {
   }
 };
 
+// Ensure the group's conversation exists (in the unified messaging system) and its participants
+// match current active membership, preserving each member's lastReadAt.
+const ensureGroupConversation = async (groupId) => {
+  const memberships = await GroupMembership.find({ groupId, status: ACTIVE_STATUS })
+    .select("userId role")
+    .lean();
+  const group = await Group.findById(groupId).select("name createdBy").lean();
+  const buildParticipants = (existing) =>
+    memberships.map((m) => ({
+      user: m.userId,
+      role: m.role || "member",
+      lastReadAt: existing?.get(String(m.userId))?.lastReadAt || null,
+    }));
+  // Reuse any existing conversation for this group (incl. legacy ones from the old schema) and
+  // upgrade it in place — the groupId index is unique.
+  let convo = await Conversation.findOne({ groupId });
+  if (!convo) {
+    convo = await Conversation.create({
+      type: "group",
+      groupId,
+      title: group?.name || "Group",
+      participants: buildParticipants(),
+      createdBy: group?.createdBy || null,
+    });
+  } else {
+    convo.type = "group";
+    if (!convo.title) convo.title = group?.name || "Group";
+    const existing = new Map(convo.participants.map((p) => [String(p.user), p]));
+    convo.participants = buildParticipants(existing);
+    await convo.save();
+  }
+  return convo;
+};
+
+// Old-shape chat payload (messages: [{_id, user, message, timestamp}]) so the existing GroupDetail
+// UI keeps working, but backed by the new Message collection.
+const formatGroupChat = async (convo) => {
+  const messages = await Message.find({ conversation: convo._id, deletedAt: null })
+    .sort({ createdAt: 1 })
+    .limit(200)
+    .populate("sender", "firstName lastName profilePicture")
+    .lean();
+  return {
+    _id: convo._id,
+    groupId: convo.groupId,
+    messages: messages.map((m) => ({
+      _id: m._id,
+      user: m.sender,
+      message: m.body,
+      timestamp: m.createdAt,
+    })),
+  };
+};
+
 const get_group_chat = async (req, res, next) => {
   try {
     const userId = res.locals.user._id;
     const { groupId } = req.params;
-
-    if (!isValidObjectId(groupId)) {
-      return res.status(400).json({ error: "Invalid group ID." });
-    }
-
-    const membership = await requireMembership(groupId, userId);
-    if (!membership) {
+    if (!isValidObjectId(groupId)) return res.status(400).json({ error: "Invalid group ID." });
+    if (!(await requireMembership(groupId, userId))) {
       return res.status(403).json({ error: "Unauthorized access." });
     }
-
-    let conversation = await Conversation.findOne({ groupId })
-      .populate("messages.user", "firstName lastName profilePicture")
-      .lean();
-
-    if (!conversation) {
-      const created = await Conversation.create({
-        groupId,
-        messages: [],
-        users: [],
-      });
-      conversation = await Conversation.findById(created._id)
-        .populate("messages.user", "firstName lastName profilePicture")
-        .lean();
-    }
-
-    return res.json(conversation);
+    const convo = await ensureGroupConversation(groupId);
+    return res.json(await formatGroupChat(convo));
   } catch (err) {
     return next(err);
   }
@@ -218,47 +253,34 @@ const send_group_message = async (req, res, next) => {
   try {
     const userId = res.locals.user._id;
     const { groupId } = req.params;
-    const { message } = req.body;
-
-    if (!isValidObjectId(groupId)) {
-      return res.status(400).json({ error: "Invalid group ID." });
-    }
-
-    if (!message || !String(message).trim()) {
-      return res.status(400).json({ error: "Message is required." });
-    }
-
-    const membership = await requireMembership(groupId, userId);
-    if (!membership) {
+    const body = String(req.body.message || "").trim();
+    if (!isValidObjectId(groupId)) return res.status(400).json({ error: "Invalid group ID." });
+    if (!body) return res.status(400).json({ error: "Message is required." });
+    if (!(await requireMembership(groupId, userId))) {
       return res.status(403).json({ error: "Unauthorized access." });
     }
-
-    const newMessage = {
-      user: userId,
-      message: String(message).trim(),
-      timestamp: new Date(),
-    };
-
-    let conversation = await Conversation.findOneAndUpdate(
-      { groupId },
-      { $push: { messages: newMessage } },
-      { returnDocument: "after" }
-    )
-      .populate("messages.user", "firstName lastName profilePicture")
-      .lean();
-
-    if (!conversation) {
-      const created = await Conversation.create({
-        groupId,
-        messages: [newMessage],
-        users: [],
-      });
-      conversation = await Conversation.findById(created._id)
-        .populate("messages.user", "firstName lastName profilePicture")
+    const convo = await ensureGroupConversation(groupId);
+    const created = await Message.create({ conversation: convo._id, sender: userId, body });
+    convo.lastMessageAt = created.createdAt;
+    convo.lastMessagePreview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+    const me = convo.participants.find((p) => String(p.user) === String(userId));
+    if (me) me.lastReadAt = created.createdAt;
+    await convo.save();
+    // Real-time to the other members (updates their unified inbox live).
+    if (global.io) {
+      const populated = await Message.findById(created._id)
+        .populate("sender", "firstName lastName profilePicture")
         .lean();
+      convo.participants
+        .filter((p) => String(p.user) !== String(userId))
+        .forEach((p) =>
+          global.io.to(String(p.user)).emit("message:new", {
+            conversationId: String(convo._id),
+            message: populated,
+          })
+        );
     }
-
-    return res.json(conversation);
+    return res.json(await formatGroupChat(convo));
   } catch (err) {
     return next(err);
   }
@@ -268,29 +290,19 @@ const delete_group_message = async (req, res, next) => {
   try {
     const userId = res.locals.user._id;
     const { groupId, messageId } = req.params;
-
     if (!isValidObjectId(groupId) || !isValidObjectId(messageId)) {
       return res.status(400).json({ error: "Invalid group or message ID." });
     }
-
-    const membership = await requireMembership(groupId, userId);
-    if (!membership) {
+    if (!(await requireMembership(groupId, userId))) {
       return res.status(403).json({ error: "Unauthorized access." });
     }
-
-    const conversation = await Conversation.findOneAndUpdate(
-      { groupId },
-      { $pull: { messages: { _id: messageId, user: userId } } },
-      { returnDocument: "after" }
-    )
-      .populate("messages.user", "firstName lastName profilePicture")
-      .lean();
-
-    if (!conversation) {
-      return res.status(404).json({ error: "Conversation not found." });
-    }
-
-    return res.json(conversation);
+    const convo = await Conversation.findOne({ groupId });
+    if (!convo) return res.status(404).json({ error: "Conversation not found." });
+    await Message.findOneAndUpdate(
+      { _id: messageId, conversation: convo._id, sender: userId, deletedAt: null },
+      { $set: { deletedAt: new Date() } }
+    );
+    return res.json(await formatGroupChat(convo));
   } catch (err) {
     return next(err);
   }

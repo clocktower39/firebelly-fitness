@@ -10,6 +10,7 @@ const GroupInvite = require("../../models/groupInvite");
 const Program = require("../../models/program");
 const Training = require("../../models/training");
 const Conversation = require("../../models/conversation");
+const Message = require("../../models/message");
 const User = require("../../models/user");
 const { groupPictureBucket } = require("../../mygridfs");
 
@@ -132,6 +133,7 @@ module.exports = {
   ACTIVE_STATUS,
   ASSIGN_ROLES,
   Conversation,
+  Message,
   Group,
   GroupInvite,
   GroupMembership,
