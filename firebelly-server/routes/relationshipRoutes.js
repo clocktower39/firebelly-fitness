@@ -55,6 +55,7 @@ router.post('/changeRelationshipStatus', validate(relationshipStatus, {}, {}), v
 router.post('/manageRelationship', validate(relationshipValidate, {}, {}), verifyAccessToken, ensureWriteAccess, relationshipController.manage_relationship);
 router.post('/removeRelationship', verifyAccessToken, ensureWriteAccess, relationshipController.remove_relationship);
 router.post('/relationships/metricsApproval', validate(metricsApprovalStatus, {}, {}), verifyAccessToken, ensureWriteAccess, relationshipController.update_metrics_approval);
+router.post('/relationships/permissions', verifyAccessToken, ensureWriteAccess, relationshipController.update_relationship_permissions);
 router.post('/relationships/profile', validate(relationshipProfile, {}, {}), verifyAccessToken, ensureWriteAccess, relationshipController.update_relationship_profile);
 router.post(
   '/relationships/client/token',

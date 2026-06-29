@@ -44,6 +44,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   delegationMode: overrides.delegationMode || null,
   canModifyViewedAccount: Boolean(overrides.canModifyViewedAccount),
   viewedUserId: overrides.viewedUserId || null,
+  scope: overrides.scope || null,
   };
   // For a delegated "view-as" token, don't expose the viewed account's PII to the acting user.
   if (overrides.delegationMode) {

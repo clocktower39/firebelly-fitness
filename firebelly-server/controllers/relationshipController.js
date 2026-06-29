@@ -173,6 +173,35 @@ const update_metrics_approval = (req, res, next) => {
     .catch((err) => next(err));
 };
 
+const PERMISSION_AREAS = ["workouts", "goals", "measurements", "readiness", "schedule"];
+const PERMISSION_LEVELS = ["none", "view", "manage"];
+// Client sets what each of their trainers can access in a "view-as" session.
+const update_relationship_permissions = (req, res, next) => {
+  const { trainer, permissions } = req.body;
+  if (!trainer || !permissions || typeof permissions !== "object") {
+    return res.status(400).send({ error: "trainer and permissions are required." });
+  }
+  const updates = {};
+  PERMISSION_AREAS.forEach((area) => {
+    if (PERMISSION_LEVELS.includes(permissions[area])) {
+      updates[`permissions.${area}`] = permissions[area];
+    }
+  });
+  if (!Object.keys(updates).length) {
+    return res.status(400).send({ error: "No valid permission areas provided." });
+  }
+  Relationship.findOneAndUpdate(
+    { trainer, client: res.locals.user._id },
+    { $set: updates },
+    { returnDocument: "after" }
+  )
+    .then((data) => {
+      if (!data) return res.status(404).send({ message: "Relationship not found." });
+      res.send({ status: "success", relationship: data });
+    })
+    .catch((err) => next(err));
+};
+
 const update_relationship_profile = (req, res, next) => {
   const { client, engagementStatus, serviceTags } = req.body;
   const updates = {};
@@ -239,6 +268,7 @@ const issue_client_view_token = async (req, res, next) => {
         delegationMode: "trainer_client",
         canModifyViewedAccount: true,
         viewedUserId: client._id,
+        scope: relationship.permissions || null,
       },
       { expiresIn: "60m" }
     );
@@ -257,6 +287,7 @@ module.exports = {
   get_my_clients,
   remove_relationship,
   update_metrics_approval,
+  update_relationship_permissions,
   update_relationship_profile,
   issue_client_view_token,
 };

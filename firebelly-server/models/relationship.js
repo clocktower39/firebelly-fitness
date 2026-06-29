@@ -7,6 +7,15 @@ const relationshipSchema = new mongoose.Schema(
     requestedBy: { type: String, required: true },
     accepted: { type: Boolean, required: true },
     metricsApprovalRequired: { type: Boolean, default: true },
+    // Per-area access the client grants this trainer in a "view-as" session (none | view | manage).
+    // Defaults to full coaching access; the client can tighten it per area.
+    permissions: {
+      workouts: { type: String, enum: ["none", "view", "manage"], default: "manage" },
+      goals: { type: String, enum: ["none", "view", "manage"], default: "manage" },
+      measurements: { type: String, enum: ["none", "view", "manage"], default: "manage" },
+      readiness: { type: String, enum: ["none", "view", "manage"], default: "manage" },
+      schedule: { type: String, enum: ["none", "view", "manage"], default: "manage" },
+    },
     engagementStatus: {
       type: String,
       enum: ["active", "paused", "inactive"],
