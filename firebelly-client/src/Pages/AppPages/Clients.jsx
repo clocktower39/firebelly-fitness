@@ -11,6 +11,7 @@ import {
   enterClientAccount,
   updateRelationshipProfile,
 } from "../../Redux/actions";
+import { accountApi } from "../../api/accountApi";
 import {
   Avatar,
   Badge,
@@ -23,12 +24,18 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
   Grid,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Switch,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { Delete, Done } from "@mui/icons-material";
@@ -80,6 +87,16 @@ const filterOptions = [
   { value: "paused", label: "Paused" },
   { value: "inactive", label: "Inactive" },
   { value: "pending", label: "Pending" },
+];
+
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Su" },
+  { value: 1, label: "Mo" },
+  { value: 2, label: "Tu" },
+  { value: 3, label: "We" },
+  { value: 4, label: "Th" },
+  { value: 5, label: "Fr" },
+  { value: 6, label: "Sa" },
 ];
 
 const sortClientRelationships = (relationships, sortKey) =>
@@ -231,10 +248,18 @@ export default function Clients({ socket }) {
     const [localServiceTags, setLocalServiceTags] = useState(
       getRelationshipServiceTags(clientRelationship)
     );
+    const [localWorkoutDays, setLocalWorkoutDays] = useState(
+      (clientRelationship.client.preferredWorkoutDays || []).map(Number)
+    );
+    const [localWeeklyFrequency, setLocalWeeklyFrequency] = useState(
+      clientRelationship.client.weeklyFrequency || ""
+    );
 
     useEffect(() => {
       setLocalEngagementStatus(getRelationshipEngagementStatus(clientRelationship));
       setLocalServiceTags(getRelationshipServiceTags(clientRelationship));
+      setLocalWorkoutDays((clientRelationship.client.preferredWorkoutDays || []).map(Number));
+      setLocalWeeklyFrequency(clientRelationship.client.weeklyFrequency || "");
     }, [clientRelationship]);
 
     const handleDeleteConfirmationOpen = () => setDeleteConfirmationOpen(true);
@@ -290,6 +315,35 @@ export default function Clients({ socket }) {
       if (!updated) {
         setLocalServiceTags(previousTags);
       }
+    };
+
+    const saveWorkoutPrefs = async (next) => {
+      setStatusMessage("");
+      const data = await accountApi.setClientWorkoutPreferences(
+        clientRelationship.client._id,
+        next
+      );
+      if (data?.error) {
+        setStatusMessage(data.error);
+        return false;
+      }
+      dispatch(requestClients());
+      return true;
+    };
+
+    const handleWorkoutDaysChange = async (event, nextDays) => {
+      const previous = localWorkoutDays;
+      setLocalWorkoutDays(nextDays);
+      const ok = await saveWorkoutPrefs({ preferredWorkoutDays: nextDays });
+      if (!ok) setLocalWorkoutDays(previous);
+    };
+
+    const handleWeeklyFrequencyChange = async (event) => {
+      const value = event.target.value;
+      const previous = localWeeklyFrequency;
+      setLocalWeeklyFrequency(value);
+      const ok = await saveWorkoutPrefs({ weeklyFrequency: value });
+      if (!ok) setLocalWeeklyFrequency(previous);
     };
 
     return (
@@ -461,6 +515,54 @@ export default function Clients({ socket }) {
                       <Typography variant="caption" color="text.secondary">
                         Optional tags like Online or Programming help you organize clients without
                         affecting access.
+                      </Typography>
+                    )}
+                  </Stack>
+
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle2">Workout Preferences</Typography>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={2}
+                      sx={{ alignItems: { sm: "center" } }}
+                    >
+                      <ToggleButtonGroup
+                        value={localWorkoutDays}
+                        onChange={handleWorkoutDaysChange}
+                        size="small"
+                        sx={{ flexWrap: "wrap" }}
+                        aria-label="workout days"
+                      >
+                        {DAYS_OF_WEEK.map((d) => (
+                          <ToggleButton key={d.value} value={d.value} sx={{ px: 1.25 }}>
+                            {d.label}
+                          </ToggleButton>
+                        ))}
+                      </ToggleButtonGroup>
+                      <FormControl size="small" sx={{ minWidth: 130 }}>
+                        <InputLabel id={`freq-${clientRelationship.client._id}`}>
+                          Days / week
+                        </InputLabel>
+                        <Select
+                          labelId={`freq-${clientRelationship.client._id}`}
+                          label="Days / week"
+                          value={localWeeklyFrequency}
+                          onChange={handleWeeklyFrequencyChange}
+                        >
+                          <MenuItem value="">
+                            <em>Not set</em>
+                          </MenuItem>
+                          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                            <MenuItem key={n} value={n}>
+                              {n}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
+                    {localWorkoutDays.length === 0 && (
+                      <Typography variant="caption" color="warning.main">
+                        No workout days set — this client won't show in daily coverage.
                       </Typography>
                     )}
                   </Stack>
