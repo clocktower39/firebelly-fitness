@@ -140,6 +140,44 @@ const get_my_clients = async (req, res, next) => {
   res.send(clients);
 };
 
+// A trainer sets one of their clients' workout-day preferences (the days that drive coverage + the
+// default days for new programs). Acts as the trainer themselves (not impersonation), relationship-
+// verified, and only ever touches preferredWorkoutDays / weeklyFrequency.
+const update_client_workout_preferences = async (req, res, next) => {
+  try {
+    if (!isRealTrainerSession(res.locals.user)) {
+      return res.status(403).json({ error: "Only trainer accounts can do this." });
+    }
+    const rel = await Relationship.findOne({
+      trainer: res.locals.user._id,
+      client: req.params.clientId,
+      accepted: true,
+    });
+    if (!rel) return res.status(403).json({ error: "Not your client." });
+    const update = {};
+    if (Array.isArray(req.body.preferredWorkoutDays)) {
+      update.preferredWorkoutDays = [
+        ...new Set(
+          req.body.preferredWorkoutDays
+            .map(Number)
+            .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+        ),
+      ].sort((a, b) => a - b);
+    }
+    const wf = Number(req.body.weeklyFrequency);
+    if (wf >= 1 && wf <= 7) update.weeklyFrequency = wf;
+    const client = await User.findByIdAndUpdate(
+      req.params.clientId,
+      { $set: update },
+      { new: true }
+    ).select("firstName lastName preferredWorkoutDays weeklyFrequency");
+    if (!client) return res.status(404).json({ error: "Client not found." });
+    return res.send({ status: "success", client });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 const remove_relationship = (req, res, next) => {
   const { trainer, client } = req.body;
   const userId = res.locals.user._id;
@@ -286,6 +324,7 @@ module.exports = {
   get_relationships,
   get_my_relationships,
   get_my_clients,
+  update_client_workout_preferences,
   remove_relationship,
   update_metrics_approval,
   update_relationship_permissions,

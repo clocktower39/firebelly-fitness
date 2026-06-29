@@ -9,6 +9,7 @@ import Loading from "../../Components/Loading";
 import DailyCheckinCard from "../../Components/DailyCheckinCard";
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
+import ClientWorkoutDaysChecklist from "../../Components/TrainingComponents/ClientWorkoutDaysChecklist";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
 import WeeklyTrainingStatus from "../../Components/TrainingComponents/WeeklyTrainingStatus";
 import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL } from "../../Redux/actions";
@@ -264,15 +265,20 @@ function Home() {
         />
       )}
       {user.isTrainer && !client && (
-        <WeeklyClientWorkoutTracker
-          selectedDate={selectedDate}
-          mode="day"
-          title="Daily Coverage"
-          description={`Quick view of clients expected on ${dayjs(selectedDate).format(
-            "dddd, MMM D"
-          )} and who still needs workouts entered.`}
-          showViewFullButton
-        />
+        <>
+          <Grid container size={12} sx={{ p: 1 }}>
+            <ClientWorkoutDaysChecklist />
+          </Grid>
+          <WeeklyClientWorkoutTracker
+            selectedDate={selectedDate}
+            mode="day"
+            title="Daily Coverage"
+            description={`Quick view of clients expected on ${dayjs(selectedDate).format(
+              "dddd, MMM D"
+            )} and who still needs workouts entered.`}
+            showViewFullButton
+          />
+        </>
       )}
     </>
   );

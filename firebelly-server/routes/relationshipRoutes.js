@@ -64,5 +64,11 @@ router.post(
   ensureWriteAccess,
   relationshipController.issue_client_view_token
 );
+router.post(
+  '/clients/:clientId/workout-preferences',
+  verifyAccessToken,
+  ensureWriteAccess,
+  relationshipController.update_client_workout_preferences
+);
 
 module.exports = router;

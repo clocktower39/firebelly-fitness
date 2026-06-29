@@ -5,6 +5,12 @@ export const accountApi = {
 
   getMyClients: () => apiFetch("/relationships/myClients"),
 
+  setClientWorkoutPreferences: (clientId, body) =>
+    apiFetch(`/clients/${encodeURIComponent(clientId)}/workout-preferences`, {
+      method: "POST",
+      body,
+    }),
+
   changeRelationshipStatus: ({ client, accepted }) =>
     apiFetch("/changeRelationshipStatus", {
       method: "POST",
