@@ -6,6 +6,7 @@ const Message = require("../models/message");
 const User = require("../models/user");
 const GuardianLink = require("../models/guardianLink");
 const Relationship = require("../models/relationship");
+const SavedReply = require("../models/savedReply");
 const { createNotification } = require("../services/notificationService");
 
 const PARTICIPANT_FIELDS = "firstName lastName username profilePicture isTrainer";
@@ -349,6 +350,67 @@ const broadcast_message = async (req, res, next) => {
   }
 };
 
+// ---- Saved replies (reusable canned responses) ----
+const list_saved_replies = async (req, res, next) => {
+  try {
+    const replies = await SavedReply.find({ user: res.locals.user._id })
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.send(replies);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const create_saved_reply = async (req, res, next) => {
+  try {
+    const text = String(req.body.text || "").trim();
+    if (!text) return res.status(400).send({ error: "Text is required." });
+    const reply = await SavedReply.create({ user: res.locals.user._id, text });
+    return res.send(reply);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const delete_saved_reply = async (req, res, next) => {
+  try {
+    await SavedReply.deleteOne({ _id: req.params.id, user: res.locals.user._id });
+    return res.send({ status: "success" });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// ---- Search across my messages ----
+const search_messages = async (req, res, next) => {
+  try {
+    const meId = res.locals.user._id;
+    const q = String(req.query.q || "").trim();
+    if (q.length < 2) return res.send([]);
+    const convos = await Conversation.find({ "participants.user": meId })
+      .select("_id type title participants")
+      .populate("participants.user", PARTICIPANT_FIELDS)
+      .lean();
+    const convoMap = new Map(convos.map((c) => [String(c._id), c]));
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const messages = await Message.find({
+      conversation: { $in: convos.map((c) => c._id) },
+      deletedAt: null,
+      body: { $regex: escaped, $options: "i" },
+    })
+      .sort({ createdAt: -1 })
+      .limit(40)
+      .populate("sender", PARTICIPANT_FIELDS)
+      .lean();
+    return res.send(
+      messages.map((m) => ({ ...m, conversation: convoMap.get(String(m.conversation)) }))
+    );
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   get_conversations,
   get_or_create_direct,
@@ -359,4 +421,8 @@ module.exports = {
   upload_attachment,
   get_attachment,
   broadcast_message,
+  list_saved_replies,
+  create_saved_reply,
+  delete_saved_reply,
+  search_messages,
 };

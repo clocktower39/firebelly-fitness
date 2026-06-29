@@ -48,5 +48,20 @@ router.post(
   ensureWriteAccess,
   conversationController.delete_message
 );
+router.get("/messages/search", verifyAccessToken, conversationController.search_messages);
+
+router.get("/saved-replies", verifyAccessToken, conversationController.list_saved_replies);
+router.post(
+  "/saved-replies",
+  verifyAccessToken,
+  ensureWriteAccess,
+  conversationController.create_saved_reply
+);
+router.post(
+  "/saved-replies/:id/delete",
+  verifyAccessToken,
+  ensureWriteAccess,
+  conversationController.delete_saved_reply
+);
 
 module.exports = router;

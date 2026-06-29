@@ -15,17 +15,30 @@ import {
   Divider,
   Grid,
   IconButton,
+  InputAdornment,
   List,
   ListItemButton,
   ListItemAvatar,
   ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { Add, ArrowBackIosNew, AttachFile, Campaign, Close, Delete, Send } from "@mui/icons-material";
+import {
+  Add,
+  ArrowBackIosNew,
+  AttachFile,
+  Campaign,
+  Close,
+  Delete,
+  Quickreply,
+  Search,
+  Send,
+} from "@mui/icons-material";
 import { conversationApi } from "../../api/conversationApi";
 import dayjs from "dayjs";
 import {
@@ -73,6 +86,10 @@ export default function Messages() {
   const [broadcasting, setBroadcasting] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
+  const [savedReplies, setSavedReplies] = useState([]);
+  const [replyAnchor, setReplyAnchor] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
   const isMobile = useMediaQuery((t) => t.breakpoints.down("md"));
   const endRef = useRef(null);
 
@@ -82,6 +99,23 @@ export default function Messages() {
   useEffect(() => {
     dispatch(getConversations());
   }, [dispatch]);
+
+  useEffect(() => {
+    conversationApi.getSavedReplies().then((r) => Array.isArray(r) && setSavedReplies(r));
+  }, []);
+
+  // Debounced message search.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      conversationApi.searchMessages(q).then((r) => Array.isArray(r) && setSearchResults(r));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   // ?u=<userId> → open/create the direct conversation, then switch to ?c=<conversationId>
   useEffect(() => {
@@ -142,6 +176,32 @@ export default function Messages() {
     if (res && res.fileId) {
       setPendingAtts((prev) => [...prev, { fileId: res.fileId, type: res.type, name: res.name }]);
     }
+  };
+
+  const refreshSavedReplies = () =>
+    conversationApi.getSavedReplies().then((r) => Array.isArray(r) && setSavedReplies(r));
+
+  const insertReply = (replyText) => {
+    setText((prev) => (prev ? `${prev} ${replyText}` : replyText));
+    setReplyAnchor(null);
+  };
+
+  const saveCurrentReply = async () => {
+    const t = text.trim();
+    if (!t) return;
+    await conversationApi.createSavedReply(t);
+    refreshSavedReplies();
+  };
+
+  const removeReply = async (id) => {
+    await conversationApi.deleteSavedReply(id);
+    refreshSavedReplies();
+  };
+
+  const openSearchResult = (conversationId) => {
+    if (!conversationId) return;
+    setSearchParams({ c: String(conversationId) });
+    setSearchQuery("");
   };
 
   const selectConversation = (id) => setSearchParams({ c: String(id) });
@@ -244,8 +304,43 @@ export default function Messages() {
           </Button>
         </Stack>
       </Stack>
+      <Box sx={{ px: 2, pb: 1 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search messages…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
       <Divider />
-      {conversations.length === 0 ? (
+      {searchQuery.trim().length >= 2 ? (
+        searchResults.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+            No matches.
+          </Typography>
+        ) : (
+          <List disablePadding>
+            {searchResults.map((m) => (
+              <ListItemButton key={m._id} onClick={() => openSearchResult(m.conversation?._id)}>
+                <ListItemText
+                  primary={convoTitle(m.conversation, meId)}
+                  secondary={m.body}
+                  primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
+                  secondaryTypographyProps={{ noWrap: true }}
+                />
+              </ListItemButton>
+            ))}
+          </List>
+        )
+      ) : conversations.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
           No conversations yet.
         </Typography>
@@ -419,6 +514,9 @@ export default function Messages() {
               <IconButton onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                 <AttachFile />
               </IconButton>
+              <IconButton onClick={(e) => setReplyAnchor(e.currentTarget)} title="Saved replies">
+                <Quickreply />
+              </IconButton>
               <TextField
                 fullWidth
                 size="small"
@@ -442,6 +540,42 @@ export default function Messages() {
                 <Send />
               </IconButton>
             </Stack>
+            <Menu
+              anchorEl={replyAnchor}
+              open={Boolean(replyAnchor)}
+              onClose={() => setReplyAnchor(null)}
+            >
+              {savedReplies.length === 0 && <MenuItem disabled>No saved replies yet</MenuItem>}
+              {savedReplies.map((r) => (
+                <MenuItem
+                  key={r._id}
+                  onClick={() => insertReply(r.text)}
+                  sx={{ maxWidth: 320, whiteSpace: "normal" }}
+                >
+                  <ListItemText primary={r.text} primaryTypographyProps={{ variant: "body2" }} />
+                  <IconButton
+                    size="small"
+                    sx={{ ml: 1 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeReply(r._id);
+                    }}
+                  >
+                    <Delete fontSize="inherit" />
+                  </IconButton>
+                </MenuItem>
+              ))}
+              <Divider />
+              <MenuItem
+                disabled={!text.trim()}
+                onClick={() => {
+                  saveCurrentReply();
+                  setReplyAnchor(null);
+                }}
+              >
+                <Add fontSize="small" sx={{ mr: 1 }} /> Save current message
+              </MenuItem>
+            </Menu>
           </Box>
         </>
       ) : (

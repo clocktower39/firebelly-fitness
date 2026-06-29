@@ -29,6 +29,13 @@ export const conversationApi = {
     return apiFetch("/messages/attachment", { method: "POST", body: fd });
   },
 
+  searchMessages: (q) => apiFetch(`/messages/search?q=${encodeURIComponent(q)}`),
+
+  getSavedReplies: () => apiFetch("/saved-replies"),
+  createSavedReply: (text) => apiFetch("/saved-replies", { method: "POST", body: { text } }),
+  deleteSavedReply: (id) =>
+    apiFetch(`/saved-replies/${id}/delete`, { method: "POST", body: {} }),
+
   markRead: (conversationId) =>
     apiFetch(`/conversations/${conversationId}/read`, { method: "POST", body: {} }),
 
