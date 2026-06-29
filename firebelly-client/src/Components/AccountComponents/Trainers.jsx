@@ -23,11 +23,12 @@ import {
   FormControlLabel,
   Typography,
 } from "@mui/material";
-import { AddCircle, Delete, Done, Message as MessageIcon, PendingActions } from "@mui/icons-material";
+import { AddCircle, Delete, Done, Message as MessageIcon, PendingActions, Tune as PermissionsIcon } from "@mui/icons-material";
 import { requestMyTrainers, removeRelationship, updateMetricsApproval, serverURL } from "../../Redux/actions";
 import SearchTrainerDialog from "./SearchTrainerDialog";
 import Messages from "../Messages";
 import TrainerConnections from "./TrainerConnections";
+import TrainerPermissionsDialog from "./TrainerPermissionsDialog";
 
 
 export default function Trainers({ socket }) {
@@ -111,6 +112,7 @@ export default function Trainers({ socket }) {
     const { trainer } = props;
     const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
     const [openMessageDrawer, setOpenMessageDrawer] = useState(false);
+    const [openPermissions, setOpenPermissions] = useState(false);
   
     const handleMessageDrawerOpen = () => setOpenMessageDrawer(true)
     const handleMessageDrawerClose = () => setOpenMessageDrawer(false)
@@ -139,6 +141,11 @@ export default function Trainers({ socket }) {
             }
             action={
               <>
+                {trainer.accepted && (
+                  <IconButton onClick={() => setOpenPermissions(true)} title="Manage access">
+                    <PermissionsIcon />
+                  </IconButton>
+                )}
                 <IconButton onClick={handleMessageDrawerOpen}>
                   <MessageIcon />
                 </IconButton>
@@ -260,6 +267,7 @@ export default function Trainers({ socket }) {
           </DialogContent>
         </Dialog>
         <Messages open={openMessageDrawer} handleClose={handleMessageDrawerClose} socket={socket} />
+        <TrainerPermissionsDialog open={openPermissions} onClose={() => setOpenPermissions(false)} trainer={trainer} />
       </Grid>
     );
   };

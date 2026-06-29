@@ -241,3 +241,13 @@ export function updateMetricsApproval(trainer, metricsApprovalRequired) {
     return dispatch(requestMyTrainers());
   };
 }
+
+export function updateTrainerPermissions(trainer, permissions) {
+  return async (dispatch) => {
+    const data = await accountApi.updateTrainerPermissions({ trainer, permissions });
+    if (data.error) {
+      return dispatch({ type: ERROR, error: data.error });
+    }
+    return dispatch(requestMyTrainers());
+  };
+}

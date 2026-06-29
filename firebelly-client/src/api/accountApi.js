@@ -37,6 +37,12 @@ export const accountApi = {
       body: { trainer, metricsApprovalRequired },
     }),
 
+  updateTrainerPermissions: ({ trainer, permissions }) =>
+    apiFetch("/relationships/permissions", {
+      method: "POST",
+      body: { trainer, permissions },
+    }),
+
   getTrainerConnections: () => apiFetch("/trainer-connections"),
 
   searchTrainerConnections: (payload) =>

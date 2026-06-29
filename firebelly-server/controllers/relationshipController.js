@@ -120,6 +120,7 @@ const get_my_relationships = async (req, res, next) => {
       profilePicture: t.profilePicture,
       accepted: relationship?.accepted ?? false,
       metricsApprovalRequired: relationship?.metricsApprovalRequired ?? true,
+      permissions: relationship?.permissions || null,
       engagementStatus: relationship?.engagementStatus || "active",
       serviceTags: normalizeServiceTags(relationship?.serviceTags),
       lastActivityAt,
