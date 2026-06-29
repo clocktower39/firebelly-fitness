@@ -5,6 +5,7 @@ const Conversation = require("../models/conversation");
 const Message = require("../models/message");
 const User = require("../models/user");
 const GuardianLink = require("../models/guardianLink");
+const Relationship = require("../models/relationship");
 const { createNotification } = require("../services/notificationService");
 
 const PARTICIPANT_FIELDS = "firstName lastName username profilePicture isTrainer";
@@ -278,6 +279,76 @@ const get_attachment = async (req, res, next) => {
   }
 };
 
+// Trainer broadcast: deliver one message to each selected client's 1:1 conversation.
+const broadcast_message = async (req, res, next) => {
+  try {
+    if (!res.locals.user.isTrainer || res.locals.user.delegationMode) {
+      return res.status(403).send({ error: "Only trainers can broadcast." });
+    }
+    const meId = String(res.locals.user._id);
+    const body = String(req.body.body || "").trim();
+    const clientIds = Array.isArray(req.body.clientIds) ? req.body.clientIds.map(String) : [];
+    if (!body) return res.status(400).send({ error: "A message is required." });
+    if (!clientIds.length) return res.status(400).send({ error: "Select at least one recipient." });
+
+    const rels = await Relationship.find({
+      trainer: meId,
+      client: { $in: clientIds },
+      accepted: true,
+    })
+      .select("client")
+      .lean();
+    const validIds = rels.map((r) => String(r.client));
+    const senderName =
+      [res.locals.user.firstName, res.locals.user.lastName].filter(Boolean).join(" ") ||
+      "New message";
+    const preview = previewOf(body);
+
+    let sent = 0;
+    for (const clientId of validIds) {
+      const directKey = [meId, clientId].sort().join("_");
+      const convo = await Conversation.findOneAndUpdate(
+        { directKey },
+        {
+          $setOnInsert: {
+            type: "direct",
+            directKey,
+            participants: [
+              { user: meId, role: "trainer" },
+              { user: clientId, role: "client" },
+            ],
+            createdBy: meId,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      let message = await Message.create({ conversation: convo._id, sender: meId, body });
+      convo.lastMessageAt = message.createdAt;
+      convo.lastMessagePreview = preview;
+      const meP = convo.participants.find((p) => String(p.user) === meId);
+      if (meP) meP.lastReadAt = message.createdAt;
+      await convo.save();
+      message = await message.populate("sender", PARTICIPANT_FIELDS);
+      if (global.io) {
+        global.io
+          .to(clientId)
+          .emit("message:new", { conversationId: String(convo._id), message });
+      }
+      await createNotification({
+        userId: clientId,
+        type: "MESSAGE",
+        title: senderName,
+        body: preview,
+        link: `/messages?c=${convo._id}`,
+      });
+      sent += 1;
+    }
+    return res.send({ sent });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   get_conversations,
   get_or_create_direct,
@@ -287,4 +358,5 @@ module.exports = {
   delete_message,
   upload_attachment,
   get_attachment,
+  broadcast_message,
 };

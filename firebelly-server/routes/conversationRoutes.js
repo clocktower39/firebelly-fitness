@@ -24,6 +24,12 @@ router.post(
   ensureWriteAccess,
   conversationController.get_or_create_direct
 );
+router.post(
+  "/conversations/broadcast",
+  verifyAccessToken,
+  ensureWriteAccess,
+  conversationController.broadcast_message
+);
 router.get(
   "/conversations/:id/messages",
   verifyAccessToken,

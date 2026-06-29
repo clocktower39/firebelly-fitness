@@ -6,8 +6,10 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -23,7 +25,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { Add, ArrowBackIosNew, AttachFile, Close, Delete, Send } from "@mui/icons-material";
+import { Add, ArrowBackIosNew, AttachFile, Campaign, Close, Delete, Send } from "@mui/icons-material";
 import { conversationApi } from "../../api/conversationApi";
 import dayjs from "dayjs";
 import {
@@ -65,6 +67,10 @@ export default function Messages() {
   const [pendingAtts, setPendingAtts] = useState([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [broadcastText, setBroadcastText] = useState("");
+  const [broadcastSel, setBroadcastSel] = useState([]);
+  const [broadcasting, setBroadcasting] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const isMobile = useMediaQuery((t) => t.breakpoints.down("md"));
@@ -181,6 +187,40 @@ export default function Messages() {
     if (convo?._id) setSearchParams({ c: String(convo._id) });
   };
 
+  const broadcastClients = useMemo(
+    () =>
+      clients
+        .filter((c) => c.accepted && c.client?._id)
+        .map((c) => ({
+          userId: String(c.client._id),
+          name: `${c.client.firstName || ""} ${c.client.lastName || ""}`.trim() || "Client",
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [clients]
+  );
+
+  const openBroadcast = () => {
+    dispatch(requestClients());
+    setBroadcastText("");
+    setBroadcastSel([]);
+    setBroadcastOpen(true);
+  };
+
+  const toggleBroadcast = (userId) =>
+    setBroadcastSel((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+
+  const handleBroadcast = async () => {
+    const body = broadcastText.trim();
+    if (!body || !broadcastSel.length) return;
+    setBroadcasting(true);
+    await conversationApi.broadcast(broadcastSel, body);
+    setBroadcasting(false);
+    setBroadcastOpen(false);
+    dispatch(getConversations());
+  };
+
   const showList = !isMobile || !activeId;
   const showThread = !isMobile || Boolean(activeId);
 
@@ -193,9 +233,16 @@ export default function Messages() {
         sx={{ p: 2, pb: 1 }}
       >
         <Typography variant="h6">Messages</Typography>
-        <Button size="small" startIcon={<Add />} onClick={openCompose}>
-          New
-        </Button>
+        <Stack direction="row" spacing={0.5}>
+          {user?.isTrainer && (
+            <Button size="small" startIcon={<Campaign />} onClick={openBroadcast}>
+              Broadcast
+            </Button>
+          )}
+          <Button size="small" startIcon={<Add />} onClick={openCompose}>
+            New
+          </Button>
+        </Stack>
       </Stack>
       <Divider />
       {conversations.length === 0 ? (
@@ -451,6 +498,69 @@ export default function Messages() {
             </List>
           )}
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={broadcastOpen} onClose={() => setBroadcastOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Broadcast a message</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Sends one message to each selected client.
+          </Typography>
+          {broadcastClients.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+              No clients yet.
+            </Typography>
+          ) : (
+            <>
+              <Button
+                size="small"
+                onClick={() =>
+                  setBroadcastSel(
+                    broadcastSel.length === broadcastClients.length
+                      ? []
+                      : broadcastClients.map((c) => c.userId)
+                  )
+                }
+              >
+                {broadcastSel.length === broadcastClients.length ? "Clear all" : "Select all"}
+              </Button>
+              <List dense sx={{ maxHeight: 220, overflowY: "auto" }}>
+                {broadcastClients.map((c) => (
+                  <ListItemButton key={c.userId} onClick={() => toggleBroadcast(c.userId)} dense>
+                    <Checkbox
+                      edge="start"
+                      checked={broadcastSel.includes(c.userId)}
+                      tabIndex={-1}
+                      disableRipple
+                    />
+                    <ListItemText primary={c.name} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </>
+          )}
+          <TextField
+            fullWidth
+            multiline
+            minRows={2}
+            maxRows={5}
+            size="small"
+            placeholder="Your message…"
+            value={broadcastText}
+            onChange={(e) => setBroadcastText(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBroadcastOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleBroadcast}
+            disabled={!broadcastText.trim() || !broadcastSel.length || broadcasting}
+          >
+            {broadcasting ? "Sending…" : `Send to ${broadcastSel.length}`}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

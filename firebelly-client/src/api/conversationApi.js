@@ -20,6 +20,9 @@ export const conversationApi = {
       body: { body, attachments },
     }),
 
+  broadcast: (clientIds, body) =>
+    apiFetch("/conversations/broadcast", { method: "POST", body: { clientIds, body } }),
+
   uploadAttachment: (file) => {
     const fd = new FormData();
     fd.append("file", file);
