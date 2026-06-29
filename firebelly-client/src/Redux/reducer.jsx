@@ -28,7 +28,11 @@ import {
   UPDATE_METRIC_ENTRY,
   DELETE_METRIC_ENTRY,
   UPDATE_CONVERSATIONS,
-  UPDATE_CONVERSATION_MESSAGES,
+  UPSERT_CONVERSATION,
+  SET_MESSAGES,
+  ADD_MESSAGE,
+  REMOVE_MESSAGE,
+  MARK_CONVO_READ,
   EDIT_SCHEDULE_EVENTS,
   EDIT_SESSION_SUMMARY,
   EDIT_WORKOUT_QUEUE,
@@ -48,6 +52,7 @@ import {
   goals,
   clients,
   conversations,
+  messagesByConversation,
   metrics,
   scheduleEvents,
   sessionSummary,
@@ -117,6 +122,7 @@ export let reducer = (
     goals,
     clients,
     conversations,
+    messagesByConversation,
     metrics,
     scheduleEvents,
     sessionSummary,
@@ -501,19 +507,77 @@ export let reducer = (
         ...state,
         conversations: [...action.conversations],
       };
-    case UPDATE_CONVERSATION_MESSAGES:
-      const updatedConversations = [
-        ...state.conversations.map((c) => {
-          if (c._id === action.conversation._id) {
-            c.messages = action.conversation.messages;
-          }
-          return c;
-        }),
-      ];
-
+    case UPSERT_CONVERSATION: {
+      const incoming = action.conversation;
+      const exists = state.conversations.some((c) => String(c._id) === String(incoming._id));
+      const conversations = exists
+        ? state.conversations.map((c) =>
+            String(c._id) === String(incoming._id) ? { ...c, ...incoming } : c
+          )
+        : [incoming, ...state.conversations];
+      return { ...state, conversations };
+    }
+    case SET_MESSAGES: {
+      const existing = state.messagesByConversation[action.conversationId] || [];
+      const merged = action.prepend ? [...action.messages, ...existing] : action.messages;
+      const seen = new Set();
+      const deduped = merged.filter((m) => {
+        const id = String(m._id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
       return {
         ...state,
-        conversations: [...updatedConversations],
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [action.conversationId]: deduped,
+        },
+      };
+    }
+    case ADD_MESSAGE: {
+      const list = state.messagesByConversation[action.conversationId] || [];
+      const already = list.some((m) => String(m._id) === String(action.message._id));
+      const nextList = already ? list : [...list, action.message];
+      const conversations = state.conversations
+        .map((c) =>
+          String(c._id) === String(action.conversationId)
+            ? {
+                ...c,
+                lastMessageAt: action.message.createdAt || c.lastMessageAt,
+                lastMessagePreview: action.message.body || c.lastMessagePreview,
+                unread: action.incrementUnread ? (c.unread || 0) + 1 : c.unread || 0,
+              }
+            : c
+        )
+        .sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0));
+      return {
+        ...state,
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [action.conversationId]: nextList,
+        },
+        conversations,
+      };
+    }
+    case REMOVE_MESSAGE: {
+      const list = state.messagesByConversation[action.conversationId] || [];
+      return {
+        ...state,
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [action.conversationId]: list.filter(
+            (m) => String(m._id) !== String(action.messageId)
+          ),
+        },
+      };
+    }
+    case MARK_CONVO_READ:
+      return {
+        ...state,
+        conversations: state.conversations.map((c) =>
+          String(c._id) === String(action.conversationId) ? { ...c, unread: 0 } : c
+        ),
       };
     case EDIT_SCHEDULE_EVENTS:
       return {

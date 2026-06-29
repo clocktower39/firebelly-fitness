@@ -49,15 +49,18 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Storefront as StorefrontIcon,
   FitnessCenter as ExerciseLibraryIcon,
+  Chat as MessagesIcon,
 } from "@mui/icons-material";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
 import BrandLogo from "../../Components/BrandLogo";
 import NotificationBell from "../../Components/NotificationBell";
+import NotificationToast from "../../Components/NotificationToast";
 
 export default function NavDrawer() {
   const user = useSelector((state) => state.user);
   const goals = useSelector((state) => state.goals);
+  const conversations = useSelector((state) => state.conversations);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const viewAsTrainer = hasDelegatedReturnAccessToken("trainer");
@@ -77,6 +80,8 @@ export default function NavDrawer() {
   const unseenAchievements = goals?.filter(
     (goal) => goal.achievedDate && !goal.achievementSeen
   )?.length || 0;
+
+  const unreadMessages = (conversations || []).reduce((sum, c) => sum + (c.unread || 0), 0);
 
   const pages = [
     {
@@ -99,6 +104,12 @@ export default function NavDrawer() {
       to: "/goals",
       icon: <GoalsIcon />,
       badge: unseenAchievements,
+    },
+    {
+      title: "Messages",
+      to: "/messages",
+      icon: <MessagesIcon />,
+      badge: unreadMessages,
     },
     {
       title: "Progress",
@@ -274,7 +285,7 @@ export default function NavDrawer() {
                   // Hide sensitive areas while a trainer is viewing a client (server also blocks them).
                   !(
                     viewAsTrainer &&
-                    ["/account", "/account/trainers", "/trainer-store", "/groups"].includes(page.to)
+                    ["/account", "/account/trainers", "/trainer-store", "/groups", "/messages"].includes(page.to)
                   )
               )
               .map((page, index) => (
@@ -325,6 +336,7 @@ export default function NavDrawer() {
 
   return (
     <>
+      {!viewAsTrainer && <NotificationToast />}
       <AppBar
         position="sticky"
         elevation={0}

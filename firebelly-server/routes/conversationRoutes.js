@@ -1,13 +1,34 @@
-const express = require('express');
-const conversationController = require('../controllers/conversationController');
+const express = require("express");
+const conversationController = require("../controllers/conversationController");
 const { verifyAccessToken } = require("../middleware/auth");
 const { ensureWriteAccess } = require("../middleware/ensureWriteAccess");
 
 const router = express.Router();
 
-router.get('/conversation/getConversations', verifyAccessToken, conversationController.get_conversations);
-router.post('/conversation/create', verifyAccessToken, ensureWriteAccess, conversationController.create_conversation);
-router.post('/conversation/message/delete', verifyAccessToken, ensureWriteAccess, conversationController.delete_message);
-router.post('/conversation/message/send', verifyAccessToken, ensureWriteAccess, conversationController.send_message);
+router.get("/conversations", verifyAccessToken, conversationController.get_conversations);
+router.post(
+  "/conversations/direct",
+  verifyAccessToken,
+  ensureWriteAccess,
+  conversationController.get_or_create_direct
+);
+router.get(
+  "/conversations/:id/messages",
+  verifyAccessToken,
+  conversationController.get_messages
+);
+router.post(
+  "/conversations/:id/messages",
+  verifyAccessToken,
+  ensureWriteAccess,
+  conversationController.send_message
+);
+router.post("/conversations/:id/read", verifyAccessToken, conversationController.mark_read);
+router.post(
+  "/messages/:id/delete",
+  verifyAccessToken,
+  ensureWriteAccess,
+  conversationController.delete_message
+);
 
 module.exports = router;

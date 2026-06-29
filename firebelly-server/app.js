@@ -191,11 +191,15 @@ global.io.use((socket, next) => {
 global.io.on("connection", (socket) => {
   const socketUser = socket.user || {};
   const userId = socketUser._id;
+  // In a "view-as" (delegated) session the socket belongs to the ACTING user (trainer/guardian),
+  // not the viewed account — so targeted notifications/messages follow the real person and don't
+  // leak to the viewer. Workout-room collaboration still uses viewedUserId separately.
+  const personalRoom = socketUser.delegationMode ? socketUser.actingUserId || userId : userId;
 
   // Save the user's socket ID
   connectedClients[userId] = socket.id;
   // Per-user room so services can push targeted notifications.
-  if (userId) socket.join(String(userId));
+  if (personalRoom) socket.join(String(personalRoom));
 
   // Notify all trainers about the client's online status
   global.io.emit("clientStatusChanged", { userId, status: "online" });

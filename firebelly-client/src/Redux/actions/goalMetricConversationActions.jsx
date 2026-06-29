@@ -1,6 +1,5 @@
 import { jwtDecode as jwt } from "jwt-decode";
 import { authApi } from "../../api/authApi";
-import { conversationApi } from "../../api/conversationApi";
 import { goalApi } from "../../api/goalApi";
 import { metricApi } from "../../api/metricApi";
 import { setAccessToken } from "../../api/client";
@@ -16,8 +15,6 @@ import {
   GET_GOALS,
   LOGIN_USER,
   REVIEW_METRIC_ENTRY,
-  UPDATE_CONVERSATION_MESSAGES,
-  UPDATE_CONVERSATIONS,
   UPDATE_GOAL,
   UPDATE_METRIC_ENTRY,
 } from "../actionTypes";
@@ -195,66 +192,6 @@ export function deleteMetricEntry(entryId, userId) {
     }
 
     return data;
-  };
-}
-
-export function getConversations() {
-  return async (dispatch, getState) => {
-    const data = await conversationApi.getConversations();
-    if (data.error) {
-      return dispatch({
-        type: ERROR,
-        error: data.error,
-      });
-    }
-
-    return dispatch({
-      type: UPDATE_CONVERSATIONS,
-      conversations: data,
-    });
-  };
-}
-
-export function sendMessage(conversationId, message) {
-  return async (dispatch, getState) => {
-    const data = await conversationApi.sendMessage({ conversationId, message });
-    if (data.error) {
-      return dispatch({
-        type: ERROR,
-        error: data.error,
-      });
-    }
-
-    return dispatch({
-      type: UPDATE_CONVERSATION_MESSAGES,
-      conversation: { ...data },
-    });
-  };
-}
-
-export function socketMessage(conversation) {
-  return async (dispatch) => {
-    return dispatch({
-      type: UPDATE_CONVERSATION_MESSAGES,
-      conversation,
-    });
-  };
-}
-
-export function deleteMessage(conversationId, messageId) {
-  return async (dispatch, getState) => {
-    const data = await conversationApi.deleteMessage({ conversationId, messageId });
-    if (data.error) {
-      return dispatch({
-        type: ERROR,
-        error: data.error,
-      });
-    }
-
-    return dispatch({
-      type: UPDATE_CONVERSATION_MESSAGES,
-      conversation: { ...data },
-    });
   };
 }
 
