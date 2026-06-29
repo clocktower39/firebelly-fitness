@@ -6,6 +6,7 @@ import {
   Badge,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -22,7 +23,8 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { Add, ArrowBackIosNew, Delete, Send } from "@mui/icons-material";
+import { Add, ArrowBackIosNew, AttachFile, Close, Delete, Send } from "@mui/icons-material";
+import { conversationApi } from "../../api/conversationApi";
 import dayjs from "dayjs";
 import {
   getConversations,
@@ -60,6 +62,9 @@ export default function Messages() {
   const myTrainers = useSelector((s) => s.myTrainers) || [];
   const [searchParams, setSearchParams] = useSearchParams();
   const [text, setText] = useState("");
+  const [pendingAtts, setPendingAtts] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const isMobile = useMediaQuery((t) => t.breakpoints.down("md"));
@@ -91,6 +96,18 @@ export default function Messages() {
   );
   const activeMessages = messagesByConversation[activeId] || [];
 
+  // Messages from a guardian (acting for their child) are labeled "· parent" so they're never
+  // mistaken for the child.
+  const guardianIds = useMemo(
+    () =>
+      new Set(
+        (activeConvo?.participants || [])
+          .filter((p) => p.role === "guardian")
+          .map((p) => String(p.user?._id || p.user))
+      ),
+    [activeConvo]
+  );
+
   // Clear unread whenever the open conversation has any (including on a freshly arrived message).
   useEffect(() => {
     if (activeId && activeConvo?.unread > 0) dispatch(markConversationRead(activeId));
@@ -102,9 +119,23 @@ export default function Messages() {
 
   const handleSend = async () => {
     const body = text.trim();
-    if (!body || !activeId) return;
+    if ((!body && !pendingAtts.length) || !activeId) return;
+    const atts = pendingAtts;
     setText("");
-    await dispatch(sendMessageTo(activeId, body));
+    setPendingAtts([]);
+    await dispatch(sendMessageTo(activeId, body, atts));
+  };
+
+  const handleAttach = async (e) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    const res = await conversationApi.uploadAttachment(file);
+    setUploading(false);
+    if (res && res.fileId) {
+      setPendingAtts((prev) => [...prev, { fileId: res.fileId, type: res.type, name: res.name }]);
+    }
   };
 
   const selectConversation = (id) => setSearchParams({ c: String(id) });
@@ -252,11 +283,50 @@ export default function Messages() {
                     {!mine && (
                       <Typography variant="caption" sx={{ fontWeight: 700, display: "block" }}>
                         {fullName(m.sender)}
+                        {guardianIds.has(String(m.sender?._id || m.sender)) ? " · parent" : ""}
                       </Typography>
                     )}
-                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                      {m.body}
-                    </Typography>
+                    {m.body && (
+                      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                        {m.body}
+                      </Typography>
+                    )}
+                    {(m.attachments || []).map((a) => (
+                      <Box key={String(a.fileId)} sx={{ mt: 0.5 }}>
+                        {a.type === "video" ? (
+                          <video
+                            src={`${serverURL}/messages/attachment/${a.fileId}`}
+                            controls
+                            style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 8 }}
+                          />
+                        ) : a.type === "image" ? (
+                          <a
+                            href={`${serverURL}/messages/attachment/${a.fileId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <img
+                              src={`${serverURL}/messages/attachment/${a.fileId}`}
+                              alt={a.name || "attachment"}
+                              style={{
+                                maxWidth: "100%",
+                                maxHeight: 240,
+                                borderRadius: 8,
+                                display: "block",
+                              }}
+                            />
+                          </a>
+                        ) : (
+                          <a
+                            href={`${serverURL}/messages/attachment/${a.fileId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {a.name || "Attachment"}
+                          </a>
+                        )}
+                      </Box>
+                    ))}
                     <Typography variant="caption" sx={{ opacity: 0.7, display: "block", mt: 0.25 }}>
                       {dayjs(m.createdAt).format("MMM D, h:mm A")}
                     </Typography>
@@ -276,26 +346,56 @@ export default function Messages() {
             <div ref={endRef} />
           </Box>
           <Divider />
-          <Stack direction="row" spacing={1} sx={{ p: 1.5 }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Type a message…"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              multiline
-              maxRows={4}
-            />
-            <IconButton color="primary" onClick={handleSend} disabled={!text.trim()}>
-              <Send />
-            </IconButton>
-          </Stack>
+          <Box sx={{ p: 1.5 }}>
+            {pendingAtts.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1, gap: 1 }}>
+                {pendingAtts.map((a, i) => (
+                  <Chip
+                    key={String(a.fileId)}
+                    size="small"
+                    icon={<AttachFile fontSize="small" />}
+                    label={a.name || a.type}
+                    onDelete={() => setPendingAtts((prev) => prev.filter((_, idx) => idx !== i))}
+                    deleteIcon={<Close fontSize="small" />}
+                  />
+                ))}
+              </Stack>
+            )}
+            <Stack direction="row" spacing={1} alignItems="flex-end">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={handleAttach}
+              />
+              <IconButton onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                <AttachFile />
+              </IconButton>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={uploading ? "Uploading…" : "Type a message…"}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                multiline
+                maxRows={4}
+              />
+              <IconButton
+                color="primary"
+                onClick={handleSend}
+                disabled={(!text.trim() && !pendingAtts.length) || uploading}
+              >
+                <Send />
+              </IconButton>
+            </Stack>
+          </Box>
         </>
       ) : (
         <Stack alignItems="center" justifyContent="center" sx={{ height: "100%" }}>

@@ -46,9 +46,9 @@ export function loadMessages(conversationId, opts = {}) {
   };
 }
 
-export function sendMessageTo(conversationId, body) {
+export function sendMessageTo(conversationId, body, attachments = []) {
   return async (dispatch) => {
-    const message = await conversationApi.sendMessage(conversationId, body);
+    const message = await conversationApi.sendMessage(conversationId, body, attachments);
     if (!message || message.error) {
       dispatch({ type: ERROR, error: message?.error || "Failed to send message" });
       return null;

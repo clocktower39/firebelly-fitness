@@ -1,6 +1,10 @@
+const mongoose = require("mongoose");
+const crypto = require("crypto");
+const path = require("path");
 const Conversation = require("../models/conversation");
 const Message = require("../models/message");
 const User = require("../models/user");
+const GuardianLink = require("../models/guardianLink");
 const { createNotification } = require("../services/notificationService");
 
 const PARTICIPANT_FIELDS = "firstName lastName username profilePicture isTrainer";
@@ -16,10 +20,29 @@ const unreadFor = (conversationId, userId, lastReadAt) =>
     createdAt: { $gt: lastReadAt || new Date(0) },
   });
 
+// A guardian reads + posts in their child's conversations — ensure they're a participant (role
+// "guardian") in each child's direct conversations so the unified inbox + endpoints include them.
+const ensureGuardianParticipation = async (guardianId) => {
+  const links = await GuardianLink.find({ guardianId }).select("childId").lean();
+  if (!links.length) return;
+  const childIds = links.map((l) => l.childId);
+  const childConvos = await Conversation.find({
+    type: "direct",
+    "participants.user": { $in: childIds },
+  });
+  for (const c of childConvos) {
+    if (!c.participants.some((p) => String(p.user) === String(guardianId))) {
+      c.participants.push({ user: guardianId, role: "guardian" });
+      await c.save();
+    }
+  }
+};
+
 // All my conversations, newest activity first, each with an unread count + populated participants.
 const get_conversations = async (req, res, next) => {
   try {
     const meId = res.locals.user._id;
+    await ensureGuardianParticipation(meId);
     const convos = await Conversation.find({ "participants.user": meId })
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .populate("participants.user", PARTICIPANT_FIELDS)
@@ -105,7 +128,12 @@ const send_message = async (req, res, next) => {
   try {
     const meId = res.locals.user._id;
     const body = String(req.body.body || "").trim();
-    if (!body) return res.status(400).send({ error: "Message body is required." });
+    const attachments = (Array.isArray(req.body.attachments) ? req.body.attachments : [])
+      .filter((a) => a && a.fileId)
+      .map((a) => ({ fileId: a.fileId, type: a.type || "file", name: a.name || "" }));
+    if (!body && !attachments.length) {
+      return res.status(400).send({ error: "A message body or attachment is required." });
+    }
 
     const convo = await Conversation.findOne({
       _id: req.params.id,
@@ -113,8 +141,12 @@ const send_message = async (req, res, next) => {
     });
     if (!convo) return res.status(403).send({ error: "Not a participant." });
 
-    let message = await Message.create({ conversation: convo._id, sender: meId, body });
-    const preview = previewOf(body);
+    let message = await Message.create({ conversation: convo._id, sender: meId, body, attachments });
+    const preview = body
+      ? previewOf(body)
+      : attachments[0]?.type === "video"
+      ? "🎥 Video"
+      : "📷 Photo";
     convo.lastMessageAt = message.createdAt;
     convo.lastMessagePreview = preview;
     const meP = convo.participants.find((p) => String(p.user) === String(meId));
@@ -197,6 +229,55 @@ const delete_message = async (req, res, next) => {
   }
 };
 
+// Upload a message attachment to GridFS; the returned fileId is sent back with send_message.
+const upload_attachment = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: "messageAttachment",
+    });
+    const filename =
+      crypto.randomBytes(16).toString("hex") + path.extname(req.file.originalname || "");
+    const stream = bucket.openUploadStream(filename, { contentType: req.file.mimetype });
+    stream.end(req.file.buffer);
+    stream.on("finish", () => {
+      const mime = req.file.mimetype || "";
+      const type = mime.startsWith("video/")
+        ? "video"
+        : mime.startsWith("image/")
+        ? "image"
+        : "file";
+      res.status(200).json({ fileId: stream.id, type, name: req.file.originalname || filename });
+    });
+    stream.on("error", (err) => next(err));
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Stream a message attachment. Served without auth like profile pictures (the fileId is an
+// unguessable ObjectId shared only within a conversation); tighten if attachments get sensitive.
+const get_attachment = async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid id." });
+    }
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: "messageAttachment",
+    });
+    const _id = new mongoose.Types.ObjectId(req.params.id);
+    const files = await bucket.find({ _id }).toArray();
+    if (!files.length) return res.status(404).json({ error: "Not found." });
+    res.set("Content-Type", files[0].contentType || "application/octet-stream");
+    bucket
+      .openDownloadStream(_id)
+      .on("error", () => res.sendStatus(404))
+      .pipe(res);
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   get_conversations,
   get_or_create_direct,
@@ -204,4 +285,6 @@ module.exports = {
   send_message,
   mark_read,
   delete_message,
+  upload_attachment,
+  get_attachment,
 };

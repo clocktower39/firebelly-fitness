@@ -12,6 +12,13 @@ const messageSchema = new mongoose.Schema(
     },
     sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     body: { type: String, default: "" },
+    attachments: [
+      {
+        fileId: { type: mongoose.Schema.Types.ObjectId },
+        type: { type: String, default: "file" }, // image | video | file
+        name: { type: String, default: "" },
+      },
+    ],
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

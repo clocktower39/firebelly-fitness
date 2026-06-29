@@ -14,8 +14,17 @@ export const conversationApi = {
     return apiFetch(`/conversations/${conversationId}/messages${q ? `?${q}` : ""}`);
   },
 
-  sendMessage: (conversationId, body) =>
-    apiFetch(`/conversations/${conversationId}/messages`, { method: "POST", body: { body } }),
+  sendMessage: (conversationId, body, attachments = []) =>
+    apiFetch(`/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: { body, attachments },
+    }),
+
+  uploadAttachment: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiFetch("/messages/attachment", { method: "POST", body: fd });
+  },
 
   markRead: (conversationId) =>
     apiFetch(`/conversations/${conversationId}/read`, { method: "POST", body: {} }),
