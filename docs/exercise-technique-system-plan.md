@@ -71,10 +71,11 @@ Exercise entry .techniques[]        ──  attachments: { key, params, appliesT
 ```
 
 - **Definitions** = *what a technique is and how to configure/show/validate it.* They live in a
-  **shared code registry** (one source of truth imported by client and server). Each definition
-  declares a typed **param schema** that drives (a) the auto-generated config form, (b) the display
-  string, and (c) validation. Adding a technique = adding one registry entry — **no builder, display,
-  or DB changes.** That is the "extensible without rewriting" property.
+  **registry of declarative data** (param schemas + display *templates* — no functions), canonical on
+  the server and served to the client via API, so a future DB-backed registry is a drop-in. Each
+  definition declares a typed **param schema** that drives (a) the auto-generated config form, (b) the
+  display string, and (c) validation. Adding a technique = adding one registry entry — **no builder,
+  display, or DB changes.** That is the "extensible without rewriting" property.
 
 - **Attachments** = *which techniques are applied to a given exercise and how.* Stored on the
   Training exercise entry as `techniques: [{ key, params, appliesToSets, notes }]`. The DB holds only
