@@ -291,16 +291,21 @@ export default function Messages() {
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ p: 2, pb: 1 }}
+        sx={{ p: 2, pb: 1, flexWrap: "wrap", gap: 1 }}
       >
         <Typography variant="h6">Messages</Typography>
-        <Stack direction="row" spacing={0.5}>
+        <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
           {user?.isTrainer && (
-            <Button size="small" startIcon={<Campaign />} onClick={openBroadcast}>
+            <Button
+              size="small"
+              startIcon={<Campaign />}
+              onClick={openBroadcast}
+              sx={{ minWidth: "auto" }}
+            >
               Broadcast
             </Button>
           )}
-          <Button size="small" startIcon={<Add />} onClick={openCompose}>
+          <Button size="small" startIcon={<Add />} onClick={openCompose} sx={{ minWidth: "auto" }}>
             New
           </Button>
         </Stack>
