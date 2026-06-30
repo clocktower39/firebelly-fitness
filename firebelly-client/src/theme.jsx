@@ -499,6 +499,152 @@ const light = {
   },
 };
 
+const pinkLemonade = {
+  palette: {
+    mode: "light",
+    primary: {
+      main: "#ec4899", // Pink 500
+      contrastText: "#ffffff",
+    },
+    secondary: {
+      main: "#facc15", // Lemon yellow 400
+      contrastText: "#3a2b31",
+    },
+    secondaryButton: {
+      main: "#facc15",
+      contrastText: "#3a2b31",
+    },
+    background: {
+      default: "#fff1f4", // soft pink wash
+      paper: "#ffffff",
+      NavDrawer: "linear-gradient(90deg, #fbcfe8, #fef3c7)", // pink -> lemon
+      ATCPaperBackground: "#ffffff",
+      DashboardCard: "#ffffff",
+      ChartToopTip: "#4a2533",
+      Footer: "#fbcfe8",
+    },
+    text: {
+      primary: "#3a2b31", // dark berry — strong contrast on the pink wash
+      secondary: "#6d4f59",
+    },
+    divider: "rgba(74, 37, 51, 0.12)",
+  },
+
+  typography: {
+    fontFamily: "'Roboto', 'Inter', sans-serif",
+    h1: { fontFamily: "'Montserrat', sans-serif", fontWeight: 700 },
+    h2: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h3: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h4: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h5: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h6: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    subtitle1: { fontSize: "1.1rem", fontWeight: 500 },
+    button: { fontWeight: 600, textTransform: "none" },
+  },
+
+  shape: {
+    borderRadius: 12,
+  },
+
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundColor: "#fff1f4",
+          scrollbarColor: "#f9a8d4 #fff1f4",
+          "&::-webkit-scrollbar, & *::-webkit-scrollbar": {
+            backgroundColor: "#fff1f4",
+            width: "8px",
+          },
+          "&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb": {
+            borderRadius: 8,
+            backgroundColor: "#f9a8d4",
+            border: "2px solid #fff1f4",
+          },
+        },
+      },
+    },
+
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          boxShadow: "none",
+          "&:hover": {
+            boxShadow: "0 4px 12px rgba(190, 24, 93, 0.18)",
+          },
+        },
+        containedPrimary: {
+          background: "linear-gradient(45deg, #ec4899 30%, #f472b6 90%)",
+        },
+      },
+    },
+
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          backgroundColor: "#ffffff",
+          boxShadow: "0 1px 3px rgba(74,37,51,0.08), 0 1px 2px rgba(74,37,51,0.06)",
+          border: "1px solid rgba(74, 37, 51, 0.08)",
+        },
+      },
+    },
+
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+        },
+        rounded: {
+          borderRadius: 16,
+        },
+      },
+    },
+
+    MuiTextField: {
+      defaultProps: {
+        variant: "outlined",
+      },
+      styleOverrides: {
+        root: {
+          "& .MuiOutlinedInput-root": {
+            borderRadius: 12,
+            backgroundColor: "#ffffff",
+            "& fieldset": {
+              borderColor: "rgba(74, 37, 51, 0.25)",
+            },
+            "&:hover fieldset": {
+              borderColor: "rgba(74, 37, 51, 0.45)",
+            },
+            "&.Mui-focused fieldset": {
+              borderColor: "#ec4899",
+            },
+          },
+        },
+      },
+    },
+
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 20,
+          backgroundColor: "#ffffff",
+          border: "1px solid rgba(74, 37, 51, 0.08)",
+        },
+      },
+    },
+
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          fontWeight: 500,
+        },
+      },
+    },
+  },
+};
+
 const buildCustomTheme = (customTheme) => {
   const colors = customTheme?.colors;
   if (!colors) {
@@ -684,6 +830,8 @@ export const theme = () => {
         return ember;
       case 'light':
         return light;
+      case 'pinkLemonade':
+        return pinkLemonade;
       default:
         return dark;
     }

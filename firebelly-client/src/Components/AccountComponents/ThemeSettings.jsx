@@ -27,6 +27,7 @@ export default function AccountSettings() {
     { label: "Moor Frog (Light and Dark Blue)", value: "moor" },
     { label: "Ember (Black and Red)", value: "ember" },
     { label: "Light", value: "light" },
+    { label: "Pink Lemonade (Pink and Yellow)", value: "pinkLemonade" },
   ];
 
   const customOptions = useMemo(
