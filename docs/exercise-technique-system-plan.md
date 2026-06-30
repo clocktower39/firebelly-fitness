@@ -208,6 +208,13 @@ Display text comes from each definition's `display(params)`, so it stays consist
   migration maps old attachments forward (and `schemaVersion` is added to the attachment only if
   needed).
 
+**Built in M5:** `GET /techniques` is the live registry/AI contract (definitions + param schemas — an
+AI emits attachments as `{key, params}` validated against it); client-education popovers (tap a
+technique chip → its description + coach notes); and a technique-usage analytics endpoint
+(`GET /techniques/usage`, trainer-scoped across clients, backed by a multikey index on
+`training.techniques.key`). Saved presets, import/export, and team-template sharing remain
+design-ready — the attachment `{key, params}` shape is already portable and definitions are versioned.
+
 ---
 
 ## 7. Risks & mitigations

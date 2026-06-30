@@ -19,7 +19,7 @@ const ALWAYS_ALLOWED = [
   /^\/checkAuthToken$/, /^\/getUser$/, /^\/trainers$/, /^\/user\/profilePicture\//,
   /^\/exerciseLibrary$/, /^\/exerciseAliases$/, /^\/setExerciseAlias$/, /^\/exerciseFavorites$/,
   /^\/toggleExerciseFavorite$/, /^\/search_exercise$/, /^\/createExercise$/, /^\/updateExercise$/,
-  /^\/mergeExercises$/, /^\/techniques$/,
+  /^\/mergeExercises$/, /^\/techniques(\/.*)?$/,
 ];
 
 // Client-data areas the client can grant per trainer (none | view | manage).

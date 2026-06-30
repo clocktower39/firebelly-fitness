@@ -19,10 +19,12 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { ArrowBackIosNew, Close, Delete, Search } from "@mui/icons-material";
+import { ArrowBackIosNew, Close, Delete, Search, Star, StarBorder } from "@mui/icons-material";
 import { renderTechniqueDisplay } from "../../utils/techniqueRegistry";
+import { getFavorites, toggleFavorite, getRecents, pushRecent } from "../../utils/techniquePrefs";
 
 const APPLIES = { WHOLE: "whole", LAST: "last" };
 
@@ -89,7 +91,9 @@ export default function TechniqueDrawer({
   exerciseSets = 0,
 }) {
   const [search, setSearch] = useState("");
-  const [draft, setDraft] = useState(null); // { def, params, applies } while configuring
+  const [draft, setDraft] = useState(null); // { def, params, applies, notes } while configuring
+  const [favorites, setFavorites] = useState(getFavorites());
+  const recents = getRecents();
 
   const categories = registry.categories || [];
   const all = registry.techniques || [];
@@ -107,18 +111,41 @@ export default function TechniqueDrawer({
     (def.params || []).forEach((p) => {
       if (p.default !== undefined) params[p.name] = p.default;
     });
-    setDraft({ def, params, applies: APPLIES.WHOLE });
+    setDraft({ def, params, applies: APPLIES.WHOLE, notes: "" });
   };
+
+  const handleToggleFavorite = (key) => setFavorites(toggleFavorite(key));
 
   const setParam = (name, val) => setDraft((d) => ({ ...d, params: { ...d.params, [name]: val } }));
 
   const addTechnique = () => {
-    const { def, params, applies } = draft;
+    const { def, params, applies, notes } = draft;
     const appliesToSets =
       def.scope === "set" && applies === APPLIES.LAST && exerciseSets > 0 ? [exerciseSets - 1] : [];
-    onChange([...(techniques || []), { key: def.key, scope: def.scope, appliesToSets, params, notes: "" }]);
+    onChange([
+      ...(techniques || []),
+      { key: def.key, scope: def.scope, appliesToSets, params, notes: notes || "" },
+    ]);
+    pushRecent(def.key);
     setDraft(null);
     setSearch("");
+  };
+
+  const quickPick = (title, keys) => {
+    const defs = keys.map((k) => registry.byKey?.[k]).filter(Boolean);
+    if (defs.length === 0) return null;
+    return (
+      <Box>
+        <Typography variant="overline" color="text.secondary">
+          {title}
+        </Typography>
+        <Stack direction="row" flexWrap="wrap" gap={1}>
+          {defs.map((d) => (
+            <Chip key={d.key} label={d.name} variant="outlined" clickable onClick={() => startConfig(d)} />
+          ))}
+        </Stack>
+      </Box>
+    );
   };
 
   const removeTechnique = (index) => onChange(techniques.filter((_, i) => i !== index));
@@ -151,9 +178,20 @@ export default function TechniqueDrawer({
       <DialogContent dividers>
         {draft ? (
           <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
-              {draft.def.description}
-            </Typography>
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+              <Typography variant="body2" color="text.secondary">
+                {draft.def.description}
+              </Typography>
+              <Tooltip title={favorites.includes(draft.def.key) ? "Unfavorite" : "Favorite"}>
+                <IconButton size="small" onClick={() => handleToggleFavorite(draft.def.key)}>
+                  {favorites.includes(draft.def.key) ? (
+                    <Star fontSize="small" color="warning" />
+                  ) : (
+                    <StarBorder fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
+            </Stack>
             {(draft.def.params || []).map((p) => (
               <ParamField key={p.name} param={p} value={draft.params[p.name]} onChange={(v) => setParam(p.name, v)} />
             ))}
@@ -173,6 +211,15 @@ export default function TechniqueDrawer({
                 </ToggleButtonGroup>
               </Box>
             )}
+            <TextField
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+              label="Coach notes (optional)"
+              value={draft.notes}
+              onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+            />
             <Divider />
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
@@ -224,6 +271,8 @@ export default function TechniqueDrawer({
                 ),
               }}
             />
+            {!search && quickPick("Favorites", favorites)}
+            {!search && quickPick("Recently used", recents)}
             {categories.map((cat) => {
               const items = filtered.filter((t) => t.category === cat.key);
               if (items.length === 0) return null;

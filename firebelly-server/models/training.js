@@ -116,6 +116,9 @@ const trainingSchema = new mongoose.Schema(
   { minimize: false }
 );
 
+// Analytics: technique usage aggregation (multikey index on the nested attachment key).
+trainingSchema.index({ "training.techniques.key": 1 });
+
 trainingSchema.plugin(mongoosePaginate);
 
 const Training = mongoose.model("Training", trainingSchema);

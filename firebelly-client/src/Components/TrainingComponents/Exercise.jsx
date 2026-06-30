@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Autocomplete,
+  Box,
   Button,
   Card,
   CardContent,
@@ -12,6 +13,7 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Popover,
   TextField,
   Tooltip,
   Typography,
@@ -54,6 +56,8 @@ export default function Exercise(props) {
   const dispatch = useDispatch();
   const techniqueRegistry = useTechniqueRegistry();
   const [techniqueDrawerOpen, setTechniqueDrawerOpen] = useState(false);
+  const [techInfoAnchor, setTechInfoAnchor] = useState(null);
+  const [techInfo, setTechInfo] = useState(null);
 
   const updateTechniques = (nextTechniques) =>
     setLocalTraining((prev) =>
@@ -588,6 +592,10 @@ export default function Exercise(props) {
                         variant="outlined"
                         color="primary"
                         label={qualifier ? `${label} · ${qualifier}` : label}
+                        onClick={(e) => {
+                          setTechInfo(t);
+                          setTechInfoAnchor(e.currentTarget);
+                        }}
                         onDelete={
                           editMode
                             ? () =>
@@ -679,6 +687,28 @@ export default function Exercise(props) {
             onChange={updateTechniques}
             exerciseSets={sets}
           />
+          <Popover
+            open={Boolean(techInfoAnchor)}
+            anchorEl={techInfoAnchor}
+            onClose={() => setTechInfoAnchor(null)}
+            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+          >
+            {techInfo && (
+              <Box sx={{ p: 2, maxWidth: 280 }}>
+                <Typography variant="subtitle2">
+                  {techniqueRegistry.byKey?.[techInfo.key]?.name || techInfo.key}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {techniqueRegistry.byKey?.[techInfo.key]?.description}
+                </Typography>
+                {techInfo.notes && (
+                  <Typography variant="body2" sx={{ mt: 1, fontStyle: "italic" }}>
+                    “{techInfo.notes}”
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Popover>
         </Grid>
       </CardContent>
     </Card>
