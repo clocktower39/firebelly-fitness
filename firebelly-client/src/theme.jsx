@@ -648,6 +648,155 @@ const pinkLemonade = {
   },
 };
 
+const julyFourth = {
+  palette: {
+    mode: "light",
+    primary: {
+      // contrastText kept dark for the many headings/labels that use it on the light page;
+      // contained buttons override back to white below.
+      main: "#2563eb", // Blue 600
+      contrastText: "#1e293b",
+    },
+    secondary: {
+      main: "#dc2626", // Red 600
+      contrastText: "#ffffff",
+    },
+    secondaryButton: {
+      main: "#dc2626",
+      contrastText: "#ffffff",
+    },
+    background: {
+      default: "#f2f5fb", // crisp cool white
+      paper: "#ffffff",
+      NavDrawer: "linear-gradient(90deg, #dbeafe, #fee2e2)", // light blue -> light red
+      ATCPaperBackground: "#ffffff",
+      DashboardCard: "#ffffff",
+      ChartToopTip: "#172554",
+      Footer: "#dbeafe",
+    },
+    text: {
+      primary: "#1e293b", // slate — strong contrast on the light background
+      secondary: "#475569",
+    },
+    divider: "rgba(30, 41, 59, 0.12)",
+  },
+
+  typography: {
+    fontFamily: "'Roboto', 'Inter', sans-serif",
+    h1: { fontFamily: "'Montserrat', sans-serif", fontWeight: 700 },
+    h2: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h3: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h4: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h5: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    h6: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+    subtitle1: { fontSize: "1.1rem", fontWeight: 500 },
+    button: { fontWeight: 600, textTransform: "none" },
+  },
+
+  shape: {
+    borderRadius: 12,
+  },
+
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundColor: "#f2f5fb",
+          scrollbarColor: "#93c5fd #f2f5fb",
+          "&::-webkit-scrollbar, & *::-webkit-scrollbar": {
+            backgroundColor: "#f2f5fb",
+            width: "8px",
+          },
+          "&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb": {
+            borderRadius: 8,
+            backgroundColor: "#93c5fd",
+            border: "2px solid #f2f5fb",
+          },
+        },
+      },
+    },
+
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          boxShadow: "none",
+          "&:hover": {
+            boxShadow: "0 4px 12px rgba(29, 78, 216, 0.18)",
+          },
+        },
+        containedPrimary: {
+          background: "linear-gradient(45deg, #1d4ed8 30%, #3b82f6 90%)",
+          color: "#ffffff",
+        },
+      },
+    },
+
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          backgroundColor: "#ffffff",
+          boxShadow: "0 1px 3px rgba(30,41,59,0.08), 0 1px 2px rgba(30,41,59,0.06)",
+          border: "1px solid rgba(30, 41, 59, 0.08)",
+        },
+      },
+    },
+
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+        },
+        rounded: {
+          borderRadius: 16,
+        },
+      },
+    },
+
+    MuiTextField: {
+      defaultProps: {
+        variant: "outlined",
+      },
+      styleOverrides: {
+        root: {
+          "& .MuiOutlinedInput-root": {
+            borderRadius: 12,
+            backgroundColor: "#ffffff",
+            "& fieldset": {
+              borderColor: "rgba(30, 41, 59, 0.25)",
+            },
+            "&:hover fieldset": {
+              borderColor: "rgba(30, 41, 59, 0.45)",
+            },
+            "&.Mui-focused fieldset": {
+              borderColor: "#1d4ed8",
+            },
+          },
+        },
+      },
+    },
+
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 20,
+          backgroundColor: "#ffffff",
+          border: "1px solid rgba(30, 41, 59, 0.08)",
+        },
+      },
+    },
+
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          fontWeight: 500,
+        },
+      },
+    },
+  },
+};
+
 const buildCustomTheme = (customTheme) => {
   const colors = customTheme?.colors;
   if (!colors) {
@@ -835,6 +984,8 @@ export const theme = () => {
         return light;
       case 'pinkLemonade':
         return pinkLemonade;
+      case 'julyFourth':
+        return julyFourth;
       default:
         return dark;
     }

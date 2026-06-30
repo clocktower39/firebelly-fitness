@@ -28,6 +28,7 @@ export default function AccountSettings() {
     { label: "Ember (Black and Red)", value: "ember" },
     { label: "Light", value: "light" },
     { label: "Pink Lemonade (Pink and Yellow)", value: "pinkLemonade" },
+    { label: "4th of July (Red, White & Blue)", value: "julyFourth" },
   ];
 
   const customOptions = useMemo(
