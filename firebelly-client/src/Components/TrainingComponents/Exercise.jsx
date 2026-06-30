@@ -17,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  Add,
   FactCheck,
   Info,
   RemoveCircle,
@@ -30,6 +31,12 @@ import ExerciseGoalPresetField from "./ExerciseGoalPresetField";
 import useExerciseGoalPreset from "./hooks/useExerciseGoalPreset";
 import { ModalBarChartHistory } from "../../Pages/AppPages/Progress";
 import { normalizeWeightUnit } from "../../utils/weightUnits";
+import {
+  useTechniqueRegistry,
+  renderTechniqueDisplay,
+  appliesToLabel,
+} from "../../utils/techniqueRegistry";
+import TechniqueDrawer from "./TechniqueDrawer";
 
 export default function Exercise(props) {
   const {
@@ -45,6 +52,19 @@ export default function Exercise(props) {
     onToggleWeightUnit,
   } = props;
   const dispatch = useDispatch();
+  const techniqueRegistry = useTechniqueRegistry();
+  const [techniqueDrawerOpen, setTechniqueDrawerOpen] = useState(false);
+
+  const updateTechniques = (nextTechniques) =>
+    setLocalTraining((prev) =>
+      prev.map((set, sIndex) =>
+        sIndex === setIndex
+          ? set.map((item, eIndex) =>
+              eIndex === exerciseIndex ? { ...item, techniques: nextTechniques } : item
+            )
+          : set
+      )
+    );
 
   const [title, setTitle] = useState(exercise.exercise);
   const [exerciseType, setExerciseType] = useState(exercise.exerciseType || "Reps");
@@ -557,6 +577,36 @@ export default function Exercise(props) {
                   {exercise.feedback?.difficulty === 2 && (
                     <Chip size="small" color="error" label="Too hard" />
                   )}
+                  {(exercise.techniques || []).map((t) => {
+                    const label = renderTechniqueDisplay(techniqueRegistry, t.key, t.params);
+                    if (!label) return null;
+                    const qualifier = appliesToLabel(t.appliesToSets, sets);
+                    return (
+                      <Chip
+                        key={t._id || t.key}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        label={qualifier ? `${label} · ${qualifier}` : label}
+                        onDelete={
+                          editMode
+                            ? () =>
+                                updateTechniques(
+                                  (exercise.techniques || []).filter((x) => x !== t)
+                                )
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    icon={<Add fontSize="small" />}
+                    label="Technique"
+                    onClick={() => setTechniqueDrawerOpen(true)}
+                    clickable
+                  />
                 </Grid>
                 <Grid
                   container
@@ -621,6 +671,14 @@ export default function Exercise(props) {
               handleClose={handleClose}
             />
           )}
+          <TechniqueDrawer
+            open={techniqueDrawerOpen}
+            onClose={() => setTechniqueDrawerOpen(false)}
+            registry={techniqueRegistry}
+            techniques={exercise.techniques || []}
+            onChange={updateTechniques}
+            exerciseSets={sets}
+          />
         </Grid>
       </CardContent>
     </Card>
