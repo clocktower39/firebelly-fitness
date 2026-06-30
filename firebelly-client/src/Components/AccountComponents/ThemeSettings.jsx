@@ -12,9 +12,59 @@ import {
   DialogTitle,
   Grid,
   Paper,
+  Popover,
+  Stack,
   TextField,
   Typography,
 } from "@mui/material";
+import { HexColorPicker } from "react-colorful";
+
+// Cross-platform color control: a swatch that opens a gradient picker (works with touch on mobile,
+// unlike the native <input type="color"> which falls back to a limited preset list on many phones)
+// plus a hex field for precise entry.
+const ColorField = ({ label, value, onChange }) => {
+  const [anchorEl, setAnchorEl] = useState(null);
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+        {label}
+      </Typography>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Box
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          role="button"
+          aria-label={`Pick ${label}`}
+          sx={{
+            width: 44,
+            height: 44,
+            flex: "0 0 auto",
+            borderRadius: 1.5,
+            cursor: "pointer",
+            backgroundColor: value,
+            border: "1px solid rgba(128,128,128,0.5)",
+          }}
+        />
+        <TextField
+          size="small"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          sx={{ width: 130 }}
+          inputProps={{ "aria-label": `${label} hex value` }}
+        />
+      </Stack>
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Box sx={{ p: 1.5 }}>
+          <HexColorPicker color={value} onChange={onChange} />
+        </Box>
+      </Popover>
+    </Box>
+  );
+};
 
 export default function AccountSettings() {
   const dispatch = useDispatch();
@@ -98,13 +148,7 @@ export default function AccountSettings() {
     dispatch(updateThemeMode(themeSelection.value));
   };
 
-  const handleColorChange = (key) => (event) => {
-    const value = event.target.value;
-    setThemeColors((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+  const setColor = (key) => (hex) => setThemeColors((prev) => ({ ...prev, [key]: hex }));
 
   const generateThemeId = () =>
     `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -293,63 +337,45 @@ export default function AccountSettings() {
               />
             </Grid>
             <Grid size={12}>
-              <TextField
-                fullWidth
+              <ColorField
                 label="Primary color"
-                type="color"
                 value={themeColors.primary}
-                onChange={handleColorChange("primary")}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={setColor("primary")}
               />
             </Grid>
             <Grid size={12}>
-              <TextField
-                fullWidth
+              <ColorField
                 label="Secondary color"
-                type="color"
                 value={themeColors.secondary}
-                onChange={handleColorChange("secondary")}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={setColor("secondary")}
               />
             </Grid>
             <Grid size={12}>
-              <TextField
-                fullWidth
+              <ColorField
                 label="Background default"
-                type="color"
                 value={themeColors.backgroundDefault}
-                onChange={handleColorChange("backgroundDefault")}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={setColor("backgroundDefault")}
               />
             </Grid>
             <Grid size={12}>
-              <TextField
-                fullWidth
+              <ColorField
                 label="Background paper"
-                type="color"
                 value={themeColors.backgroundPaper}
-                onChange={handleColorChange("backgroundPaper")}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={setColor("backgroundPaper")}
               />
             </Grid>
             <Grid size={12}>
-              <TextField
-                fullWidth
+              <ColorField
                 label="Text primary"
-                type="color"
                 value={themeColors.textPrimary}
-                onChange={handleColorChange("textPrimary")}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={setColor("textPrimary")}
               />
             </Grid>
             <Grid size={12}>
-              <TextField
-                fullWidth
+              <ColorField
                 label="Text secondary"
-                type="color"
                 value={themeColors.textSecondary}
-                onChange={handleColorChange("textSecondary")}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={setColor("textSecondary")}
               />
             </Grid>
             <Grid size={12}>
