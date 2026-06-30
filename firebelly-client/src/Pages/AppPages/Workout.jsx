@@ -289,6 +289,7 @@ export default function Workout({ socket }) {
                 percent: Array(setCount).fill(0),
                 seconds: Array(setCount).fill(0),
               },
+              techniques: [],
             });
           });
         }

@@ -290,6 +290,7 @@ export function addExerciseToWorkout({ exercise, workout, setCount = 4 }) {
         seconds: zeros(),
       },
       achieved: { sets: 0, reps: zeros(), weight: zeros(), percent: zeros(), seconds: zeros() },
+      techniques: [],
     };
     const newTraining = [...(workout.training || []), [entry]];
     return dispatch(updateTraining(workout._id, { ...workout, training: newTraining }));

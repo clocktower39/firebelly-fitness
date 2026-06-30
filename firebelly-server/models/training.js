@@ -12,6 +12,20 @@ const commentSchema = new mongoose.Schema(
   { _id: true }
 );
 
+// One Exercise Technique attachment (Exercise Technique System). `key` references
+// services/techniqueRegistry.js; `params` is free-form here but is validated against that registry on
+// save (Mongoose does not validate Mixed). See docs/exercise-technique-system-plan.md.
+const techniqueSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    scope: { type: String, enum: ["exercise", "set"], default: "exercise" },
+    appliesToSets: { type: [Number], default: [] },
+    params: { type: mongoose.Schema.Types.Mixed, default: {} },
+    notes: { type: String, default: "" },
+  },
+  { _id: true }
+);
+
 const trainingSchema = new mongoose.Schema(
   {
     title: { type: String },
@@ -47,6 +61,7 @@ const trainingSchema = new mongoose.Schema(
               difficulty: { type: Number, min: 0, max: 2, default: 1 },
               comments: { type: [commentSchema], default: [], }
             },
+            techniques: { type: [techniqueSchema], default: [] },
           },
         ],
       ],

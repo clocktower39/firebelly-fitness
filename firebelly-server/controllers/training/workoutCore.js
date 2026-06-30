@@ -15,6 +15,7 @@ const {
 } = require("./context");
 const { createNotification } = require("../../services/notificationService");
 const { bridgeWorkoutComment } = require("../../services/messagingBridge");
+const { sanitizeTrainingTechniques } = require("../../services/techniqueValidation");
 
 const create_training = async (req, res, next) => {
   try {
@@ -34,6 +35,9 @@ const create_training = async (req, res, next) => {
       targetUserId = userId;
     }
 
+    if (Array.isArray(payload.training)) {
+      payload.training = sanitizeTrainingTechniques(payload.training);
+    }
     const training = new Training({
       ...payload,
       user: targetUserId,
@@ -89,6 +93,9 @@ const update_training = async (req, res, next) => {
       return res.status(403).json({ error: "Unauthorized access." });
     }
 
+    if (req.body.training && Array.isArray(req.body.training.training)) {
+      req.body.training.training = sanitizeTrainingTechniques(req.body.training.training);
+    }
     const updates = pick(req.body.training, TRAINING_UPDATE_FIELDS);
     const training = await Training.findByIdAndUpdate(
       req.body._id,

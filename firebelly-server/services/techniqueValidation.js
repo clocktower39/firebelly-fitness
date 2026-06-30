@@ -143,9 +143,31 @@ const validateAttachment = (attachment = {}) => {
   };
 };
 
+// Walk a training[][] array and normalize every exercise's techniques[] against the registry,
+// dropping any attachment that fails validation. Returns a NEW array (no mutation); safe on missing
+// fields. This is the server's integrity guard on save (Mongoose does not validate Mixed params).
+const sanitizeTrainingTechniques = (training) => {
+  if (!Array.isArray(training)) return training;
+  return training.map((circuit) =>
+    Array.isArray(circuit)
+      ? circuit.map((entry) => {
+          if (!entry || !Array.isArray(entry.techniques) || entry.techniques.length === 0) {
+            return entry;
+          }
+          const techniques = entry.techniques
+            .map((t) => validateAttachment(t))
+            .filter((r) => r.valid)
+            .map((r) => r.value);
+          return { ...entry, techniques };
+        })
+      : circuit
+  );
+};
+
 module.exports = {
   validateParamValue,
   validateTechniqueParams,
   renderTechniqueDisplay,
   validateAttachment,
+  sanitizeTrainingTechniques,
 };
