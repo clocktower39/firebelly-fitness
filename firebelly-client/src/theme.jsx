@@ -503,8 +503,10 @@ const pinkLemonade = {
   palette: {
     mode: "light",
     primary: {
+      // Many components use primary.contrastText for headings/labels that sit on the light page,
+      // so it must be dark to stay readable; contained buttons override back to white below.
       main: "#ec4899", // Pink 500
-      contrastText: "#ffffff",
+      contrastText: "#3a2b31",
     },
     secondary: {
       main: "#facc15", // Lemon yellow 400
@@ -575,6 +577,7 @@ const pinkLemonade = {
         },
         containedPrimary: {
           background: "linear-gradient(45deg, #ec4899 30%, #f472b6 90%)",
+          color: "#ffffff", // white reads best on the pink button
         },
       },
     },
