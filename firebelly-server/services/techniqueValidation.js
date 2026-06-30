@@ -135,11 +135,15 @@ const validateAttachment = (attachment = {}) => {
   errors.push(...paramResult.errors);
 
   const notes = typeof attachment.notes === "string" ? attachment.notes.slice(0, MAX_NOTES) : "";
+  // result is the client's logged achieved data — passed through leniently (not strictly
+  // schema-validated, since logs can legitimately deviate from the prescription).
+  const result =
+    attachment.result && typeof attachment.result === "object" ? attachment.result : null;
 
   return {
     valid: errors.length === 0,
     errors,
-    value: { key: def.key, scope, appliesToSets, params: paramResult.value, notes },
+    value: { key: def.key, scope, appliesToSets, params: paramResult.value, result, notes },
   };
 };
 

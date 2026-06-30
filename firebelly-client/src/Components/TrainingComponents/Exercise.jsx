@@ -39,6 +39,7 @@ import {
   appliesToLabel,
 } from "../../utils/techniqueRegistry";
 import TechniqueDrawer from "./TechniqueDrawer";
+import TechniqueLogger from "./TechniqueLogger";
 
 export default function Exercise(props) {
   const {
@@ -666,6 +667,11 @@ export default function Exercise(props) {
                 setLocalTraining={setLocalTraining}
                 weightUnit={weightUnit}
                 onToggleWeightUnit={onToggleWeightUnit}
+              />
+              <TechniqueLogger
+                registry={techniqueRegistry}
+                techniques={exercise.techniques || []}
+                onChange={updateTechniques}
               />
             </>
           )}

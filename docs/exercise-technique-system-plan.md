@@ -215,6 +215,15 @@ technique chip → its description + coach notes); and a technique-usage analyti
 `training.techniques.key`). Saved presets, import/export, and team-template sharing remain
 design-ready — the attachment `{key, params}` shape is already portable and definitions are versioned.
 
+**Built in M6 (technique-aware client logging):** structured techniques (drop set, rep goal, cluster,
+rest-pause, myo-reps) declare an optional `result` schema; in log mode `TechniqueLogger.jsx`
+auto-generates the right widget — **fixed prescribed rows** (drop set → N drops of weight×reps) or a
+**dynamic "＋ Set" list with a running tally** (rep goal → "37 / 50 reps") — and stores the client's
+entries on the attachment (`result.items`, Mixed, passed through leniently). Cue techniques (tempo,
+RIR, …) render nothing extra. Added a **"Pyramid / Ladder"** label technique (styles: pyramid /
+reverse / ascending- / descending-ladder); pyramids need no special logging because the per-set
+`goals`/`achieved` arrays already vary per set.
+
 ---
 
 ## 7. Risks & mitigations

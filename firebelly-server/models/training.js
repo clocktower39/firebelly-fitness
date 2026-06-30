@@ -21,6 +21,7 @@ const techniqueSchema = new mongoose.Schema(
     scope: { type: String, enum: ["exercise", "set"], default: "exercise" },
     appliesToSets: { type: [Number], default: [] },
     params: { type: mongoose.Schema.Types.Mixed, default: {} },
+    result: { type: mongoose.Schema.Types.Mixed, default: null }, // client-logged technique result
     notes: { type: String, default: "" },
   },
   { _id: true }

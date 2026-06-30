@@ -63,6 +63,14 @@ test("sanitize: safe on empty / non-array input", () => {
   assert.deepEqual(sanitizeTrainingTechniques([[]]), [[]]);
 });
 
+test("sanitize: passes through client-logged result data", () => {
+  const result = { items: [{ weight: 100, reps: 12 }, { weight: 100, reps: 10 }] };
+  const out = sanitizeTrainingTechniques([
+    [{ exercise: "x", techniques: [{ key: "repGoal", params: { target: 50 }, result }] }],
+  ]);
+  assert.deepEqual(out[0][0].techniques[0].result, result);
+});
+
 test("sanitize: does not mutate the input", () => {
   const training = [[{ exercise: "x", techniques: [{ key: "rir", params: { rir: 1 } }] }]];
   const snapshot = JSON.stringify(training);

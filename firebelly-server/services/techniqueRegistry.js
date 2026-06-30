@@ -103,6 +103,14 @@ const TECHNIQUES = Object.freeze([
       },
     ],
     displayFormat: "Drop set ×{drops} (−{reduction}%)",
+    result: {
+      itemLabel: "Drop",
+      fields: [
+        { name: "weight", type: "number", label: "Weight", unit: "lb" },
+        { name: "reps", type: "int", label: "Reps" },
+      ],
+      count: { fromParam: "drops" },
+    },
     version: 1,
   },
   {
@@ -123,6 +131,11 @@ const TECHNIQUES = Object.freeze([
       },
     ],
     displayFormat: "Rest-pause {bursts}× ({restSec}s)",
+    result: {
+      itemLabel: "Burst",
+      fields: [{ name: "reps", type: "int", label: "Reps" }],
+      count: { fromParam: "bursts" },
+    },
     version: 1,
   },
   {
@@ -151,6 +164,11 @@ const TECHNIQUES = Object.freeze([
       },
     ],
     displayFormat: "Cluster {clusters}×{miniSetReps} ({intraRestSec}s)",
+    result: {
+      itemLabel: "Cluster",
+      fields: [{ name: "reps", type: "int", label: "Reps" }],
+      count: { fromParam: "clusters" },
+    },
     version: 1,
   },
   {
@@ -177,6 +195,15 @@ const TECHNIQUES = Object.freeze([
       { name: "target", label: "Total reps", type: PARAM_TYPES.INT, default: 50, min: 1, max: 500 },
     ],
     displayFormat: "Rep goal {target}",
+    result: {
+      itemLabel: "Set",
+      fields: [
+        { name: "weight", type: "number", label: "Weight", unit: "lb" },
+        { name: "reps", type: "int", label: "Reps" },
+      ],
+      count: { dynamic: true },
+      tally: { field: "reps", goalParam: "target" },
+    },
     version: 1,
   },
   {
@@ -198,6 +225,35 @@ const TECHNIQUES = Object.freeze([
       { name: "miniReps", label: "Reps per mini-set", type: PARAM_TYPES.INT, default: 3, min: 2, max: 8 },
     ],
     displayFormat: "Myo-reps {activationReps}+{miniSets}×{miniReps}",
+    result: {
+      itemLabel: "Mini-set",
+      fields: [{ name: "reps", type: "int", label: "Reps" }],
+      count: { fromParam: "miniSets" },
+    },
+    version: 1,
+  },
+  {
+    key: "pyramid",
+    name: "Pyramid / Ladder",
+    category: "repScheme",
+    scope: "exercise",
+    description:
+      "Progress load and reps across sets (e.g. ascending weight with descending reps). Enter each set's targets in the normal per-set fields.",
+    params: [
+      {
+        name: "style",
+        label: "Style",
+        type: PARAM_TYPES.ENUM,
+        default: "pyramid",
+        options: [
+          { value: "pyramid", label: "Pyramid" },
+          { value: "reversePyramid", label: "Reverse pyramid" },
+          { value: "ascendingLadder", label: "Ascending ladder" },
+          { value: "descendingLadder", label: "Descending ladder" },
+        ],
+      },
+    ],
+    displayFormat: "{style}",
     version: 1,
   },
   {

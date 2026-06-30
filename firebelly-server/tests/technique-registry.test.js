@@ -78,6 +78,38 @@ test("registry: helpers resolve", () => {
   assert.ok(getTechniquesByCategory("set").every((t) => t.category === "set"));
 });
 
+test("registry: result schemas (client logging) are well-formed", () => {
+  for (const t of TECHNIQUES) {
+    if (!t.result) continue;
+    const r = t.result;
+    assert.ok(r.itemLabel, `${t.key}: result.itemLabel`);
+    assert.ok(Array.isArray(r.fields) && r.fields.length > 0, `${t.key}: result.fields`);
+    for (const f of r.fields) {
+      assert.ok(f.name && f.label, `${t.key}: result field name/label`);
+      assert.ok(PARAM_TYPE_VALUES.includes(f.type), `${t.key}: result field type "${f.type}"`);
+    }
+    assert.ok(r.count, `${t.key}: result.count`);
+    if (r.count.fromParam) {
+      assert.ok(
+        t.params.some((p) => p.name === r.count.fromParam),
+        `${t.key}: count.fromParam "${r.count.fromParam}" must reference a real param`
+      );
+    } else {
+      assert.equal(r.count.dynamic, true, `${t.key}: count must be fromParam or dynamic`);
+    }
+    if (r.tally) {
+      assert.ok(
+        r.fields.some((f) => f.name === r.tally.field),
+        `${t.key}: tally.field must reference a result field`
+      );
+      assert.ok(
+        t.params.some((p) => p.name === r.tally.goalParam),
+        `${t.key}: tally.goalParam must reference a real param`
+      );
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------
 // validateTechniqueParams
 // ---------------------------------------------------------------------------
@@ -154,6 +186,7 @@ test("attachment: valid attachment normalizes", () => {
     scope: "set",
     appliesToSets: [2],
     params: { drops: 3, reduction: 25 },
+    result: null,
     notes: "",
   });
 });
