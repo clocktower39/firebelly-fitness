@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import { getMyReadiness, saveReadiness } from "../Redux/actions";
+import { readinessApi } from "../api/readinessApi";
 import {
   READINESS_FACTORS,
   computeReadinessScore,
@@ -21,14 +22,21 @@ import {
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
 
 // Fast daily readiness / fatigue check-in (sleep, mood, energy, soreness, joint pain).
-export default function DailyCheckinCard() {
+// Own view = editable. When clientId is set (a trainer viewing a client's page) it renders read-only
+// from that client's data — the trainer can see the status but not fill or edit the client's check-in.
+export default function DailyCheckinCard({ clientId = null }) {
   const dispatch = useDispatch();
-  const readiness = useSelector((s) => s.readiness) || { entries: [], loaded: false };
+  const reduxReadiness = useSelector((s) => s.readiness) || { entries: [], loaded: false };
+  const readOnly = Boolean(clientId);
+  const [clientEntries, setClientEntries] = useState(null); // null = not yet loaded
   const todayKey = dayKey();
 
+  // Source the entries from the viewed client (read-only) or from my own Redux state.
+  const entries = readOnly ? clientEntries || [] : reduxReadiness.entries || [];
+
   const todayEntry = useMemo(
-    () => (readiness.entries || []).find((e) => String(e.date).slice(0, 10) === todayKey) || null,
-    [readiness.entries, todayKey]
+    () => entries.find((e) => String(e.date).slice(0, 10) === todayKey) || null,
+    [entries, todayKey]
   );
 
   const [values, setValues] = useState({});
@@ -36,12 +44,29 @@ export default function DailyCheckinCard() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Load: the viewed client's readiness (read-only) or my own.
   useEffect(() => {
-    if (!readiness.loaded) dispatch(getMyReadiness());
-  }, [dispatch, readiness.loaded]);
+    if (readOnly) {
+      let cancelled = false;
+      setClientEntries(null);
+      readinessApi
+        .getClientReadiness(clientId)
+        .then((res) => {
+          if (!cancelled) setClientEntries(Array.isArray(res) ? res : []);
+        })
+        .catch(() => {
+          if (!cancelled) setClientEntries([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!reduxReadiness.loaded) dispatch(getMyReadiness());
+    return undefined;
+  }, [readOnly, clientId, dispatch, reduxReadiness.loaded]);
 
   useEffect(() => {
-    if (todayEntry) {
+    if (!readOnly && todayEntry) {
       setValues({
         sleep: todayEntry.sleep,
         mood: todayEntry.mood,
@@ -51,7 +76,7 @@ export default function DailyCheckinCard() {
       });
       setNote(todayEntry.note || "");
     }
-  }, [todayEntry]);
+  }, [todayEntry, readOnly]);
 
   const score = computeReadinessScore(todayEntry && !editing ? todayEntry : values);
   const band = readinessBand(score);
@@ -59,7 +84,7 @@ export default function DailyCheckinCard() {
 
   const trendData = useMemo(
     () =>
-      [...(readiness.entries || [])]
+      [...entries]
         .map((e) => ({ date: e.date, score: computeReadinessScore(e) }))
         .filter((d) => d.score != null)
         .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -71,8 +96,29 @@ export default function DailyCheckinCard() {
           }),
           score: d.score,
         })),
-    [readiness.entries]
+    [entries]
   );
+
+  const trendChart =
+    trendData.length >= 2 ? (
+      <Box sx={{ width: "100%", height: 90, mt: 1.5 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={trendData} margin={{ top: 4, right: 6, left: -28, bottom: 0 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} minTickGap={20} />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} />
+            <Tooltip />
+            <Area
+              type="monotone"
+              dataKey="score"
+              name="Readiness"
+              stroke="#10b981"
+              fill="#10b981"
+              fillOpacity={0.2}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Box>
+    ) : null;
 
   const handleSave = async () => {
     setSaving(true);
@@ -80,6 +126,61 @@ export default function DailyCheckinCard() {
     setSaving(false);
     setEditing(false);
   };
+
+  // Read-only view for a trainer looking at a client's page: show the client's status, no editing.
+  if (readOnly) {
+    const loadingClient = clientEntries == null;
+    const lastEntry = entries.length
+      ? entries.reduce((a, b) => (new Date(a.date) > new Date(b.date) ? a : b))
+      : null;
+    const lastScore = lastEntry ? computeReadinessScore(lastEntry) : null;
+    const lastBand = readinessBand(lastScore);
+    const lastLabel = lastEntry
+      ? new Date(lastEntry.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+      : null;
+    return (
+      <Paper sx={{ p: 2, mb: 2, width: "100%" }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Daily check-in
+            </Typography>
+            {loadingClient ? (
+              <Typography variant="body2" color="text.secondary">
+                Loading…
+              </Typography>
+            ) : todayEntry ? (
+              <Typography variant="body2" color="text.secondary">
+                Today ✓ · Readiness: {score != null ? `${score}/100` : "—"}
+              </Typography>
+            ) : lastEntry ? (
+              <Typography variant="body2" color="text.secondary">
+                No check-in today · last {lastLabel}: {lastScore != null ? `${lastScore}/100` : "—"}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No check-ins yet
+              </Typography>
+            )}
+          </Box>
+          {!loadingClient && todayEntry && <Chip size="small" color={band.color} label={band.label} />}
+          {!loadingClient && !todayEntry && lastEntry && (
+            <Chip size="small" variant="outlined" color={lastBand.color} label={lastBand.label} />
+          )}
+        </Stack>
+        {todayEntry?.note && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 0.5, fontStyle: "italic" }}
+          >
+            “{todayEntry.note}”
+          </Typography>
+        )}
+        {trendChart}
+      </Paper>
+    );
+  }
 
   if (todayEntry && !editing) {
     return (
@@ -100,25 +201,7 @@ export default function DailyCheckinCard() {
             </Button>
           </Stack>
         </Stack>
-        {trendData.length >= 2 && (
-          <Box sx={{ width: "100%", height: 90, mt: 1.5 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData} margin={{ top: 4, right: 6, left: -28, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} minTickGap={20} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="score"
-                  name="Readiness"
-                  stroke="#10b981"
-                  fill="#10b981"
-                  fillOpacity={0.2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Box>
-        )}
+        {trendChart}
       </Paper>
     );
   }

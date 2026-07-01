@@ -279,6 +279,11 @@ function Home() {
           <DailyCheckinCard />
         </Grid>
       )}
+      {!isPersonalWorkout() && client && (
+        <Grid container size={12} sx={{ p: 1 }}>
+          <DailyCheckinCard clientId={client} />
+        </Grid>
+      )}
       {user.isTrainer && !client && (
         <WeeklyClientWorkoutTracker
           selectedDate={selectedDate}
