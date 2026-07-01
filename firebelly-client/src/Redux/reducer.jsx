@@ -133,14 +133,22 @@ export let reducer = (
   action
 ) => {
   switch (action.type) {
-    case LOGIN_USER:
+    case LOGIN_USER: {
+      // When the identity actually changes — a fresh login, or entering/leaving a "view as" (trainer→
+      // client / guardian→child) session — drop cached "my readiness" so the check-in card re-fetches
+      // for the new account instead of showing the previous user's stats. (readiness is a flat slice,
+      // not keyed by user, so it would otherwise persist across the SPA account switch.)
+      const identityChanged =
+        action.user && String(action.user._id) !== String(state.user?._id);
       return {
         ...state,
         user: {
           ...state.user,
           ...action.user,
         },
+        readiness: identityChanged ? { entries: [], loaded: false } : state.readiness,
       };
+    }
     case LOGOUT_USER:
       return {
         ...state,
