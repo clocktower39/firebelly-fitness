@@ -80,6 +80,14 @@ export default function AccountSettings() {
     { label: "Pink Lemonade (Pink and Yellow)", value: "pinkLemonade" },
     { label: "4th of July (Red, White & Blue)", value: "julyFourth" },
     { label: "Forest (Dark Green & Brown)", value: "forest" },
+    { label: "New Year's (Gold & Silver)", value: "newYears" },
+    { label: "Valentine's Day (Red & Pink)", value: "valentines" },
+    { label: "St. Patrick's Day (Green & Gold)", value: "stPatricks" },
+    { label: "Easter (Pastels)", value: "easter" },
+    { label: "Halloween (Orange & Purple)", value: "halloween" },
+    { label: "Thanksgiving (Autumn)", value: "thanksgiving" },
+    { label: "Christmas (Red & Green)", value: "christmas" },
+    { label: "Hanukkah (Blue & Silver)", value: "hanukkah" },
   ];
 
   const customOptions = useMemo(

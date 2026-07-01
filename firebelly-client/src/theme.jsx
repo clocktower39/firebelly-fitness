@@ -960,6 +960,160 @@ const FOREST_COLORS = {
   textSecondary: "#e2e8f0",
 };
 
+// ---- US holiday themes ----------------------------------------------------------------------------
+// One small factory so each holiday is just a color set. Handles light + dark: in light themes many
+// components use primary.contrastText for text on the page, so it's set to the dark page text and
+// contained buttons override back to white (the pattern used by the Pink Lemonade / 4th of July
+// themes). July 4th is intentionally its own hand-tuned theme and is not regenerated here.
+const HOLIDAY_TYPOGRAPHY = {
+  fontFamily: "'Roboto', 'Inter', sans-serif",
+  h1: { fontFamily: "'Montserrat', sans-serif", fontWeight: 700 },
+  h2: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+  h3: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+  h4: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+  h5: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+  h6: { fontFamily: "'Montserrat', sans-serif", fontWeight: 600 },
+  subtitle1: { fontSize: "1.1rem", fontWeight: 500 },
+  button: { fontWeight: 600, textTransform: "none" },
+};
+
+const makeHolidayTheme = ({
+  mode,
+  primary,
+  secondary,
+  bgDefault,
+  bgPaper,
+  textPrimary,
+  textSecondary,
+  navGradient,
+  buttonGradient,
+  scrollThumb,
+}) => {
+  const isLight = mode === "light";
+  const border = isLight ? "rgba(15, 23, 42, 0.1)" : "rgba(148, 163, 184, 0.16)";
+  return {
+    palette: {
+      mode,
+      primary: { main: primary, contrastText: isLight ? textPrimary : "#ffffff" },
+      secondary: { main: secondary, contrastText: "#ffffff" },
+      secondaryButton: { main: secondary, contrastText: "#ffffff" },
+      background: {
+        default: bgDefault,
+        paper: bgPaper,
+        NavDrawer: navGradient || `linear-gradient(90deg, ${bgDefault}, ${bgPaper})`,
+        ATCPaperBackground: bgPaper,
+        DashboardCard: bgPaper,
+        ChartToopTip: isLight ? "#1e293b" : bgDefault,
+        Footer: isLight ? bgPaper : bgDefault,
+      },
+      text: { primary: textPrimary, secondary: textSecondary },
+      divider: isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(148, 163, 184, 0.18)",
+    },
+    typography: HOLIDAY_TYPOGRAPHY,
+    shape: { borderRadius: 12 },
+    components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          body: {
+            backgroundColor: bgDefault,
+            scrollbarColor: `${scrollThumb} ${bgDefault}`,
+            "&::-webkit-scrollbar, & *::-webkit-scrollbar": { backgroundColor: bgDefault, width: "8px" },
+            "&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb": {
+              borderRadius: 8,
+              backgroundColor: scrollThumb,
+              border: `2px solid ${bgDefault}`,
+            },
+          },
+        },
+      },
+      MuiButton: {
+        styleOverrides: {
+          root: { boxShadow: "none", "&:hover": { boxShadow: "0 4px 12px rgba(0,0,0,0.18)" } },
+          containedPrimary: { background: buttonGradient || primary, color: "#ffffff" },
+        },
+      },
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            borderRadius: 16,
+            backgroundColor: bgPaper,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)",
+            border: `1px solid ${border}`,
+          },
+        },
+      },
+      MuiPaper: { styleOverrides: { root: { backgroundImage: "none" }, rounded: { borderRadius: 16 } } },
+      MuiTextField: {
+        defaultProps: { variant: "outlined" },
+        styleOverrides: {
+          root: {
+            "& .MuiOutlinedInput-root": {
+              borderRadius: 12,
+              backgroundColor: bgPaper,
+              "& fieldset": { borderColor: border },
+              "&:hover fieldset": { borderColor: primary },
+              "&.Mui-focused fieldset": { borderColor: primary },
+            },
+          },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: { paper: { borderRadius: 20, backgroundColor: bgPaper, border: `1px solid ${border}` } },
+      },
+      MuiChip: { styleOverrides: { root: { borderRadius: 8, fontWeight: 500 } } },
+    },
+  };
+};
+
+const newYears = makeHolidayTheme({
+  mode: "dark", primary: "#d4af37", secondary: "#c0c0c0", bgDefault: "#0a0a0f", bgPaper: "#17171f",
+  textPrimary: "#f8fafc", textSecondary: "#cbd5e1", scrollThumb: "#3a3a44",
+  navGradient: "linear-gradient(90deg, #17171f, #b8860b)",
+  buttonGradient: "linear-gradient(45deg, #b8860b 30%, #d4af37 90%)",
+});
+const valentines = makeHolidayTheme({
+  mode: "light", primary: "#e11d48", secondary: "#ec4899", bgDefault: "#fff0f3", bgPaper: "#ffffff",
+  textPrimary: "#4c0519", textSecondary: "#9f1239", scrollThumb: "#fda4af",
+  navGradient: "linear-gradient(90deg, #fecdd3, #fbcfe8)",
+  buttonGradient: "linear-gradient(45deg, #e11d48 30%, #fb7185 90%)",
+});
+const stPatricks = makeHolidayTheme({
+  mode: "light", primary: "#16a34a", secondary: "#ca8a04", bgDefault: "#f0fdf4", bgPaper: "#ffffff",
+  textPrimary: "#14532d", textSecondary: "#3f6212", scrollThumb: "#86efac",
+  navGradient: "linear-gradient(90deg, #bbf7d0, #fef08a)",
+  buttonGradient: "linear-gradient(45deg, #15803d 30%, #22c55e 90%)",
+});
+const easter = makeHolidayTheme({
+  mode: "light", primary: "#a78bfa", secondary: "#f472b6", bgDefault: "#faf5ff", bgPaper: "#ffffff",
+  textPrimary: "#4a044e", textSecondary: "#7e22ce", scrollThumb: "#d8b4fe",
+  navGradient: "linear-gradient(90deg, #ddd6fe, #fbcfe8)",
+  buttonGradient: "linear-gradient(45deg, #a78bfa 30%, #c4b5fd 90%)",
+});
+const halloween = makeHolidayTheme({
+  mode: "dark", primary: "#f97316", secondary: "#a855f7", bgDefault: "#0c0a09", bgPaper: "#1c1917",
+  textPrimary: "#fafaf9", textSecondary: "#d6d3d1", scrollThumb: "#44403c",
+  navGradient: "linear-gradient(90deg, #1c1917, #ea580c)",
+  buttonGradient: "linear-gradient(45deg, #ea580c 30%, #f97316 90%)",
+});
+const thanksgiving = makeHolidayTheme({
+  mode: "light", primary: "#b45309", secondary: "#78350f", bgDefault: "#fdf4e3", bgPaper: "#fffcf5",
+  textPrimary: "#431407", textSecondary: "#7c2d12", scrollThumb: "#e7c9a0",
+  navGradient: "linear-gradient(90deg, #fed7aa, #d6a05a)",
+  buttonGradient: "linear-gradient(45deg, #b45309 30%, #d97706 90%)",
+});
+const christmas = makeHolidayTheme({
+  mode: "light", primary: "#dc2626", secondary: "#16a34a", bgDefault: "#f7faf7", bgPaper: "#ffffff",
+  textPrimary: "#14532d", textSecondary: "#3f6212", scrollThumb: "#86efac",
+  navGradient: "linear-gradient(90deg, #fecaca, #bbf7d0)",
+  buttonGradient: "linear-gradient(45deg, #b91c1c 30%, #dc2626 90%)",
+});
+const hanukkah = makeHolidayTheme({
+  mode: "light", primary: "#1d4ed8", secondary: "#64748b", bgDefault: "#eff6ff", bgPaper: "#ffffff",
+  textPrimary: "#1e3a8a", textSecondary: "#475569", scrollThumb: "#93c5fd",
+  navGradient: "linear-gradient(90deg, #bfdbfe, #e2e8f0)",
+  buttonGradient: "linear-gradient(45deg, #1d4ed8 30%, #3b82f6 90%)",
+});
+
 // Exporting the same function signature to maintain compatibility
 export const theme = () => {
   const { themeMode, customThemes = [] } = store.getState().user;
@@ -1001,6 +1155,22 @@ export const theme = () => {
         return julyFourth;
       case 'forest':
         return buildCustomTheme({ colors: FOREST_COLORS });
+      case 'newYears':
+        return newYears;
+      case 'valentines':
+        return valentines;
+      case 'stPatricks':
+        return stPatricks;
+      case 'easter':
+        return easter;
+      case 'halloween':
+        return halloween;
+      case 'thanksgiving':
+        return thanksgiving;
+      case 'christmas':
+        return christmas;
+      case 'hanukkah':
+        return hanukkah;
       default:
         return dark;
     }
