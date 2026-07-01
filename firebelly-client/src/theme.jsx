@@ -679,6 +679,7 @@ const julyFourth = {
       secondary: "#475569",
     },
     divider: "rgba(30, 41, 59, 0.12)",
+    setNumber: "#dc2626", // set numbers in red pop against the blue/white theme
   },
 
   typography: {

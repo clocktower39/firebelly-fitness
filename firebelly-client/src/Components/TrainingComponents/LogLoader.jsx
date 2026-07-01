@@ -130,7 +130,7 @@ const LoggedField = (props) => {
               >
                 <Button
                   sx={{
-                    color: "#fff",
+                    color: "text.secondary",
                     display: "inline-block",
                     padding: 0,
                     minHeight: 0,
@@ -239,7 +239,7 @@ export default function LogLoader(props) {
             <Grid size={2} container sx={{ justifyContent: "flex-end", alignContent: "center" }}>
               <Button
                 sx={{
-                  color: "#fff",
+                  color: (theme) => theme.palette.setNumber || theme.palette.text.primary,
                   display: "inline-block",
                   padding: 0,
                   minHeight: 0,

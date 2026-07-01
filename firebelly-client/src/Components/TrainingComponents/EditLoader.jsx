@@ -212,14 +212,18 @@ export default function EditLoader(props) {
             <Grid size={2} container sx={{ justifyContent: "flex-end", alignContent: "center" }}>
               <Button
                 sx={{
-                  color: "#fff",
+                  color: (theme) => theme.palette.setNumber || theme.palette.text.primary,
                   display: "inline-block",
                   padding: 0,
                   minHeight: 0,
                   minWidth: 0,
                 }}
               >
-                <Typography variant color="text.primary" noWrap>
+                <Typography
+                  variant
+                  sx={{ color: (theme) => theme.palette.setNumber || theme.palette.text.primary }}
+                  noWrap
+                >
                   Set {exerciseSetIndex + 1}:
                 </Typography>
               </Button>
