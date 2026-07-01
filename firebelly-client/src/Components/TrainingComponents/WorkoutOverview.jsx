@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -1133,22 +1134,33 @@ export default function WorkoutOverview({
 
 const CardioWorkoutPreview = ({ workout, viewMode }) => {
   const cardio = useMemo(() => normalizeCardioPreview(workout.cardio), [workout.cardio]);
+  const [splitsOpen, setSplitsOpen] = useState(false);
   const isResultsMode = viewMode === "achieved";
   const requestedEntry = isResultsMode ? cardio.actual : cardio.plan;
   const showingPlanFallback = isResultsMode && isCardioPreviewEmpty(requestedEntry) && !isCardioPreviewEmpty(cardio.plan);
   const cardioFields = showingPlanFallback ? cardio.plan : requestedEntry;
   const metric = getCardioPreviewMetric(cardioFields);
   const activityLabel = cardioFields.activity || "Cardio";
+  const cadenceUnit = cardioFields.activity === "Bike" ? "rpm" : "spm";
   const detailChips = [
     cardioFields.routeType,
     cardioFields.surface,
     cardioFields.weather,
     formatCardioPreviewTemperature(cardioFields.temperature, cardioFields.temperatureUnit),
     hasCardioPreviewValue(cardioFields.elevationGain) ? `Gain ${cardioFields.elevationGain}` : "",
+    hasCardioPreviewValue(cardioFields.avgHeartRate) ? `${cardioFields.avgHeartRate} bpm` : "",
     hasCardioPreviewValue(cardioFields.rpe) ? `RPE ${cardioFields.rpe}` : "",
     cardioFields.hrZone,
-    cardioFields.segments?.length ? `${cardioFields.segments.length} split${cardioFields.segments.length === 1 ? "" : "s"}` : "",
+    hasCardioPreviewValue(cardioFields.cadence) ? `Cad ${cardioFields.cadence} ${cadenceUnit}` : "",
   ].filter(Boolean);
+  const previewSegments = (cardioFields.segments || []).filter(
+    (seg) =>
+      seg &&
+      (hasCardioPreviewValue(seg.distance) ||
+        hasCardioPreviewValue(seg.duration) ||
+        hasCardioPreviewValue(seg.pace) ||
+        hasCardioPreviewValue(seg.label))
+  );
 
   if (isCardioPreviewEmpty(cardioFields)) {
     return (
@@ -1241,10 +1253,59 @@ const CardioWorkoutPreview = ({ workout, viewMode }) => {
 
         {detailChips.length > 0 && (
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
-            {detailChips.slice(0, 6).map((detail) => (
+            {detailChips.slice(0, 8).map((detail) => (
               <Chip key={`${workout._id}-${detail}`} label={detail} size="small" variant="outlined" />
             ))}
           </Stack>
+        )}
+
+        {previewSegments.length > 0 && (
+          <Box>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => setSplitsOpen((open) => !open)}
+              sx={{ textTransform: "none", px: 0.5, minWidth: 0 }}
+            >
+              {splitsOpen ? "▾" : "▸"} {previewSegments.length} split
+              {previewSegments.length === 1 ? "" : "s"}
+            </Button>
+            <Collapse in={splitsOpen}>
+              <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                {previewSegments.map((seg, idx) => (
+                  <Stack
+                    key={`${workout._id}-split-${idx}`}
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      backgroundColor: "rgba(255,255,255,0.6)",
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                      {seg.label || `Split ${idx + 1}`}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {[
+                        hasCardioPreviewValue(seg.distance)
+                          ? `${seg.distance} ${cardioFields.distanceUnit}`
+                          : "",
+                        hasCardioPreviewValue(seg.duration) ? seg.duration : "",
+                        hasCardioPreviewValue(seg.pace) ? seg.pace : "",
+                        hasCardioPreviewValue(seg.rpe) ? `RPE ${seg.rpe}` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Collapse>
+          </Box>
         )}
 
         {hasCardioPreviewValue(cardioFields.notes) && (
