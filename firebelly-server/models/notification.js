@@ -10,10 +10,12 @@ const notificationSchema = new mongoose.Schema(
     body: { type: String, default: "" },
     link: { type: String, default: "" }, // in-app path to open, e.g. "/sessions" or "/invoices"
     read: { type: Boolean, default: false, index: true },
+    dismissed: { type: Boolean, default: false }, // cleared from the bell, but kept in history
   },
   { timestamps: true }
 );
 
 notificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, dismissed: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Notification", notificationSchema);

@@ -50,6 +50,7 @@ import {
   Storefront as StorefrontIcon,
   FitnessCenter as ExerciseLibraryIcon,
   Chat as MessagesIcon,
+  NotificationsNone as NotificationsNavIcon,
 } from "@mui/icons-material";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
@@ -110,6 +111,11 @@ export default function NavDrawer() {
       to: "/messages",
       icon: <MessagesIcon />,
       badge: unreadMessages,
+    },
+    {
+      title: "Notifications",
+      to: "/notifications",
+      icon: <NotificationsNavIcon />,
     },
     {
       title: "Progress",

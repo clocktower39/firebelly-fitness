@@ -27,6 +27,7 @@ const SignUp = lazy(() => import("./Pages/SignUp"));
 const VerifyEmail = lazy(() => import("./Pages/VerifyEmail"));
 const Home = lazy(() => import("./Pages/AppPages/Home"));
 const Messages = lazy(() => import("./Pages/AppPages/Messages"));
+const Notifications = lazy(() => import("./Pages/AppPages/Notifications"));
 const Coverage = lazy(() => import("./Pages/AppPages/Coverage"));
 const Workout = lazy(() => import("./Pages/AppPages/Workout"));
 const Calendar = lazy(() => import("./Pages/AppPages/Calendar"));
@@ -282,6 +283,7 @@ function App({ }) {
                     <Route exact path="/progress" element={<Progress />} />
                     <Route exact path="/goals" element={<Goals />} />
                     <Route exact path="/messages" element={<Messages />} />
+                    <Route exact path="/notifications" element={<Notifications />} />
                     <Route exact path="/exercises" element={<Exercises />} />
                     <Route exact path="/exercise-library" element={<ExerciseLibrary />} />
                     <Route exact path="/exercise-library/:id" element={<ExerciseDetail />} />

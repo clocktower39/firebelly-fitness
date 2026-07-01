@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import CloseIcon from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { notificationApi } from "../api/notificationApi";
@@ -83,6 +84,31 @@ export default function NotificationBell() {
     setUnread(0);
   };
 
+  const handleDismiss = async (n) => {
+    try {
+      await notificationApi.dismiss({ id: n._id });
+    } catch (err) {
+      /* best effort */
+    }
+    setItems((prev) => prev.filter((x) => x._id !== n._id));
+    if (!n.read) setUnread((u) => Math.max(0, u - 1));
+  };
+
+  const clearAll = async () => {
+    try {
+      await notificationApi.dismiss({ all: true });
+    } catch (err) {
+      /* best effort */
+    }
+    setItems([]);
+    setUnread(0);
+  };
+
+  const viewAll = () => {
+    close();
+    navigate("/notifications");
+  };
+
   useEffect(() => {
     if (pushSupported()) isPushSubscribed().then(setPushOn);
   }, []);
@@ -115,24 +141,31 @@ export default function NotificationBell() {
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={close}
-        slotProps={{ paper: { sx: { width: 340, maxWidth: "92vw", maxHeight: 440 } } }}
+        slotProps={{ paper: { sx: { width: 360, maxWidth: "92vw", maxHeight: 460 } } }}
       >
         <Stack
           direction="row"
           sx={{ px: 2, py: 1, alignItems: "center", justifyContent: "space-between" }}
         >
           <Typography variant="subtitle2">Notifications</Typography>
-          {unread > 0 && (
-            <Button size="small" onClick={markAll}>
-              Mark all read
-            </Button>
-          )}
+          <Stack direction="row" spacing={0.5}>
+            {unread > 0 && (
+              <Button size="small" onClick={markAll}>
+                Mark all read
+              </Button>
+            )}
+            {items.length > 0 && (
+              <Button size="small" color="inherit" onClick={clearAll}>
+                Clear all
+              </Button>
+            )}
+          </Stack>
         </Stack>
         <Divider />
         {items.length === 0 ? (
           <MenuItem disabled>
             <Typography variant="body2" color="text.secondary">
-              No notifications
+              No new notifications
             </Typography>
           </MenuItem>
         ) : (
@@ -146,22 +179,40 @@ export default function NotificationBell() {
                 bgcolor: n.read ? "transparent" : "action.hover",
               }}
             >
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: n.read ? 400 : 600 }}>
-                  {n.title}
-                </Typography>
-                {n.body && (
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    {n.body}
+              <Stack direction="row" spacing={1} sx={{ width: "100%", alignItems: "flex-start" }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: n.read ? 400 : 600 }}>
+                    {n.title}
                   </Typography>
-                )}
-                <Typography variant="caption" color="text.secondary">
-                  {dayjs(n.createdAt).format("MMM D, h:mm A")}
-                </Typography>
-              </Box>
+                  {n.body && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {n.body}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    {dayjs(n.createdAt).format("MMM D, h:mm A")}
+                  </Typography>
+                </Box>
+                <IconButton
+                  size="small"
+                  aria-label="dismiss"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDismiss(n);
+                  }}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
             </MenuItem>
           ))
         )}
+        <Divider />
+        <MenuItem onClick={viewAll}>
+          <Typography variant="body2" color="primary" sx={{ mx: "auto" }}>
+            View all notifications
+          </Typography>
+        </MenuItem>
         {pushSupported() && (
           <Box>
             <Divider />
