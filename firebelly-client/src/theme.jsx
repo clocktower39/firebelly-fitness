@@ -948,6 +948,18 @@ const buildCustomTheme = (customTheme) => {
   };
 };
 
+// Built-in "Forest" theme — modeled on a coach's custom forest theme (dark forest greens, bark-brown
+// + soft sky-blue accents), rendered through buildCustomTheme so it matches that look. Tiny tweak: a
+// deep forest-green background instead of pure black, for a warmer, more cohesive nav gradient.
+const FOREST_COLORS = {
+  primary: "#99c1f1",
+  secondary: "#63452c",
+  backgroundDefault: "#0a140d",
+  backgroundPaper: "#132617",
+  textPrimary: "#ffffff",
+  textSecondary: "#e2e8f0",
+};
+
 // Exporting the same function signature to maintain compatibility
 export const theme = () => {
   const { themeMode, customThemes = [] } = store.getState().user;
@@ -987,6 +999,8 @@ export const theme = () => {
         return pinkLemonade;
       case 'julyFourth':
         return julyFourth;
+      case 'forest':
+        return buildCustomTheme({ colors: FOREST_COLORS });
       default:
         return dark;
     }
