@@ -11,9 +11,10 @@ import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
 import WeeklyTrainingStatus from "../../Components/TrainingComponents/WeeklyTrainingStatus";
-import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL } from "../../Redux/actions";
+import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL, getMyReadiness } from "../../Redux/actions";
 import { Avatar, Button, Grid, Paper, Stack, Typography } from '@mui/material';
 import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUnits";
+import { dayKey } from "../../utils/readiness";
 
 dayjs.extend(utc);
 dayjs.extend(customParseFormat);
@@ -53,6 +54,11 @@ function Home() {
   const latestMetric = useSelector(
     (state) => state.metrics.latestByUser[(client || user._id)] || null
   );
+  const readiness = useSelector((state) => state.readiness) || { entries: [], loaded: false };
+  // The daily check-in is always for today; once it's done, the card moves below the workout.
+  const todayCheckinDone =
+    readiness.loaded &&
+    (readiness.entries || []).some((e) => String(e.date).slice(0, 10) === dayKey());
   const [loading, setLoading] = useState(true);
   const activeWorkoutUser = !isPersonalWorkout() && workoutsUser?._id ? workoutsUser : user;
 
@@ -171,6 +177,11 @@ function Home() {
     dispatch(requestLatestMetric({ userId: isPersonalWorkout() ? undefined : client }));
   }, [dispatch, isPersonalWorkout, client]);
 
+  // Load today's readiness up front so the check-in card is placed in the right spot without a flash.
+  useEffect(() => {
+    if (isPersonalWorkout() && !readiness.loaded) dispatch(getMyReadiness());
+  }, [dispatch, isPersonalWorkout, readiness.loaded]);
+
 
   return loading ? (
     <Loading />
@@ -201,7 +212,7 @@ function Home() {
         setVisibleDateLocked={setWeeklyStatusDateLocked}
         workouts={workouts}
       />
-      {isPersonalWorkout() && (
+      {isPersonalWorkout() && readiness.loaded && !todayCheckinDone && (
         <Grid container size={12} sx={{ p: 1 }}>
           <DailyCheckinCard />
         </Grid>
@@ -262,6 +273,11 @@ function Home() {
           }}
           user={activeWorkoutUser}
         />
+      )}
+      {isPersonalWorkout() && readiness.loaded && todayCheckinDone && (
+        <Grid container size={12} sx={{ p: 1 }}>
+          <DailyCheckinCard />
+        </Grid>
       )}
       {user.isTrainer && !client && (
         <WeeklyClientWorkoutTracker
