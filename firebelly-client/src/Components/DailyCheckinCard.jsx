@@ -140,7 +140,7 @@ export default function DailyCheckinCard() {
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {f.label}
             </Typography>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 0.25 }}>
+            <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mt: 0.25 }}>
               <Typography variant="caption" color="text.secondary" sx={{ minWidth: 52 }}>
                 {f.lowLabel}
               </Typography>
