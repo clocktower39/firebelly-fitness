@@ -1,34 +1,24 @@
 import React from "react";
 import { Add } from "@mui/icons-material";
-import {
-  Alert,
-  Button,
-  Chip,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from "@mui/material";
+import { Alert, Button, Chip, Stack, Typography } from "@mui/material";
 import {
   CARDIO_CLIENT_PROMPT_LOOKUP,
   CARDIO_CLIENT_PROMPT_OPTIONS,
   CARDIO_OPTIONAL_SECTIONS,
 } from "../../utils/workoutUtils";
 
+// The "extras" beneath the core cardio inputs: quick presets, the Add-details section toggles, and the
+// contextual plan/results helpers. The mode toggle + "Log as planned" live in the editor header now.
 export default function CardioSummaryPanel({
   activeCardio,
   cardioComparisonItems,
-  cardioEditorMode,
   cardioSectionHasData,
   cardioSectionSummaries,
   cardioSectionsOpen,
   cardioStatus,
   cardioStylePresets,
   cardioViewMode,
-  handleCardioEditorModeChange,
-  handleCardioViewModeChange,
   handleCopyPlanFieldToActual,
-  handleCopyPlanToActual,
   handleStylePreset,
   handleToggleClientPrompt,
   isTrainerEditingClient,
@@ -37,53 +27,99 @@ export default function CardioSummaryPanel({
   planCopyActions,
   toggleCardioSection,
 }) {
+  const hasCollapsedSummaries = CARDIO_OPTIONAL_SECTIONS.some(
+    (section) => cardioSectionHasData[section.key] && !cardioSectionsOpen[section.key]
+  );
+
   return (
     <>
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "8px",
-        }}
-      >
+      {["warning", "error"].includes(cardioStatus.severity) && (
+        <Alert severity={cardioStatus.severity} variant="outlined">
+          {cardioStatus.message}
+        </Alert>
+      )}
+
+      {cardioStylePresets.length > 0 && (
         <Stack spacing={0.5}>
-          <Typography variant="h6">Cardio Details</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Start with the basics. Open the plus buttons for the extras.
+          <Typography variant="caption" color="text.secondary">
+            Quick presets
           </Typography>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+            {cardioStylePresets.map((style) => (
+              <Chip
+                key={`preset-${style}`}
+                label={style}
+                size="small"
+                clickable
+                color={activeCardio.style === style ? "primary" : "default"}
+                variant={activeCardio.style === style ? "filled" : "outlined"}
+                onClick={() => handleStylePreset(style)}
+              />
+            ))}
+          </Stack>
         </Stack>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-          <ToggleButtonGroup
-            value={cardioViewMode}
-            exclusive
-            size="small"
-            onChange={handleCardioViewModeChange}
-          >
-            <ToggleButton value="plan">Plan</ToggleButton>
-            <ToggleButton value="actual">Results</ToggleButton>
-          </ToggleButtonGroup>
-          <ToggleButtonGroup
-            value={cardioEditorMode}
-            exclusive
-            size="small"
-            onChange={handleCardioEditorModeChange}
-          >
-            <ToggleButton value="quick">Quick Log</ToggleButton>
-            <ToggleButton value="full">Full Details</ToggleButton>
-          </ToggleButtonGroup>
-          {cardioViewMode === "actual" && (
-            <Button variant="outlined" size="small" onClick={handleCopyPlanToActual}>
-              Copy plan
+      )}
+
+      <Stack spacing={0.5}>
+        <Typography variant="caption" color="text.secondary">
+          Add details
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+          {CARDIO_OPTIONAL_SECTIONS.map((section) => (
+            <Button
+              key={section.key}
+              variant={cardioSectionsOpen[section.key] ? "contained" : "outlined"}
+              color={
+                cardioSectionsOpen[section.key] || cardioSectionHasData[section.key]
+                  ? "primary"
+                  : "inherit"
+              }
+              size="small"
+              onClick={() => toggleCardioSection(section.key)}
+              startIcon={
+                <Add
+                  sx={{
+                    transform: cardioSectionsOpen[section.key] ? "rotate(45deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                  }}
+                />
+              }
+            >
+              {section.label}
             </Button>
-          )}
+          ))}
         </Stack>
       </Stack>
-      <Alert severity={cardioStatus.severity} variant="outlined">
-        {cardioStatus.message}
-      </Alert>
+
+      {hasCollapsedSummaries && (
+        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+          {CARDIO_OPTIONAL_SECTIONS.filter(
+            (section) =>
+              cardioSectionHasData[section.key] &&
+              !cardioSectionsOpen[section.key] &&
+              cardioSectionSummaries[section.key]
+          ).map((section) => (
+            <Chip
+              key={`${section.key}-summary`}
+              label={`${section.summaryLabel}: ${cardioSectionSummaries[section.key]}`}
+              variant="outlined"
+              size="small"
+              clickable
+              onClick={() => toggleCardioSection(section.key)}
+              sx={{
+                maxWidth: "100%",
+                "& .MuiChip-label": {
+                  display: "block",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                },
+              }}
+            />
+          ))}
+        </Stack>
+      )}
+
       {cardioComparisonItems.length > 0 && (
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
           {cardioComparisonItems.map((item) => (
@@ -96,6 +132,7 @@ export default function CardioSummaryPanel({
           ))}
         </Stack>
       )}
+
       {cardioViewMode === "actual" && planClientPrompts.length > 0 && (
         <Stack spacing={1}>
           <Typography variant="body2" color="text.secondary">
@@ -122,6 +159,7 @@ export default function CardioSummaryPanel({
           </Stack>
         </Stack>
       )}
+
       {cardioViewMode === "actual" && planCopyActions.length > 0 && (
         <Stack spacing={1}>
           <Typography variant="body2" color="text.secondary">
@@ -141,26 +179,7 @@ export default function CardioSummaryPanel({
           </Stack>
         </Stack>
       )}
-      {cardioStylePresets.length > 0 && (
-        <Stack spacing={1}>
-          <Typography variant="body2" color="text.secondary">
-            Quick presets
-          </Typography>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
-            {cardioStylePresets.map((style) => (
-              <Chip
-                key={`preset-${style}`}
-                label={style}
-                size="small"
-                clickable
-                color={activeCardio.style === style ? "primary" : "default"}
-                variant={activeCardio.style === style ? "filled" : "outlined"}
-                onClick={() => handleStylePreset(style)}
-              />
-            ))}
-          </Stack>
-        </Stack>
-      )}
+
       {isTrainerEditingClient && cardioViewMode === "plan" && (
         <Stack spacing={1}>
           <Typography variant="body2" color="text.secondary">
@@ -179,61 +198,6 @@ export default function CardioSummaryPanel({
               />
             ))}
           </Stack>
-        </Stack>
-      )}
-      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
-        {CARDIO_OPTIONAL_SECTIONS.map((section) => (
-          <Button
-            key={section.key}
-            variant={cardioSectionsOpen[section.key] ? "contained" : "outlined"}
-            color={
-              cardioSectionsOpen[section.key] || cardioSectionHasData[section.key]
-                ? "primary"
-                : "inherit"
-            }
-            size="small"
-            onClick={() => toggleCardioSection(section.key)}
-            startIcon={
-              <Add
-                sx={{
-                  transform: cardioSectionsOpen[section.key] ? "rotate(45deg)" : "rotate(0deg)",
-                  transition: "transform 0.2s ease",
-                }}
-              />
-            }
-          >
-            {section.label}
-          </Button>
-        ))}
-      </Stack>
-      {CARDIO_OPTIONAL_SECTIONS.some(
-        (section) => cardioSectionHasData[section.key] && !cardioSectionsOpen[section.key]
-      ) && (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
-          {CARDIO_OPTIONAL_SECTIONS.filter(
-            (section) =>
-              cardioSectionHasData[section.key] &&
-              !cardioSectionsOpen[section.key] &&
-              cardioSectionSummaries[section.key]
-          ).map((section) => (
-            <Chip
-              key={`${section.key}-summary`}
-              label={`${section.summaryLabel}: ${cardioSectionSummaries[section.key]}`}
-              variant="outlined"
-              size="small"
-              clickable
-              onClick={() => toggleCardioSection(section.key)}
-              sx={{
-                maxWidth: "100%",
-                "& .MuiChip-label": {
-                  display: "block",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                },
-              }}
-            />
-          ))}
         </Stack>
       )}
     </>

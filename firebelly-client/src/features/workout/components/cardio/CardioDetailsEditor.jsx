@@ -1,5 +1,13 @@
 import React from "react";
-import { Grid, Paper, Stack } from "@mui/material";
+import {
+  Button,
+  Grid,
+  Paper,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 import CardioBasicFields from "./CardioBasicFields";
 import CardioConditionsSection from "./CardioConditionsSection";
 import CardioMetricsSection from "./CardioMetricsSection";
@@ -14,7 +22,6 @@ export default function CardioDetailsEditor({
   cardioAuto,
   cardioComparisonItems,
   cardioDistanceUnitOptions,
-  cardioEditorMode,
   cardioRouteOptions,
   cardioSectionHasData,
   cardioSectionSummaries,
@@ -30,7 +37,6 @@ export default function CardioDetailsEditor({
   handleCardioChange,
   handleCardioDerivedChange,
   handleCardioDistanceUnitChange,
-  handleCardioEditorModeChange,
   handleCardioSegmentChange,
   handleCardioViewModeChange,
   handleCopyPlanFieldToActual,
@@ -70,28 +76,42 @@ export default function CardioDetailsEditor({
       <Grid size={12}>
         <Paper variant="outlined" sx={{ padding: "16px" }}>
           <Stack spacing={2.5}>
-            <CardioSummaryPanel
-              activeCardio={activeCardio}
-              cardioComparisonItems={cardioComparisonItems}
-              cardioEditorMode={cardioEditorMode}
-              cardioSectionHasData={cardioSectionHasData}
-              cardioSectionSummaries={cardioSectionSummaries}
-              cardioSectionsOpen={cardioSectionsOpen}
-              cardioStatus={cardioStatus}
-              cardioStylePresets={cardioStylePresets}
-              cardioViewMode={cardioViewMode}
-              handleCardioEditorModeChange={handleCardioEditorModeChange}
-              handleCardioViewModeChange={handleCardioViewModeChange}
-              handleCopyPlanFieldToActual={handleCopyPlanFieldToActual}
-              handleCopyPlanToActual={handleCopyPlanToActual}
-              handleStylePreset={handleStylePreset}
-              handleToggleClientPrompt={handleToggleClientPrompt}
-              isTrainerEditingClient={isTrainerEditingClient}
-              missingClientPromptKeys={missingClientPromptKeys}
-              planClientPrompts={planClientPrompts}
-              planCopyActions={planCopyActions}
-              toggleCardioSection={toggleCardioSection}
-            />
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              <Stack spacing={0.25}>
+                <Typography variant="h6">Cardio Details</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {cardioViewMode === "actual"
+                    ? "Log what you actually did."
+                    : "Start with the basics — add extras below if you want."}
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <ToggleButtonGroup
+                  value={cardioViewMode}
+                  exclusive
+                  size="small"
+                  onChange={handleCardioViewModeChange}
+                >
+                  <ToggleButton value="plan">Plan</ToggleButton>
+                  <ToggleButton value="actual">Results</ToggleButton>
+                </ToggleButtonGroup>
+                {cardioViewMode === "actual" && (
+                  <Button variant="contained" size="small" onClick={handleCopyPlanToActual}>
+                    Log as planned
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+
             <CardioBasicFields
               activeCardio={activeCardio}
               cardioAuto={cardioAuto}
@@ -110,6 +130,25 @@ export default function CardioDetailsEditor({
               primaryCardioMetricLabel={primaryCardioMetricLabel}
               primaryCardioMetricPlaceholder={primaryCardioMetricPlaceholder}
               primaryMetricHasError={primaryMetricHasError}
+            />
+
+            <CardioSummaryPanel
+              activeCardio={activeCardio}
+              cardioComparisonItems={cardioComparisonItems}
+              cardioSectionHasData={cardioSectionHasData}
+              cardioSectionSummaries={cardioSectionSummaries}
+              cardioSectionsOpen={cardioSectionsOpen}
+              cardioStatus={cardioStatus}
+              cardioStylePresets={cardioStylePresets}
+              cardioViewMode={cardioViewMode}
+              handleCopyPlanFieldToActual={handleCopyPlanFieldToActual}
+              handleStylePreset={handleStylePreset}
+              handleToggleClientPrompt={handleToggleClientPrompt}
+              isTrainerEditingClient={isTrainerEditingClient}
+              missingClientPromptKeys={missingClientPromptKeys}
+              planClientPrompts={planClientPrompts}
+              planCopyActions={planCopyActions}
+              toggleCardioSection={toggleCardioSection}
             />
           </Stack>
         </Paper>
