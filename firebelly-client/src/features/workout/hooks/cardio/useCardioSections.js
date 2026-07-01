@@ -62,7 +62,9 @@ export default function useCardioSections({
         activeCardio.routeType,
         activeCardio.surface,
         activeCardio.shoes ? truncateText(activeCardio.shoes, 18) : "",
-        activeCardio.elevationGain ? `Gain ${activeCardio.elevationGain}` : "",
+        activeCardio.elevationGain
+          ? `Gain ${activeCardio.elevationGain} ${activeCardio.elevationUnit || "ft"}`
+          : "",
         activeCardio.routeLink ? "Link" : "",
       ],
       2

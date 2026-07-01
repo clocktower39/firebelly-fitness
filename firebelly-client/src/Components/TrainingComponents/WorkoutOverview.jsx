@@ -1147,7 +1147,9 @@ const CardioWorkoutPreview = ({ workout, viewMode }) => {
     cardioFields.surface,
     cardioFields.weather,
     formatCardioPreviewTemperature(cardioFields.temperature, cardioFields.temperatureUnit),
-    hasCardioPreviewValue(cardioFields.elevationGain) ? `Gain ${cardioFields.elevationGain}` : "",
+    hasCardioPreviewValue(cardioFields.elevationGain)
+      ? `Gain ${cardioFields.elevationGain}${cardioFields.elevationUnit ? ` ${cardioFields.elevationUnit}` : ""}`
+      : "",
     hasCardioPreviewValue(cardioFields.avgHeartRate) ? `${cardioFields.avgHeartRate} bpm` : "",
     hasCardioPreviewValue(cardioFields.rpe) ? `RPE ${cardioFields.rpe}` : "",
     cardioFields.hrZone,

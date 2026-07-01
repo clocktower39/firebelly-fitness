@@ -1,11 +1,36 @@
-import React from "react";
-import { Grid, MenuItem, TextField } from "@mui/material";
+import React, { useState } from "react";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Grid,
+  MenuItem,
+  TextField,
+} from "@mui/material";
 import {
   CARDIO_ACTIVITY_OPTIONS,
   getDerivedMetricErrorText,
   getDurationHelperText,
+  hasCardioValue,
   renderAutoAdornment,
+  sanitizeCardioForActivity,
 } from "../../utils/workoutUtils";
+
+// Fields whose values can be cleared when the activity changes (label used in the confirm dialog).
+const ACTIVITY_CLEAR_LABELS = [
+  ["style", "session type"],
+  ["avgPace", "pace"],
+  ["avgSpeed", "speed"],
+  ["routeType", "route"],
+  ["surface", "surface"],
+  ["shoes", "shoes"],
+  ["cadence", "cadence"],
+  ["strideLength", "stride"],
+  ["elevationGain", "elevation gain"],
+];
 
 export default function CardioBasicFields({
   activeCardio,
@@ -26,6 +51,33 @@ export default function CardioBasicFields({
   primaryCardioMetricPlaceholder,
   primaryMetricHasError,
 }) {
+  const [pendingActivity, setPendingActivity] = useState(null);
+
+  const computeClearedFields = (nextActivity) => {
+    const next = sanitizeCardioForActivity(activeCardio, nextActivity);
+    return ACTIVITY_CLEAR_LABELS.filter(
+      ([field]) => hasCardioValue(activeCardio?.[field]) && !hasCardioValue(next?.[field])
+    ).map(([, label]) => label);
+  };
+
+  // Confirm before an activity switch discards details, instead of silently clearing them.
+  const handleActivitySelect = (event) => {
+    const nextActivity = event.target.value;
+    const cleared = computeClearedFields(nextActivity);
+    if (cleared.length > 0) {
+      setPendingActivity({ activity: nextActivity, cleared });
+    } else {
+      handleCardioActivityChange(event);
+    }
+  };
+
+  const confirmActivityChange = () => {
+    if (pendingActivity) {
+      handleCardioActivityChange({ target: { value: pendingActivity.activity } });
+    }
+    setPendingActivity(null);
+  };
+
   return (
     <Grid container spacing={2}>
       <Grid size={{ xs: 12, sm: 4 }}>
@@ -33,7 +85,7 @@ export default function CardioBasicFields({
           select
           label="Activity"
           value={activeCardio.activity}
-          onChange={handleCardioActivityChange}
+          onChange={handleActivitySelect}
           helperText="Changing activity clears details that do not apply."
           fullWidth
         >
@@ -88,7 +140,7 @@ export default function CardioBasicFields({
       <Grid size={{ xs: 6, sm: 4 }}>
         <TextField
           label="Duration"
-          placeholder="hh:mm:ss"
+          placeholder="45:00"
           value={activeCardio.duration}
           onChange={handleCardioChange("duration")}
           error={durationHasError}
@@ -120,6 +172,22 @@ export default function CardioBasicFields({
           }
         />
       </Grid>
+
+      <Dialog open={Boolean(pendingActivity)} onClose={() => setPendingActivity(null)}>
+        <DialogTitle>Switch to {pendingActivity?.activity}?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will clear details that don&apos;t apply to {pendingActivity?.activity}:{" "}
+            {pendingActivity?.cleared.join(", ")}.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingActivity(null)}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={confirmActivityChange}>
+            Switch &amp; clear
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   );
 }

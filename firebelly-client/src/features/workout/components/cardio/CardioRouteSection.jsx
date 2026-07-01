@@ -64,16 +64,30 @@ export default function CardioRouteSection({
                 </Grid>
               )}
               {activeCardioConfig.showElevation && (
-                <Grid size={{ xs: 12, sm: 3 }}>
-                  <TextField
-                    label="Elevation gain"
-                    type="number"
-                    value={activeCardio.elevationGain}
-                    onChange={handleCardioChange("elevationGain")}
-                    fullWidth
-                    slotProps={{ htmlInput: { min: 0 } }}
-                  />
-                </Grid>
+                <>
+                  <Grid size={{ xs: 8, sm: 3 }}>
+                    <TextField
+                      label="Elevation gain"
+                      type="number"
+                      value={activeCardio.elevationGain}
+                      onChange={handleCardioChange("elevationGain")}
+                      fullWidth
+                      slotProps={{ htmlInput: { min: 0 } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 4, sm: 2 }}>
+                    <TextField
+                      select
+                      label="Unit"
+                      value={activeCardio.elevationUnit || "ft"}
+                      onChange={handleCardioChange("elevationUnit")}
+                      fullWidth
+                    >
+                      <MenuItem value="ft">ft</MenuItem>
+                      <MenuItem value="m">m</MenuItem>
+                    </TextField>
+                  </Grid>
+                </>
               )}
               <Grid size={12}>
                 <TextField

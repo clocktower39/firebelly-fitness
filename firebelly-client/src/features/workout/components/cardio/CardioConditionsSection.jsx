@@ -1,15 +1,5 @@
 import React from "react";
-import {
-  Collapse,
-  Grid,
-  InputAdornment,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Collapse, Grid, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import { CARDIO_WEATHER_OPTIONS } from "../../utils/workoutUtils";
 
 export default function CardioConditionsSection({
@@ -24,7 +14,7 @@ export default function CardioConditionsSection({
           <Stack spacing={2}>
             <Typography variant="subtitle1">Conditions</Typography>
             <Grid container spacing={2}>
-              <Grid size={{ xs: 6, sm: 3 }}>
+              <Grid size={{ xs: 12, sm: 5 }}>
                 <TextField
                   select
                   label="Weather"
@@ -39,32 +29,27 @@ export default function CardioConditionsSection({
                   ))}
                 </TextField>
               </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
+              <Grid size={{ xs: 8, sm: 4 }}>
                 <TextField
                   label="Temperature"
                   type="number"
                   value={activeCardio.temperature}
                   onChange={handleCardioChange("temperature")}
                   fullWidth
-                  slotProps={{
-                    htmlInput: { step: "0.1" },
-                    input: {
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <Select
-                            size="small"
-                            variant="standard"
-                            value={activeCardio.temperatureUnit}
-                            onChange={handleCardioChange("temperatureUnit")}
-                          >
-                            <MenuItem value="F">F</MenuItem>
-                            <MenuItem value="C">C</MenuItem>
-                          </Select>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
+                  slotProps={{ htmlInput: { step: "0.1" } }}
                 />
+              </Grid>
+              <Grid size={{ xs: 4, sm: 3 }}>
+                <TextField
+                  select
+                  label="Unit"
+                  value={activeCardio.temperatureUnit || "F"}
+                  onChange={handleCardioChange("temperatureUnit")}
+                  fullWidth
+                >
+                  <MenuItem value="F">°F</MenuItem>
+                  <MenuItem value="C">°C</MenuItem>
+                </TextField>
               </Grid>
             </Grid>
           </Stack>

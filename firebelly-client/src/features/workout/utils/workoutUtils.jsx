@@ -184,6 +184,7 @@ export const DEFAULT_CARDIO_FIELDS = {
   rpe: "",
   avgHeartRate: "",
   elevationGain: "",
+  elevationUnit: "ft",
   routeType: "",
   surface: "",
   shoes: "",
@@ -273,7 +274,8 @@ export const getSecondaryCardioMetric = (activity) => {
   return null;
 };
 
-export const getDurationHelperText = () => "Examples: 45, 45:00, or 1:05:30.";
+export const getDurationHelperText = () =>
+  "mm:ss — e.g., 45:00. A plain number counts as minutes (45 = 45 min).";
 
 export const getDerivedMetricHelperText = (metric, paceUnitLabel, speedUnitLabel) => {
   if (metric === "speed") {
