@@ -1,10 +1,23 @@
 import React from "react";
-import { Collapse, Grid, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import {
+  Box,
+  Collapse,
+  Grid,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 import {
   CARDIO_HR_ZONE_OPTIONS,
   getDerivedMetricErrorText,
   renderAutoAdornment,
 } from "../../utils/workoutUtils";
+
+const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function CardioMetricsSection({
   activeCardio,
@@ -40,7 +53,9 @@ export default function CardioMetricsSection({
                     fullWidth
                     slotProps={{
                       htmlInput:
-                        secondaryCardioMetric === "speed" ? { min: 0, step: "0.1" } : undefined,
+                        secondaryCardioMetric === "speed"
+                          ? { min: 0, step: "0.1", inputMode: "decimal" }
+                          : undefined,
                       input: {
                         endAdornment: renderAutoAdornment(
                           cardioAuto?.[cardioViewMode]?.[secondaryCardioMetricAutoKey]
@@ -56,15 +71,29 @@ export default function CardioMetricsSection({
                   />
                 </Grid>
               )}
-              <Grid size={{ xs: 4, sm: 3 }}>
-                <TextField
-                  label="RPE"
-                  type="number"
-                  value={activeCardio.rpe}
-                  onChange={handleCardioChange("rpe")}
-                  fullWidth
-                  slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                />
+              <Grid size={12}>
+                <Typography variant="caption" color="text.secondary">
+                  RPE — effort (1 easy → 10 max)
+                </Typography>
+                <Box sx={{ mt: 0.5 }}>
+                  <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={Number(activeCardio.rpe) || null}
+                    onChange={(event, value) =>
+                      handleCardioChange("rpe")({
+                        target: { value: value == null ? "" : String(value) },
+                      })
+                    }
+                    sx={{ flexWrap: "wrap" }}
+                  >
+                    {RPE_VALUES.map((n) => (
+                      <ToggleButton key={n} value={n} sx={{ px: 1.25 }}>
+                        {n}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                </Box>
               </Grid>
               <Grid size={{ xs: 8, sm: 3 }}>
                 <TextField
@@ -88,7 +117,7 @@ export default function CardioMetricsSection({
                   value={activeCardio.avgHeartRate}
                   onChange={handleCardioChange("avgHeartRate")}
                   fullWidth
-                  slotProps={{ htmlInput: { min: 0 } }}
+                  slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }}
                 />
               </Grid>
               {activeCardioConfig.showCadence && (
@@ -99,7 +128,7 @@ export default function CardioMetricsSection({
                     value={activeCardio.cadence}
                     onChange={handleCardioChange("cadence")}
                     fullWidth
-                    slotProps={{ htmlInput: { min: 0, step: "1" } }}
+                    slotProps={{ htmlInput: { min: 0, step: "1", inputMode: "numeric" } }}
                   />
                 </Grid>
               )}
@@ -112,7 +141,7 @@ export default function CardioMetricsSection({
                       value={activeCardio.strideLength}
                       onChange={handleCardioChange("strideLength")}
                       fullWidth
-                      slotProps={{ htmlInput: { min: 0, step: "0.1" } }}
+                      slotProps={{ htmlInput: { min: 0, step: "0.1", inputMode: "decimal" } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 6, sm: 2 }}>

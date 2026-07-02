@@ -119,7 +119,7 @@ export default function CardioBasicFields({
           value={activeCardio.distance}
           onChange={handleCardioChange("distance")}
           fullWidth
-          slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+          slotProps={{ htmlInput: { min: 0, step: "0.01", inputMode: "decimal" } }}
         />
       </Grid>
       <Grid size={{ xs: 4, sm: 2 }}>
@@ -157,7 +157,10 @@ export default function CardioBasicFields({
           onChange={handleCardioDerivedChange(primaryCardioMetricField)}
           fullWidth
           slotProps={{
-            htmlInput: primaryCardioMetric === "speed" ? { min: 0, step: "0.1" } : undefined,
+            htmlInput:
+              primaryCardioMetric === "speed"
+                ? { min: 0, step: "0.1", inputMode: "decimal" }
+                : undefined,
             input: {
               endAdornment: renderAutoAdornment(
                 cardioAuto?.[cardioViewMode]?.[primaryCardioMetricAutoKey]

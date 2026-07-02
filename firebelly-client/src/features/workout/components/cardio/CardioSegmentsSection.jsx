@@ -65,7 +65,7 @@ export default function CardioSegmentsSection({
                         value={segment.distance}
                         onChange={handleCardioSegmentChange(index, "distance")}
                         fullWidth
-                        slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                        slotProps={{ htmlInput: { min: 0, step: "0.01", inputMode: "decimal" } }}
                       />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 2 }}>
@@ -97,7 +97,7 @@ export default function CardioSegmentsSection({
                         value={segment.rpe}
                         onChange={handleCardioSegmentChange(index, "rpe")}
                         fullWidth
-                        slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                        slotProps={{ htmlInput: { min: 1, max: 10, inputMode: "numeric" } }}
                       />
                     </Grid>
                     <Grid size={{ xs: 2, sm: 1 }} container sx={{ justifyContent: "flex-end" }}>

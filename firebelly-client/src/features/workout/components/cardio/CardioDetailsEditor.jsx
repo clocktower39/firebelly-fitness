@@ -64,6 +64,7 @@ export default function CardioDetailsEditor({
   secondaryCardioMetricPlaceholder,
   secondaryMetricHasError,
   shoeMileageHelper,
+  shoeOptions,
   speedUnitLabel,
   splitMetricLabel,
   splitMetricUnitLabel,
@@ -177,6 +178,7 @@ export default function CardioDetailsEditor({
         cardioSurfaceOptions={cardioSurfaceOptions}
         handleCardioChange={handleCardioChange}
         shoeMileageHelper={shoeMileageHelper}
+        shoeOptions={shoeOptions}
       />
       <CardioConditionsSection
         activeCardio={activeCardio}

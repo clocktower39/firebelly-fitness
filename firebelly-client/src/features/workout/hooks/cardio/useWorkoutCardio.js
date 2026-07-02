@@ -36,7 +36,7 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
     plannedCardio,
   });
 
-  const { shoeMileageHelper } = useCardioShoeMileage({
+  const { shoeMileageHelper, shoeOptions } = useCardioShoeMileage({
     activeCardio,
     training,
     user,
@@ -131,6 +131,7 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
       secondaryCardioMetricPlaceholder: derivedMetrics.secondaryCardioMetricPlaceholder,
       secondaryMetricHasError: derivedMetrics.secondaryMetricHasError,
       shoeMileageHelper,
+      shoeOptions,
       speedUnitLabel: derivedMetrics.speedUnitLabel,
       splitMetricLabel: derivedMetrics.splitMetricLabel,
       splitMetricUnitLabel: derivedMetrics.splitMetricUnitLabel,

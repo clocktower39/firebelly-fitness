@@ -1,5 +1,14 @@
 import React from "react";
-import { Collapse, Grid, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import {
+  Autocomplete,
+  Collapse,
+  Grid,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 export default function CardioRouteSection({
   activeCardio,
@@ -9,6 +18,7 @@ export default function CardioRouteSection({
   cardioSurfaceOptions,
   handleCardioChange,
   shoeMileageHelper,
+  shoeOptions = [],
 }) {
   return (
     <Grid size={12}>
@@ -53,13 +63,23 @@ export default function CardioRouteSection({
               )}
               {activeCardioConfig.showFootwear && (
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    label={activeCardio.activity === "Hike" ? "Shoes / footwear" : "Shoes"}
-                    placeholder="e.g., Nike Pegasus 41"
-                    value={activeCardio.shoes}
-                    onChange={handleCardioChange("shoes")}
-                    fullWidth
-                    helperText={shoeMileageHelper}
+                  <Autocomplete
+                    freeSolo
+                    disableClearable
+                    options={shoeOptions}
+                    inputValue={activeCardio.shoes || ""}
+                    onInputChange={(event, newValue) =>
+                      handleCardioChange("shoes")({ target: { value: newValue || "" } })
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label={activeCardio.activity === "Hike" ? "Shoes / footwear" : "Shoes"}
+                        placeholder="e.g., Nike Pegasus 41"
+                        helperText={shoeMileageHelper}
+                        fullWidth
+                      />
+                    )}
                   />
                 </Grid>
               )}
@@ -72,7 +92,7 @@ export default function CardioRouteSection({
                       value={activeCardio.elevationGain}
                       onChange={handleCardioChange("elevationGain")}
                       fullWidth
-                      slotProps={{ htmlInput: { min: 0 } }}
+                      slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 4, sm: 2 }}>

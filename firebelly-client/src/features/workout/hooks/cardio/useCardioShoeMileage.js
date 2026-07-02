@@ -52,8 +52,22 @@ export default function useCardioShoeMileage({ activeCardio, training, user }) {
     return `Loaded mileage: ${shoeMileage.value} ${shoeMileage.unit} (${shoeMileage.workouts} ${workoutLabel} loaded)`;
   }, [activeCardio.shoes, shoeMileage]);
 
+  // Distinct shoe names from prior cardio workouts, for the shoes autocomplete.
+  const shoeOptions = useMemo(() => {
+    const set = new Set();
+    workoutsForMileage.forEach((workout) => {
+      const cardio = normalizeCardio(workout?.cardio);
+      ["plan", "actual"].forEach((mode) => {
+        const shoe = cardio?.[mode]?.shoes;
+        if (shoe && String(shoe).trim()) set.add(String(shoe).trim());
+      });
+    });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [workoutsForMileage]);
+
   return {
     shoeMileage,
     shoeMileageHelper,
+    shoeOptions,
   };
 }

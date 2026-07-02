@@ -36,7 +36,7 @@ export default function CardioConditionsSection({
                   value={activeCardio.temperature}
                   onChange={handleCardioChange("temperature")}
                   fullWidth
-                  slotProps={{ htmlInput: { step: "0.1" } }}
+                  slotProps={{ htmlInput: { step: "0.1", inputMode: "decimal" } }}
                 />
               </Grid>
               <Grid size={{ xs: 4, sm: 3 }}>
