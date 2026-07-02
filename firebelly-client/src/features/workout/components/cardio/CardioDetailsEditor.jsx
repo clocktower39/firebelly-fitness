@@ -20,6 +20,7 @@ export default function CardioDetailsEditor({
   activeCardio,
   activeCardioConfig,
   cardioAuto,
+  canRepeatLast,
   cardioComparisonItems,
   cardioDistanceUnitOptions,
   cardioRouteOptions,
@@ -42,9 +43,11 @@ export default function CardioDetailsEditor({
   handleCopyPlanFieldToActual,
   handleCopyPlanToActual,
   handleRemoveCardioSegment,
+  handleRepeatLast,
   handleStylePreset,
   handleToggleClientPrompt,
   isTrainerEditingClient,
+  lastSessionLabel,
   missingClientPromptKeys,
   paceUnitLabel,
   planClientPrompts,
@@ -135,6 +138,9 @@ export default function CardioDetailsEditor({
 
             <CardioSummaryPanel
               activeCardio={activeCardio}
+              canRepeatLast={canRepeatLast}
+              handleRepeatLast={handleRepeatLast}
+              lastSessionLabel={lastSessionLabel}
               cardioComparisonItems={cardioComparisonItems}
               cardioSectionHasData={cardioSectionHasData}
               cardioSectionSummaries={cardioSectionSummaries}

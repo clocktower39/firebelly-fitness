@@ -11,6 +11,9 @@ import {
 // contextual plan/results helpers. The mode toggle + "Log as planned" live in the editor header now.
 export default function CardioSummaryPanel({
   activeCardio,
+  canRepeatLast,
+  handleRepeatLast,
+  lastSessionLabel,
   cardioComparisonItems,
   cardioSectionHasData,
   cardioSectionSummaries,
@@ -33,6 +36,16 @@ export default function CardioSummaryPanel({
 
   return (
     <>
+      {canRepeatLast && (
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={handleRepeatLast}
+          sx={{ alignSelf: "flex-start" }}
+        >
+          ↻ {lastSessionLabel}
+        </Button>
+      )}
       {["warning", "error"].includes(cardioStatus.severity) && (
         <Alert severity={cardioStatus.severity} variant="outlined">
           {cardioStatus.message}

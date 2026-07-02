@@ -7,6 +7,7 @@ import {
 } from "../../utils/workoutUtils";
 import useCardioDerivedMetrics from "./useCardioDerivedMetrics";
 import useCardioHandlers from "./useCardioHandlers";
+import useCardioLastSession from "./useCardioLastSession";
 import useCardioPlanCopyActions from "./useCardioPlanCopyActions";
 import useCardioSections from "./useCardioSections";
 import useCardioShoeMileage from "./useCardioShoeMileage";
@@ -37,6 +38,12 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
   });
 
   const { shoeMileageHelper, shoeOptions } = useCardioShoeMileage({
+    activeCardio,
+    training,
+    user,
+  });
+
+  const { lastCardio, lastSessionLabel } = useCardioLastSession({
     activeCardio,
     training,
     user,
@@ -78,6 +85,17 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
     setCardioViewMode,
   });
 
+  // One-tap prefill of the current view from the last matching cardio session.
+  const handleRepeatLast = () => {
+    if (!lastCardio) return;
+    const seeded = normalizeCardioFields(lastCardio);
+    setCardioDetails((prev) => ({ ...prev, [cardioViewMode]: seeded }));
+    setCardioAuto((prev) => ({
+      ...prev,
+      [cardioViewMode]: { pace: !seeded.avgPace, speed: !seeded.avgSpeed },
+    }));
+  };
+
   return {
     cardioDetails,
     cardioNotice,
@@ -111,6 +129,9 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
       handleRemoveCardioSegment: handlers.handleRemoveCardioSegment,
       handleStylePreset: handlers.handleStylePreset,
       handleToggleClientPrompt: handlers.handleToggleClientPrompt,
+      canRepeatLast: !!lastCardio,
+      handleRepeatLast,
+      lastSessionLabel,
       isTrainerEditingClient,
       missingClientPromptKeys: derivedMetrics.missingClientPromptKeys,
       paceUnitLabel: derivedMetrics.paceUnitLabel,
