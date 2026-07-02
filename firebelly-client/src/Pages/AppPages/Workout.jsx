@@ -6,10 +6,7 @@ import dayjs from "dayjs";
 import {
   Alert,
   Button,
-  Checkbox,
-  FormControlLabel,
   Grid,
-  Paper,
   Snackbar,
   TextField,
 } from "@mui/material";
@@ -368,13 +365,15 @@ export default function Workout({ socket }) {
   };
 
   // Save all changes to training
-  const save = async () => {
+  const save = async (overrides) => {
+    const complete =
+      typeof overrides?.complete === "boolean" ? overrides.complete : workoutCompleteStatus;
     const payload = {
       ...training,
       title: trainingTitle,
       category: [...trainingCategory],
       training: localTraining,
-      complete: workoutCompleteStatus,
+      complete,
       workoutFeedback: workoutFeedback,
       workoutType: activeWorkoutType,
       cardio: cardioDetails,
@@ -390,6 +389,16 @@ export default function Workout({ socket }) {
       emitWorkoutUpdate(workout);
       return workout;
     });
+  };
+
+  const handleCompleteAndSave = () => {
+    setWorkoutCompleteStatus(true);
+    save({ complete: true });
+  };
+
+  const handleReopenWorkout = () => {
+    setWorkoutCompleteStatus(false);
+    save({ complete: false });
   };
 
   const handleBackNavigation = async () => {
@@ -543,42 +552,53 @@ export default function Workout({ socket }) {
                     workoutUser={training.user}
                   />
                 )}
-                {isCardio && (
-                  <Grid container size={12} sx={{ paddingTop: "15px" }}>
-                    <Paper variant="outlined" sx={{ p: 2, width: "100%" }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={!!workoutCompleteStatus}
-                            onChange={(event) => setWorkoutCompleteStatus(event.target.checked)}
-                          />
-                        }
-                        label={
-                          workoutCompleteStatus ? "Workout complete" : "Mark workout complete"
-                        }
-                      />
-                    </Paper>
+                {isCardio && workoutCompleteStatus && (
+                  <Grid container size={12} sx={{ paddingTop: "10px", justifyContent: "center" }}>
+                    <Button size="small" color="success" onClick={handleReopenWorkout}>
+                      ✓ Workout complete — mark incomplete
+                    </Button>
                   </Grid>
                 )}
               </Grid>
               <Grid
                 container
                 size={12}
+                spacing={1}
                 sx={{
+                  position: "sticky",
+                  bottom: 0,
+                  zIndex: 2,
+                  backgroundColor: "background.default",
                   alignContent: "flex-end",
                   "&.MuiGrid-root": { flexGrow: 1 },
+                  paddingTop: "5px",
                   paddingBottom: "5px",
                 }}
               >
-                <Button
-                  variant="contained"
-                  onClick={save}
-                  fullWidth
-                  disabled={loading}
-                  color={isDirty ? "warning" : "primary"}
-                >
-                  Save
-                </Button>
+                <Grid size={isCardio && !workoutCompleteStatus ? 7 : 12}>
+                  <Button
+                    variant="contained"
+                    onClick={save}
+                    fullWidth
+                    disabled={loading}
+                    color={isDirty ? "warning" : "primary"}
+                  >
+                    Save
+                  </Button>
+                </Grid>
+                {isCardio && !workoutCompleteStatus && (
+                  <Grid size={5}>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      fullWidth
+                      disabled={loading}
+                      onClick={handleCompleteAndSave}
+                    >
+                      Complete &amp; Save
+                    </Button>
+                  </Grid>
+                )}
               </Grid>
 
               {nextWorkout && activeStep >= localTraining.length && (
