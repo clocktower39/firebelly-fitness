@@ -561,6 +561,15 @@ export const computeDurationFromCardio = (cardio) => {
   return "";
 };
 
+// Suggested workout title from cardio details, e.g. "5 mi Easy Run" or "Bike".
+export const buildCardioTitle = (cardio) => {
+  if (!cardio) return "";
+  const distancePart = cardio.distance ? `${cardio.distance} ${cardio.distanceUnit || "mi"}` : "";
+  const style = cardio.style && cardio.style !== cardio.activity ? cardio.style : "";
+  const activity = cardio.activity || "Cardio";
+  return [distancePart, style, activity].filter(Boolean).join(" ");
+};
+
 export const computeSplitSummary = (segments = [], cardio = {}) => {
   if (!Array.isArray(segments) || segments.length === 0) {
     return { totalDistance: "", totalDuration: "", avgPace: "", avgSpeed: "" };

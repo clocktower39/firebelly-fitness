@@ -20,6 +20,7 @@ import { requestTraining, updateTraining, getExerciseList } from "../../Redux/ac
 import { workoutApi } from "../../api/workoutApi";
 import Loading from "../../Components/Loading";
 import CardioDetailsEditor from "../../features/workout/components/cardio/CardioDetailsEditor";
+import { buildCardioTitle } from "../../features/workout/utils/workoutUtils";
 import StrengthWorkoutEditor from "../../features/workout/components/StrengthWorkoutEditor";
 import WorkoutCategoryField from "../../features/workout/components/WorkoutCategoryField";
 import WorkoutHeader from "../../features/workout/components/WorkoutHeader";
@@ -93,6 +94,7 @@ export default function Workout({ socket }) {
     });
   }, [localTraining, exerciseList]);
   const [trainingTitle, setTrainingTitle] = useState("");
+  const [titleAuto, setTitleAuto] = useState(false);
   const [workoutCompleteStatus, setWorkoutCompleteStatus] = useState(training?.complete || false);
   const [loading, setLoading] = useState(true);
   const [workoutFeedback, setWorkoutFeedback] = useState(training?.workoutFeedback || { difficulty: 1, comments: [] });
@@ -186,6 +188,8 @@ export default function Workout({ socket }) {
     if (cardioHydratedIdRef.current !== training._id) {
       cardioHydratedIdRef.current = training._id;
       hydrateCardio(training.cardio, user?.isTrainer);
+      // Auto-title only when this workout has no manual title yet.
+      setTitleAuto(!training.title);
     }
 
     setBaseline({
@@ -220,7 +224,15 @@ export default function Workout({ socket }) {
   const [toggleNewSet, setToggleNewSet] = useState(false);
   const [toggleRemoveSet, setToggleRemoveSet] = useState(false);
 
+  // Keep a cardio workout's title in sync with its details until the user types their own.
+  useEffect(() => {
+    if (!isCardio || !titleAuto) return;
+    const suggested = buildCardioTitle(cardioEditorProps?.activeCardio);
+    if (suggested) setTrainingTitle(suggested);
+  }, [isCardio, titleAuto, cardioEditorProps?.activeCardio]);
+
   const handleTitleChange = (e) => {
+    setTitleAuto(false);
     setTrainingTitle(e.target.value);
   };
 
