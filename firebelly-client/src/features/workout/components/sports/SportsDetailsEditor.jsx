@@ -1,12 +1,12 @@
 import React from "react";
 import { Add, RemoveCircle, Star, StarBorder } from "@mui/icons-material";
 import {
+  Autocomplete,
   Box,
   Button,
   Collapse,
   Grid,
   IconButton,
-  ListSubheader,
   MenuItem,
   Paper,
   Stack,
@@ -62,26 +62,21 @@ export default function SportsDetailsEditor({
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-                  <TextField
-                    select
-                    label="Sport"
-                    value={sports.sport}
-                    onChange={handleChange("sport")}
+                  <Autocomplete
+                    disableClearable
                     fullWidth
-                  >
-                    {favList.length > 0 && <ListSubheader>Favorites</ListSubheader>}
-                    {favList.map((option) => (
-                      <MenuItem key={`fav-${option}`} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                    {favList.length > 0 && <ListSubheader>All sports</ListSubheader>}
-                    {otherSports.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                    options={[...favList, ...otherSports]}
+                    value={sports.sport}
+                    onChange={(event, newValue) => {
+                      if (newValue) handleChange("sport")(newValue);
+                    }}
+                    groupBy={
+                      favList.length > 0
+                        ? (option) => (favList.includes(option) ? "★ Favorites" : "All sports")
+                        : undefined
+                    }
+                    renderInput={(params) => <TextField {...params} label="Sport" />}
+                  />
                   <Tooltip title={isCurrentFavorite ? "Unfavorite" : "Favorite this sport"}>
                     <IconButton
                       size="small"
