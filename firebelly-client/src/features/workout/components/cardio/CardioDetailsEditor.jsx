@@ -136,11 +136,17 @@ export default function CardioDetailsEditor({
                   <ToggleButton value="plan">Plan</ToggleButton>
                   <ToggleButton value="actual">Results</ToggleButton>
                 </ToggleButtonGroup>
-                {cardioViewMode === "actual" && (
-                  <Button variant="contained" size="small" onClick={handleCopyPlanToActual}>
-                    Log as planned
-                  </Button>
-                )}
+                {/* Always render (reserving its width) so the Plan/Results toggle doesn't shift when
+                    switching modes; just hide + disable it on the Plan view. */}
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleCopyPlanToActual}
+                  disabled={cardioViewMode !== "actual"}
+                  sx={{ visibility: cardioViewMode === "actual" ? "visible" : "hidden" }}
+                >
+                  Log as planned
+                </Button>
               </Stack>
             </Stack>
 
