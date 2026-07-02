@@ -5,6 +5,7 @@ import { useParams, useOutletContext, useNavigate, useLocation } from "react-rou
 import dayjs from "dayjs";
 import {
   Alert,
+  Box,
   Button,
   Grid,
   Snackbar,
@@ -499,6 +500,7 @@ export default function Workout({ socket }) {
                   justifyContent: "flex-start",
                   minHeight: "100%",
                   paddingTop: "15px",
+                  paddingBottom: "84px",
                 }}
               >
                 <WorkoutHeader
@@ -571,46 +573,42 @@ export default function Workout({ socket }) {
                   </Grid>
                 )}
               </Grid>
-              <Grid
-                container
-                size={12}
-                spacing={1}
+              <Box
                 sx={{
-                  position: "sticky",
+                  position: "fixed",
+                  left: 0,
+                  right: 0,
                   bottom: 0,
-                  zIndex: 2,
+                  zIndex: (theme) => theme.zIndex.appBar,
                   backgroundColor: "background.default",
-                  alignContent: "flex-end",
-                  "&.MuiGrid-root": { flexGrow: 1 },
-                  paddingTop: "5px",
-                  paddingBottom: "5px",
+                  boxShadow: "0 -4px 12px -6px rgba(0,0,0,0.35)",
+                  px: 2,
+                  py: 1,
                 }}
               >
-                <Grid size={isCardio && !workoutCompleteStatus ? 7 : 12}>
+                <Box sx={{ maxWidth: 900, mx: "auto", display: "flex", gap: 1 }}>
                   <Button
                     variant="contained"
                     onClick={save}
-                    fullWidth
                     disabled={loading}
                     color={isDirty ? "warning" : "primary"}
+                    sx={{ flex: isCardio && !workoutCompleteStatus ? 7 : 1 }}
                   >
                     Save
                   </Button>
-                </Grid>
-                {isCardio && !workoutCompleteStatus && (
-                  <Grid size={5}>
+                  {isCardio && !workoutCompleteStatus && (
                     <Button
                       variant="contained"
                       color="success"
-                      fullWidth
                       disabled={loading}
                       onClick={handleCompleteAndSave}
+                      sx={{ flex: 5 }}
                     >
                       Complete &amp; Save
                     </Button>
-                  </Grid>
-                )}
-              </Grid>
+                  )}
+                </Box>
+              </Box>
 
               {nextWorkout && activeStep >= localTraining.length && (
                 <Grid container size={12} sx={{ paddingBottom: "5px" }}>
