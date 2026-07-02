@@ -256,7 +256,6 @@ function Home() {
           </Paper>
         </Grid>
       )}
-      <CardioSummaryCard client={client} />
       {localWorkouts && (
         <WorkoutOverview
           localWorkouts={localWorkouts}
@@ -276,6 +275,7 @@ function Home() {
           user={activeWorkoutUser}
         />
       )}
+      <CardioSummaryCard client={client} />
       {isPersonalWorkout() && readiness.loaded && todayCheckinDone && (
         <Grid container size={12} sx={{ p: 1 }}>
           <DailyCheckinCard />
