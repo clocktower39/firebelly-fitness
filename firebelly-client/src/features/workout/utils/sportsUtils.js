@@ -87,7 +87,7 @@ export const DEFAULT_SPORTS_STAT = { label: "", value: "" };
 
 export const DEFAULT_SPORTS_FIELDS = {
   sport: "Basketball",
-  sessionType: "Game",
+  sessionType: "Practice",
   durationMinutes: "",
   rpe: "",
   // result & competition (competitive sessions)

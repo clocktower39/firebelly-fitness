@@ -53,9 +53,9 @@ import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUni
 const WORKOUT_TYPES = [
   { label: "Strength", value: "Strength", enabled: true },
   { label: "Cardio", value: "Cardio", enabled: true },
+  { label: "Sports", value: "Sports", enabled: true },
   { label: "Yoga", value: "Yoga", enabled: false, hint: "Coming soon" },
   { label: "Pilates", value: "Pilates", enabled: false, hint: "Coming soon" },
-  { label: "Sports", value: "Sports", enabled: true },
 ];
 
 const CARDIO_PREVIEW_DEFAULTS = {

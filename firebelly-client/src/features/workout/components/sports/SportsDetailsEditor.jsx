@@ -1,17 +1,19 @@
-import React from "react";
-import { Add, RemoveCircle } from "@mui/icons-material";
+import React, { useState } from "react";
+import { Add, RemoveCircle, Star, StarBorder } from "@mui/icons-material";
 import {
   Box,
   Button,
   Collapse,
   Grid,
   IconButton,
+  ListSubheader,
   MenuItem,
   Paper,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import {
@@ -25,6 +27,7 @@ import {
   SPORTS_WEATHER_OPTIONS,
   isCompetitiveSession,
 } from "../../utils/sportsUtils";
+import { getFavoriteSports, toggleFavoriteSport } from "../../utils/sportsPrefs";
 
 const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -38,6 +41,11 @@ export default function SportsDetailsEditor({
   changeStat,
 }) {
   const competitive = isCompetitiveSession(sports.sessionType);
+  const [favoriteSports, setFavoriteSports] = useState(() => getFavoriteSports());
+  const favList = favoriteSports.filter((option) => SPORTS_LIST.includes(option));
+  const otherSports = SPORTS_LIST.filter((option) => !favList.includes(option));
+  const isCurrentFavorite = favList.includes(sports.sport);
+  const handleToggleFavoriteSport = () => setFavoriteSports(toggleFavoriteSport(sports.sport));
 
   return (
     <>
@@ -53,19 +61,41 @@ export default function SportsDetailsEditor({
 
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  select
-                  label="Sport"
-                  value={sports.sport}
-                  onChange={handleChange("sport")}
-                  fullWidth
-                >
-                  {SPORTS_LIST.map((option) => (
-                    <MenuItem key={option} value={option}>
-                      {option}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                  <TextField
+                    select
+                    label="Sport"
+                    value={sports.sport}
+                    onChange={handleChange("sport")}
+                    fullWidth
+                  >
+                    {favList.length > 0 && <ListSubheader>Favorites</ListSubheader>}
+                    {favList.map((option) => (
+                      <MenuItem key={`fav-${option}`} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                    {favList.length > 0 && <ListSubheader>All sports</ListSubheader>}
+                    {otherSports.map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Tooltip title={isCurrentFavorite ? "Unfavorite" : "Favorite this sport"}>
+                    <IconButton
+                      size="small"
+                      onClick={handleToggleFavoriteSport}
+                      aria-label="favorite sport"
+                    >
+                      {isCurrentFavorite ? (
+                        <Star fontSize="small" color="warning" />
+                      ) : (
+                        <StarBorder fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
