@@ -18,11 +18,14 @@ import { requestTraining, updateTraining, getExerciseList } from "../../Redux/ac
 import { workoutApi } from "../../api/workoutApi";
 import Loading from "../../Components/Loading";
 import CardioDetailsEditor from "../../features/workout/components/cardio/CardioDetailsEditor";
+import SportsDetailsEditor from "../../features/workout/components/sports/SportsDetailsEditor";
 import { buildCardioTitle } from "../../features/workout/utils/workoutUtils";
+import { buildSportsTitle } from "../../features/workout/utils/sportsUtils";
 import StrengthWorkoutEditor from "../../features/workout/components/StrengthWorkoutEditor";
 import WorkoutCategoryField from "../../features/workout/components/WorkoutCategoryField";
 import WorkoutHeader from "../../features/workout/components/WorkoutHeader";
 import useWorkoutCardio from "../../features/workout/hooks/useWorkoutCardio";
+import useWorkoutSports from "../../features/workout/hooks/useWorkoutSports";
 import useWorkoutDirtyState from "../../features/workout/hooks/useWorkoutDirtyState";
 import useWorkoutScheduleEvent from "../../features/workout/hooks/useWorkoutScheduleEvent";
 import useWorkoutSocketSync from "../../features/workout/hooks/useWorkoutSocketSync";
@@ -106,6 +109,8 @@ export default function Workout({ socket }) {
   const weightLabelUnitToggleEnabled = Boolean(workoutGestures.tapWeightLabelToSwitchUnit);
   const activeWorkoutType = workoutType || training?.workoutType || "Strength";
   const isCardio = activeWorkoutType === "Cardio";
+  const isSports = activeWorkoutType === "Sports";
+  const isActivityLog = isCardio || isSports;
   const handleWorkoutWeightUnitChange = (event, nextUnit) => {
     if (!nextUnit) return;
     setActiveWorkoutWeightUnit(normalizeWeightUnit(nextUnit));
@@ -131,6 +136,12 @@ export default function Workout({ socket }) {
     hydrateCardio,
   } = useWorkoutCardio({ isCardio, training, user });
 
+  const {
+    sports: sportsDetails,
+    editorProps: sportsEditorProps,
+    hydrateSports,
+  } = useWorkoutSports({ training });
+
   const trainerAccessToken = user?.isTrainer
     ? getAccessToken()
     : getDelegatedReturnAccessToken("trainer");
@@ -143,6 +154,7 @@ export default function Workout({ socket }) {
 
   const { buildLocalComposite, isDirty, setBaseline } = useWorkoutDirtyState({
     cardioDetails,
+    sportsDetails,
     localTraining,
     trainingCategory,
     trainingTitle,
@@ -186,6 +198,7 @@ export default function Workout({ socket }) {
     if (cardioHydratedIdRef.current !== training._id) {
       cardioHydratedIdRef.current = training._id;
       hydrateCardio(training.cardio, user?.isTrainer);
+      hydrateSports(training.sports);
       // Auto-title only when this workout has no manual title yet.
       setTitleAuto(!training.title);
     }
@@ -198,6 +211,7 @@ export default function Workout({ socket }) {
       training: training.training ?? [],
       workoutType: training.workoutType ?? "Strength",
       cardio: training.cardio ?? {},
+      sports: training.sports ?? {},
     });
 
     if (training.user?._id) {
@@ -207,6 +221,7 @@ export default function Workout({ socket }) {
     setLoading(false);
   }, [
     hydrateCardio,
+    hydrateSports,
     isPersonalWorkout,
     setBaseline,
     setBorderHighlight,
@@ -228,6 +243,12 @@ export default function Workout({ socket }) {
     const suggested = buildCardioTitle(cardioEditorProps?.activeCardio);
     if (suggested) setTrainingTitle(suggested);
   }, [isCardio, titleAuto, cardioEditorProps?.activeCardio]);
+
+  useEffect(() => {
+    if (!isSports || !titleAuto) return;
+    const suggested = buildSportsTitle(sportsDetails);
+    if (suggested) setTrainingTitle(suggested);
+  }, [isSports, titleAuto, sportsDetails]);
 
   // Warn before a browser refresh / tab-close / external navigation drops unsaved changes.
   useEffect(() => {
@@ -389,6 +410,7 @@ export default function Workout({ socket }) {
       workoutFeedback: workoutFeedback,
       workoutType: activeWorkoutType,
       cardio: cardioDetails,
+      sports: sportsDetails,
     };
 
     return dispatch(
@@ -529,6 +551,8 @@ export default function Workout({ socket }) {
                   </Grid>
                   {isCardio ? (
                     <CardioDetailsEditor {...cardioEditorProps} />
+                  ) : isSports ? (
+                    <SportsDetailsEditor {...sportsEditorProps} />
                   ) : (
                     <WorkoutCategoryField
                       categories={categories}
@@ -537,7 +561,7 @@ export default function Workout({ socket }) {
                     />
                   )}
                 </Grid>
-                {!isCardio && (
+                {!isCardio && !isSports && (
                   <StrengthWorkoutEditor
                     activeStep={activeStep}
                     activeWorkoutWeightUnit={activeWorkoutWeightUnit}
@@ -565,7 +589,7 @@ export default function Workout({ socket }) {
                     workoutUser={training.user}
                   />
                 )}
-                {isCardio && workoutCompleteStatus && (
+                {isActivityLog && workoutCompleteStatus && (
                   <Grid container size={12} sx={{ paddingTop: "10px", justifyContent: "center" }}>
                     <Button size="small" color="success" onClick={handleReopenWorkout}>
                       ✓ Workout complete — mark incomplete
@@ -592,11 +616,11 @@ export default function Workout({ socket }) {
                     onClick={save}
                     disabled={loading}
                     color={isDirty ? "warning" : "primary"}
-                    sx={{ flex: isCardio && !workoutCompleteStatus ? 7 : 1 }}
+                    sx={{ flex: isActivityLog && !workoutCompleteStatus ? 7 : 1 }}
                   >
                     Save
                   </Button>
-                  {isCardio && !workoutCompleteStatus && (
+                  {isActivityLog && !workoutCompleteStatus && (
                     <Button
                       variant="contained"
                       color="success"

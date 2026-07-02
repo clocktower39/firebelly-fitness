@@ -47,6 +47,7 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { DragHandle as DragHandleIcon, Settings } from "@mui/icons-material";
 import { updateTraining, createTraining } from "../../Redux/actions";
 import { WorkoutOptionModalView } from "../WorkoutOptionModal";
+import { normalizeSports, isCompetitiveSession } from "../../features/workout/utils/sportsUtils";
 import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUnits";
 
 const WORKOUT_TYPES = [
@@ -54,7 +55,7 @@ const WORKOUT_TYPES = [
   { label: "Cardio", value: "Cardio", enabled: true },
   { label: "Yoga", value: "Yoga", enabled: false, hint: "Coming soon" },
   { label: "Pilates", value: "Pilates", enabled: false, hint: "Coming soon" },
-  { label: "Sports", value: "Sports", enabled: false, hint: "Coming soon" },
+  { label: "Sports", value: "Sports", enabled: true },
 ];
 
 const CARDIO_PREVIEW_DEFAULTS = {
@@ -868,6 +869,8 @@ export default function WorkoutOverview({
 
           const currentViewMode = viewModes[workout._id] || "goals";
           const isCardioWorkout = workout.workoutType === "Cardio";
+          const isSportsWorkout = workout.workoutType === "Sports";
+          const isActivityCard = isCardioWorkout || isSportsWorkout;
 
           return (
             <React.Fragment key={`workout-${workout._id || index}`}>
@@ -876,8 +879,12 @@ export default function WorkoutOverview({
                 sx={{
                   margin: "5px",
                   padding: "8px",
-                  borderTop: isCardioWorkout ? "4px solid" : undefined,
-                  borderColor: isCardioWorkout ? "info.main" : undefined,
+                  borderTop: isActivityCard ? "4px solid" : undefined,
+                  borderColor: isSportsWorkout
+                    ? "secondary.main"
+                    : isCardioWorkout
+                    ? "info.main"
+                    : undefined,
                 }}
               >
                 <Grid container sx={{ justifyContent: "center", alignItems: "center" }}>
@@ -894,22 +901,24 @@ export default function WorkoutOverview({
                 </Grid>
                 <Typography variant="h6">{workout.category.join(", ")}</Typography>
 
-                <ToggleButtonGroup
-                  value={currentViewMode}
-                  exclusive
-                  onChange={(event, newViewMode) =>
-                    handleViewToggleChange(workout._id, newViewMode)
-                  }
-                  aria-label="goals or achieved"
-                  size="small"
-                >
-                  <ToggleButton value="goals" aria-label="goals">
-                    {isCardioWorkout ? "Plan" : "Goals"}
-                  </ToggleButton>
-                  <ToggleButton value="achieved" aria-label="achieved">
-                    {isCardioWorkout ? "Results" : "Achieved"}
-                  </ToggleButton>
-                </ToggleButtonGroup>
+                {!isSportsWorkout && (
+                  <ToggleButtonGroup
+                    value={currentViewMode}
+                    exclusive
+                    onChange={(event, newViewMode) =>
+                      handleViewToggleChange(workout._id, newViewMode)
+                    }
+                    aria-label="goals or achieved"
+                    size="small"
+                  >
+                    <ToggleButton value="goals" aria-label="goals">
+                      {isCardioWorkout ? "Plan" : "Goals"}
+                    </ToggleButton>
+                    <ToggleButton value="achieved" aria-label="achieved">
+                      {isCardioWorkout ? "Results" : "Achieved"}
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                )}
 
                 <WorkoutDropZone
                   id={workoutContainerId}
@@ -924,13 +933,13 @@ export default function WorkoutOverview({
                       ref={setNodeRef}
                       sx={{
                         padding: "10px 0px",
-                        minHeight: isCardioWorkout ? undefined : 72,
+                        minHeight: isActivityCard ? undefined : 72,
                         borderRadius: 2,
-                        backgroundColor: isOver && !isCardioWorkout ? "action.hover" : "transparent",
-                        border: !isCardioWorkout && (isOver || circuits.length === 0)
+                        backgroundColor: isOver && !isActivityCard ? "action.hover" : "transparent",
+                        border: !isActivityCard && (isOver || circuits.length === 0)
                           ? "1px dashed"
                           : "1px solid transparent",
-                        borderColor: !isCardioWorkout && (isOver || circuits.length === 0)
+                        borderColor: !isActivityCard && (isOver || circuits.length === 0)
                           ? isOver
                             ? "primary.main"
                             : "divider"
@@ -939,6 +948,8 @@ export default function WorkoutOverview({
                     >
                       {isCardioWorkout ? (
                         <CardioWorkoutPreview workout={workout} viewMode={currentViewMode} />
+                      ) : isSportsWorkout ? (
+                        <SportsWorkoutPreview workout={workout} />
                       ) : (
                         <SortableContext items={circuitIds} strategy={verticalListSortingStrategy}>
                           {circuits.length > 0 ? (
@@ -1322,6 +1333,105 @@ const CardioWorkoutPreview = ({ workout, viewMode }) => {
               Notes
             </Typography>
             <Typography variant="body2">{truncateCardioPreviewText(cardioFields.notes, 140)}</Typography>
+          </Paper>
+        )}
+      </Stack>
+    </Box>
+  );
+};
+
+const hasSportsValue = (value) => value !== "" && value !== null && value !== undefined;
+
+const SportsWorkoutPreview = ({ workout }) => {
+  const sports = normalizeSports(workout.sports);
+  const competitive = isCompetitiveSession(sports.sessionType);
+  const detailChips = [
+    sports.environment,
+    sports.surface,
+    sports.location,
+    hasSportsValue(sports.avgHeartRate) ? `${sports.avgHeartRate} bpm` : "",
+    hasSportsValue(sports.calories) ? `${sports.calories} cal` : "",
+    hasSportsValue(sports.distance) ? `${sports.distance} ${sports.distanceUnit}` : "",
+    sports.gear || "",
+  ].filter(Boolean);
+  const stats = (sports.stats || []).filter((stat) => stat.label || stat.value);
+  const resultLine = [
+    sports.result,
+    sports.score ? `(${sports.score})` : "",
+    sports.opponent ? `vs ${sports.opponent}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        padding: 2,
+        border: "1px solid",
+        borderColor: "divider",
+        background: (theme) =>
+          `linear-gradient(135deg, ${theme.palette.secondary.light}20 0%, ${theme.palette.info.light}12 100%)`,
+      }}
+    >
+      <Stack spacing={1.5}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ flexWrap: "wrap", gap: "8px", alignItems: "center" }}
+        >
+          <Chip size="small" color="secondary" label={sports.sport || "Sport"} />
+          {hasSportsValue(sports.sessionType) && (
+            <Chip size="small" variant="outlined" label={sports.sessionType} />
+          )}
+          {hasSportsValue(sports.durationMinutes) && (
+            <Chip size="small" variant="outlined" label={`${sports.durationMinutes} min`} />
+          )}
+          {hasSportsValue(sports.rpe) && (
+            <Chip size="small" variant="outlined" label={`RPE ${sports.rpe}`} />
+          )}
+        </Stack>
+
+        {competitive && resultLine && (
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {resultLine}
+          </Typography>
+        )}
+
+        {detailChips.length > 0 && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+            {detailChips.slice(0, 6).map((detail) => (
+              <Chip key={`${workout._id}-${detail}`} label={detail} size="small" variant="outlined" />
+            ))}
+          </Stack>
+        )}
+
+        {stats.length > 0 && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+            {stats.map((stat, index) => (
+              <Chip
+                key={`${workout._id}-stat-${index}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                label={`${stat.label || "Stat"}: ${stat.value}`}
+              />
+            ))}
+          </Stack>
+        )}
+
+        {hasSportsValue(sports.skills) && (
+          <Typography variant="body2" color="text.secondary">
+            Focus: {sports.skills}
+          </Typography>
+        )}
+
+        {hasSportsValue(sports.notes) && (
+          <Paper variant="outlined" sx={{ padding: 1.25, backgroundColor: "rgba(255,255,255,0.65)" }}>
+            <Typography variant="caption" color="text.secondary">
+              Notes
+            </Typography>
+            <Typography variant="body2">{truncateCardioPreviewText(sports.notes, 140)}</Typography>
           </Paper>
         )}
       </Stack>

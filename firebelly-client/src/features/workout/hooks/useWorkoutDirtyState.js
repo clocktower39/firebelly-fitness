@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import deepEqual from "fast-deep-equal/react";
 import { normalizeCardio } from "../utils/workoutUtils";
+import { normalizeSports } from "../utils/sportsUtils";
 
 const normalizeWorkoutSnapshot = (obj) => {
   const clone = typeof structuredClone === "function" ? structuredClone(obj) : JSON.parse(JSON.stringify(obj ?? {}));
@@ -40,12 +41,14 @@ const normalizeWorkoutSnapshot = (obj) => {
   clone.training = clone.training ?? [];
   clone.workoutType = clone.workoutType ?? "Strength";
   clone.cardio = normalizeCardio(clone.cardio);
+  clone.sports = normalizeSports(clone.sports);
 
   return clone;
 };
 
 export default function useWorkoutDirtyState({
   cardioDetails,
+  sportsDetails,
   localTraining,
   trainingCategory,
   trainingTitle,
@@ -66,9 +69,11 @@ export default function useWorkoutDirtyState({
       training: localTraining,
       workoutType,
       cardio: cardioDetails,
+      sports: sportsDetails,
     }),
     [
       cardioDetails,
+      sportsDetails,
       localTraining,
       trainingCategory,
       trainingTitle,

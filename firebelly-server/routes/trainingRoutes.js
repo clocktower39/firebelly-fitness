@@ -11,6 +11,7 @@ const trainingFields = {
   date: Joi.date().optional(),
   workoutType: Joi.string().allow("").optional(),
   cardio: Joi.object().unknown(true).optional(),
+  sports: Joi.object().unknown(true).optional(),
   category: Joi.array().items(Joi.string().allow("")).optional(),
   training: Joi.array().items(Joi.array().items(Joi.object().unknown(true))).optional(),
   workoutFeedback: Joi.object().unknown(true).optional(),
