@@ -29,6 +29,10 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
   const actualCardio = cardioDetails?.actual || normalizeCardioFields({});
   const isTrainerEditingClient =
     !!user?.isTrainer && !!training?.user?._id && String(user._id) !== String(training.user._id);
+  // Plan vs Results only matters when a trainer is involved (prescribe -> log). Solo logging gets a
+  // single view. Based on the relationship (not plan data) so it doesn't flip once you enter data.
+  const showPlanResults =
+    isTrainerEditingClient || Boolean(user?.trainerId) || Boolean(training?.user?.trainerId);
 
   const derivedMetrics = useCardioDerivedMetrics({
     activeCardio,
@@ -134,6 +138,7 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
       handleRepeatLast,
       lastSessionLabel,
       isTrainerEditingClient,
+      showPlanResults,
       missingClientPromptKeys: derivedMetrics.missingClientPromptKeys,
       paceUnitLabel: derivedMetrics.paceUnitLabel,
       planClientPrompts: derivedMetrics.planClientPrompts,

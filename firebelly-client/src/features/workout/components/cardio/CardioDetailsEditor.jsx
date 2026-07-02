@@ -49,6 +49,7 @@ export default function CardioDetailsEditor({
   handleToggleClientPrompt,
   isTrainerEditingClient,
   lastSessionLabel,
+  showPlanResults,
   missingClientPromptKeys,
   paceUnitLabel,
   planClientPrompts,
@@ -89,7 +90,7 @@ export default function CardioDetailsEditor({
     };
   };
   const handleSwipeEnd = (event) => {
-    if (swipeRef.current.skip) return;
+    if (!showPlanResults || swipeRef.current.skip) return;
     const touch = event.changedTouches[0];
     const dx = touch.clientX - swipeRef.current.x;
     const dy = touch.clientY - swipeRef.current.y;
@@ -121,33 +122,37 @@ export default function CardioDetailsEditor({
               <Stack spacing={0.25}>
                 <Typography variant="h6">Cardio Details</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {cardioViewMode === "actual"
+                  {!showPlanResults
+                    ? "Log your cardio session."
+                    : cardioViewMode === "actual"
                     ? "Log what you did — swipe right for the plan."
                     : "Plan the session — swipe left to log results."}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <ToggleButtonGroup
-                  value={cardioViewMode}
-                  exclusive
-                  size="small"
-                  onChange={handleCardioViewModeChange}
-                >
-                  <ToggleButton value="plan">Plan</ToggleButton>
-                  <ToggleButton value="actual">Results</ToggleButton>
-                </ToggleButtonGroup>
-                {/* Always render (reserving its width) so the Plan/Results toggle doesn't shift when
-                    switching modes; just hide + disable it on the Plan view. */}
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={handleCopyPlanToActual}
-                  disabled={cardioViewMode !== "actual"}
-                  sx={{ visibility: cardioViewMode === "actual" ? "visible" : "hidden" }}
-                >
-                  Log as planned
-                </Button>
-              </Stack>
+              {showPlanResults && (
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <ToggleButtonGroup
+                    value={cardioViewMode}
+                    exclusive
+                    size="small"
+                    onChange={handleCardioViewModeChange}
+                  >
+                    <ToggleButton value="plan">Plan</ToggleButton>
+                    <ToggleButton value="actual">Results</ToggleButton>
+                  </ToggleButtonGroup>
+                  {/* Always render (reserving its width) so the Plan/Results toggle doesn't shift when
+                      switching modes; just hide + disable it on the Plan view. */}
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleCopyPlanToActual}
+                    disabled={cardioViewMode !== "actual"}
+                    sx={{ visibility: cardioViewMode === "actual" ? "visible" : "hidden" }}
+                  >
+                    Log as planned
+                  </Button>
+                </Stack>
+              )}
             </Stack>
 
             <CardioBasicFields
