@@ -7,6 +7,7 @@ import utc from "dayjs/plugin/utc";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import Loading from "../../Components/Loading";
 import DailyCheckinCard from "../../Components/DailyCheckinCard";
+import CardioSummaryCard from "../../features/workout/components/cardio/CardioSummaryCard";
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
@@ -255,6 +256,7 @@ function Home() {
           </Paper>
         </Grid>
       )}
+      <CardioSummaryCard client={client} />
       {localWorkouts && (
         <WorkoutOverview
           localWorkouts={localWorkouts}

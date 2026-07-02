@@ -71,6 +71,7 @@ import {
   YAxis,
 } from "recharts";
 import queryString from "query-string";
+import CardioDashboard from "../../features/workout/components/cardio/CardioDashboard";
 import {
   WEIGHT_UNIT_OPTIONS,
   displayWeightUnit,
@@ -2548,7 +2549,7 @@ export default function Progress(props) {
   const location = useLocation();
   const { client, tab } = queryString.parse(location.search);
   const [searchValue, setSearchValue] = useState(props.searchExercise || "");
-  const [activeTab, setActiveTab] = useState(tab === "metrics" ? 1 : 0);
+  const [activeTab, setActiveTab] = useState(tab === "metrics" ? 1 : tab === "cardio" ? 2 : 0);
   const user = useSelector((state) => state.user);
   const clients = useSelector((state) => state.clients);
   const progressState = useSelector((state) => state.progress);
@@ -2607,6 +2608,8 @@ export default function Progress(props) {
   useEffect(() => {
     if (tab === "metrics") {
       setActiveTab(1);
+    } else if (tab === "cardio") {
+      setActiveTab(2);
     } else if (tab === "exercise") {
       setActiveTab(0);
     }
@@ -2631,6 +2634,7 @@ export default function Progress(props) {
           >
             <Tab label="Exercise Progress" />
             <Tab label="Body Metrics" />
+            <Tab label="Cardio" />
           </Tabs>
         </Grid>
 
@@ -2659,6 +2663,12 @@ export default function Progress(props) {
         {activeTab === 1 && (
           <Grid container size={{ xs: 12, sm: 10 }}>
             <BodyMetrics targetUser={targetUser} isTrainerView={isTrainerView} />
+          </Grid>
+        )}
+
+        {activeTab === 2 && (
+          <Grid container size={{ xs: 12, sm: 10 }}>
+            <CardioDashboard client={client} />
           </Grid>
         )}
       </Grid>
