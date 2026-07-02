@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   Button,
   Grid,
@@ -76,10 +76,37 @@ export default function CardioDetailsEditor({
   splitSummary,
   toggleCardioSection,
 }) {
+  // Swipe left/right to move Plan <-> Results (mirrors the strength circuit-to-circuit swipe). Ignores
+  // vertical scrolls and swipes that start on a form control.
+  const swipeRef = useRef({ x: 0, y: 0, skip: false });
+  const handleSwipeStart = (event) => {
+    const touch = event.touches[0];
+    const tag = event.target?.tagName;
+    swipeRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      skip: ["INPUT", "TEXTAREA", "SELECT"].includes(tag),
+    };
+  };
+  const handleSwipeEnd = (event) => {
+    if (swipeRef.current.skip) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - swipeRef.current.x;
+    const dy = touch.clientY - swipeRef.current.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0 && cardioViewMode !== "actual") handleCardioViewModeChange(null, "actual");
+    else if (dx > 0 && cardioViewMode !== "plan") handleCardioViewModeChange(null, "plan");
+  };
+
   return (
     <>
       <Grid size={12}>
-        <Paper variant="outlined" sx={{ padding: "16px" }}>
+        <Paper
+          variant="outlined"
+          sx={{ padding: "16px" }}
+          onTouchStart={handleSwipeStart}
+          onTouchEnd={handleSwipeEnd}
+        >
           <Stack spacing={2.5}>
             <Stack
               direction="row"
@@ -95,8 +122,8 @@ export default function CardioDetailsEditor({
                 <Typography variant="h6">Cardio Details</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {cardioViewMode === "actual"
-                    ? "Log what you actually did."
-                    : "Start with the basics — add extras below if you want."}
+                    ? "Log what you did — swipe right for the plan."
+                    : "Plan the session — swipe left to log results."}
                 </Typography>
               </Stack>
               <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
