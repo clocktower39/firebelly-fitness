@@ -228,6 +228,17 @@ export default function Workout({ socket }) {
     if (suggested) setTrainingTitle(suggested);
   }, [isCardio, titleAuto, cardioEditorProps?.activeCardio]);
 
+  // Warn before a browser refresh / tab-close / external navigation drops unsaved changes.
+  useEffect(() => {
+    if (!isDirty) return undefined;
+    const handler = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
   const handleTitleChange = (e) => {
     setTitleAuto(false);
     setTrainingTitle(e.target.value);
