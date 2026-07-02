@@ -6,7 +6,10 @@ import dayjs from "dayjs";
 import {
   Alert,
   Button,
+  Checkbox,
+  FormControlLabel,
   Grid,
+  Paper,
   Snackbar,
   TextField,
 } from "@mui/material";
@@ -527,6 +530,23 @@ export default function Workout({ socket }) {
                     workoutFeedback={workoutFeedback}
                     workoutUser={training.user}
                   />
+                )}
+                {isCardio && (
+                  <Grid container size={12} sx={{ paddingTop: "15px" }}>
+                    <Paper variant="outlined" sx={{ p: 2, width: "100%" }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={!!workoutCompleteStatus}
+                            onChange={(event) => setWorkoutCompleteStatus(event.target.checked)}
+                          />
+                        }
+                        label={
+                          workoutCompleteStatus ? "Workout complete" : "Mark workout complete"
+                        }
+                      />
+                    </Paper>
+                  </Grid>
                 )}
               </Grid>
               <Grid
