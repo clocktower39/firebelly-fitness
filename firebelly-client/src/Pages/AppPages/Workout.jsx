@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo } from "react";
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { getAccessToken, getDelegatedReturnAccessToken } from "../../api/client";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useOutletContext, useNavigate, useLocation } from "react-router-dom";
@@ -162,6 +162,10 @@ export default function Workout({ socket }) {
     workoutId: params._id,
   });
 
+  // Tracks which workout's cardio we've hydrated, so a background/live training update to the SAME
+  // workout doesn't re-hydrate (and wipe) cardio fields the user is actively editing.
+  const cardioHydratedIdRef = useRef(null);
+
   // Hydrate locals when Redux training changes and set the baseline snapshot
   useEffect(() => {
     if (!training?._id) return;
@@ -174,7 +178,12 @@ export default function Workout({ socket }) {
     setWorkoutCompleteStatus(!!training.complete);
     setWorkoutFeedback(training.workoutFeedback ?? { difficulty: 1, comments: [] });
     setWorkoutType(training.workoutType || "Strength");
-    hydrateCardio(training.cardio, user?.isTrainer);
+    // Only (re)hydrate cardio when the workout itself changes — otherwise a background training
+    // update (socket sync, save round-trip) would clobber cardio fields being typed.
+    if (cardioHydratedIdRef.current !== training._id) {
+      cardioHydratedIdRef.current = training._id;
+      hydrateCardio(training.cardio, user?.isTrainer);
+    }
 
     setBaseline({
       title: training.title ?? "",
