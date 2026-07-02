@@ -34,6 +34,7 @@ export default function CardioDetailsEditor({
   cardioViewMode,
   durationHasError,
   handleAddCardioSegment,
+  handleGenerateEvenSplits,
   handleCardioActivityChange,
   handleCardioChange,
   handleCardioDerivedChange,
@@ -200,6 +201,7 @@ export default function CardioDetailsEditor({
         activeCardio={activeCardio}
         cardioSectionsOpen={cardioSectionsOpen}
         handleAddCardioSegment={handleAddCardioSegment}
+        handleGenerateEvenSplits={handleGenerateEvenSplits}
         handleCardioSegmentChange={handleCardioSegmentChange}
         handleRemoveCardioSegment={handleRemoveCardioSegment}
         paceUnitLabel={paceUnitLabel}

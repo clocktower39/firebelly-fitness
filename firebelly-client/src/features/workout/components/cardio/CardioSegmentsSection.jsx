@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Add, Delete } from "@mui/icons-material";
 import {
   Button,
@@ -16,6 +16,7 @@ export default function CardioSegmentsSection({
   activeCardio,
   cardioSectionsOpen,
   handleAddCardioSegment,
+  handleGenerateEvenSplits,
   handleCardioSegmentChange,
   handleRemoveCardioSegment,
   paceUnitLabel,
@@ -26,21 +27,50 @@ export default function CardioSegmentsSection({
   splitMetricValue,
   splitSummary,
 }) {
+  const [evenCount, setEvenCount] = useState(4);
+
   return (
     <Grid size={12}>
       <Collapse in={cardioSectionsOpen.segments} unmountOnExit>
         <Paper variant="outlined" sx={{ padding: "16px" }}>
           <Stack spacing={2}>
-            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 1,
+              }}
+            >
               <Typography variant="subtitle1">Splits & Intervals</Typography>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={handleAddCardioSegment}
-                startIcon={<Add />}
-              >
-                Add split
-              </Button>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <TextField
+                  label="# splits"
+                  type="number"
+                  size="small"
+                  value={evenCount}
+                  onChange={(event) => setEvenCount(event.target.value)}
+                  sx={{ width: 92 }}
+                  slotProps={{ htmlInput: { min: 1, max: 50, inputMode: "numeric" } }}
+                />
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => handleGenerateEvenSplits(evenCount)}
+                >
+                  Even splits
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleAddCardioSegment}
+                  startIcon={<Add />}
+                >
+                  Add split
+                </Button>
+              </Stack>
             </Stack>
             {(activeCardio.segments || []).length === 0 ? (
               <Typography variant="body2" color="text.secondary">

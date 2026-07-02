@@ -117,6 +117,7 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
       cardioViewMode,
       durationHasError: derivedMetrics.durationHasError,
       handleAddCardioSegment: handlers.handleAddCardioSegment,
+      handleGenerateEvenSplits: handlers.handleGenerateEvenSplits,
       handleCardioActivityChange: handlers.handleCardioActivityChange,
       handleCardioChange: handlers.handleCardioChange,
       handleCardioDerivedChange: handlers.handleCardioDerivedChange,

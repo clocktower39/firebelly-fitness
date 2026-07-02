@@ -349,8 +349,28 @@ export default function useCardioHandlers({
     });
   };
 
+  // Replace segments with N equal splits (distance split evenly; duration/pace left to fill in).
+  const handleGenerateEvenSplits = (count) => {
+    const n = Math.max(1, Math.min(50, Math.round(Number(count) || 0)));
+    const total = Number(activeCardio.distance) || 0;
+    const per = total ? String(Number((total / n).toFixed(2))) : "";
+    setCardioSectionsOpen((prev) => ({ ...prev, segments: true }));
+    setCardioDetails((prev) => ({
+      ...prev,
+      [cardioViewMode]: {
+        ...prev[cardioViewMode],
+        segments: Array.from({ length: n }, (_, i) => ({
+          ...DEFAULT_CARDIO_SEGMENT,
+          label: `Split ${i + 1}`,
+          distance: per,
+        })),
+      },
+    }));
+  };
+
   return {
     handleAddCardioSegment,
+    handleGenerateEvenSplits,
     handleCardioActivityChange,
     handleCardioChange,
     handleCardioDerivedChange,

@@ -7,11 +7,13 @@ import {
   DialogContentText,
   DialogTitle,
   Grid,
+  InputAdornment,
   MenuItem,
   TextField,
 } from "@mui/material";
 import {
   CARDIO_ACTIVITY_OPTIONS,
+  computeDurationFromCardio,
   getDerivedMetricErrorText,
   getDurationHelperText,
   hasCardioValue,
@@ -76,6 +78,16 @@ export default function CardioBasicFields({
       handleCardioActivityChange({ target: { value: pendingActivity.activity } });
     }
     setPendingActivity(null);
+  };
+
+  // "Enter any two, compute the third": offer to fill duration from distance + pace/speed.
+  const canCalcDuration =
+    !activeCardio.duration &&
+    !!activeCardio.distance &&
+    (!!activeCardio.avgPace || !!activeCardio.avgSpeed);
+  const handleCalcDuration = () => {
+    const computed = computeDurationFromCardio(activeCardio);
+    if (computed) handleCardioChange("duration")({ target: { value: computed } });
   };
 
   return (
@@ -146,6 +158,21 @@ export default function CardioBasicFields({
           error={durationHasError}
           helperText={durationHasError ? "Use mm:ss or hh:mm:ss." : getDurationHelperText()}
           fullWidth
+          slotProps={
+            canCalcDuration
+              ? {
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button size="small" onClick={handleCalcDuration} sx={{ minWidth: 0 }}>
+                          Calc
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  },
+                }
+              : undefined
+          }
         />
       </Grid>
       <Grid size={{ xs: 6, sm: 4 }}>

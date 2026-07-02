@@ -532,6 +532,35 @@ export const computeDerivedCardio = (cardio) => {
   return { pace, speed };
 };
 
+export const formatSecondsToDuration = (totalSeconds) => {
+  const s = Math.max(0, Math.round(totalSeconds || 0));
+  if (!s) return "";
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const two = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
+};
+
+// Inverse of computeDerivedCardio: duration from distance + pace (preferred) or speed. Lets a user
+// enter any two of distance / duration / pace and compute the third.
+export const computeDurationFromCardio = (cardio) => {
+  const distance = Number(cardio?.distance);
+  if (!distance) return "";
+  const activity = cardio?.activity || "Run";
+  const paceSeconds = parseDurationToSeconds(cardio?.avgPace || "");
+  if (paceSeconds) {
+    const durationSeconds =
+      activity === "Swim" ? paceSeconds * (distance / 100) : paceSeconds * distance;
+    return formatSecondsToDuration(durationSeconds);
+  }
+  const speed = Number(cardio?.avgSpeed);
+  if (speed > 0 && !["m", "yd"].includes(cardio?.distanceUnit)) {
+    return formatSecondsToDuration((distance / speed) * 3600);
+  }
+  return "";
+};
+
 export const computeSplitSummary = (segments = [], cardio = {}) => {
   if (!Array.isArray(segments) || segments.length === 0) {
     return { totalDistance: "", totalDuration: "", avgPace: "", avgSpeed: "" };
