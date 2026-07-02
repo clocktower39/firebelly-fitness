@@ -4,6 +4,7 @@ export let user = {
     customThemes: [],
     workoutWeightUnit: "lbs",
     defaultSessionLengthMinutes: 60,
+    favoriteSports: [],
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

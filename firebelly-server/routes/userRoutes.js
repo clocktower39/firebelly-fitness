@@ -52,6 +52,7 @@ const updateUserValidate = {
         themeMode: Joi.string().allow(""),
         workoutWeightUnit: Joi.string().allow(""),
         defaultSessionLengthMinutes: Joi.number().integer().min(5).max(480),
+        favoriteSports: Joi.array().items(Joi.string().allow("")),
         autoPaymentReminders: Joi.boolean(),
         timezone: Joi.string().allow(""),
         notificationPrefs: Joi.object({

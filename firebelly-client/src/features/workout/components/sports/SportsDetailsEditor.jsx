@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Add, RemoveCircle, Star, StarBorder } from "@mui/icons-material";
 import {
   Box,
@@ -27,13 +27,14 @@ import {
   SPORTS_WEATHER_OPTIONS,
   isCompetitiveSession,
 } from "../../utils/sportsUtils";
-import { getFavoriteSports, toggleFavoriteSport } from "../../utils/sportsPrefs";
 
 const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function SportsDetailsEditor({
   sports,
   sectionsOpen,
+  favoriteSports,
+  onToggleFavoriteSport,
   handleChange,
   toggleSection,
   addStat,
@@ -41,11 +42,10 @@ export default function SportsDetailsEditor({
   changeStat,
 }) {
   const competitive = isCompetitiveSession(sports.sessionType);
-  const [favoriteSports, setFavoriteSports] = useState(() => getFavoriteSports());
-  const favList = favoriteSports.filter((option) => SPORTS_LIST.includes(option));
+  const favList = (favoriteSports || []).filter((option) => SPORTS_LIST.includes(option));
   const otherSports = SPORTS_LIST.filter((option) => !favList.includes(option));
   const isCurrentFavorite = favList.includes(sports.sport);
-  const handleToggleFavoriteSport = () => setFavoriteSports(toggleFavoriteSport(sports.sport));
+  const handleToggleFavoriteSport = () => onToggleFavoriteSport(sports.sport);
 
   return (
     <>

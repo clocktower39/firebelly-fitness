@@ -25,6 +25,7 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "themeMode",
   "workoutWeightUnit",
   "defaultSessionLengthMinutes",
+  "favoriteSports",
   "autoPaymentReminders",
   "timezone",
   "notificationPrefs",

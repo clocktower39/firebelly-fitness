@@ -1,9 +1,13 @@
 import { useCallback, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { updateUserSettings } from "../../../Redux/actions";
 import {
   DEFAULT_SPORTS_STAT,
   normalizeSports,
   sportsSectionHasData,
 } from "../utils/sportsUtils";
+
+const EMPTY_FAVORITES = [];
 
 const openFromData = (sports) => {
   const has = sportsSectionHasData(sports);
@@ -14,6 +18,21 @@ const openFromData = (sports) => {
 export default function useWorkoutSports({ training }) {
   const [sports, setSports] = useState(() => normalizeSports(training?.sports));
   const [sectionsOpen, setSectionsOpen] = useState(() => openFromData(normalizeSports(training?.sports)));
+
+  const dispatch = useDispatch();
+  // Account-bound favorite sports (a user setting, so they follow the person across devices).
+  const favoriteSports = useSelector((state) => state.user?.favoriteSports) || EMPTY_FAVORITES;
+  const onToggleFavoriteSport = useCallback(
+    (sport) => {
+      if (!sport) return;
+      const current = Array.isArray(favoriteSports) ? favoriteSports : [];
+      const next = current.includes(sport)
+        ? current.filter((s) => s !== sport)
+        : [...current, sport];
+      dispatch(updateUserSettings({ favoriteSports: next }));
+    },
+    [dispatch, favoriteSports]
+  );
 
   const handleChange = (field) => (event) => {
     const value = event?.target ? event.target.value : event;
@@ -52,6 +71,8 @@ export default function useWorkoutSports({ training }) {
     editorProps: {
       sports,
       sectionsOpen,
+      favoriteSports,
+      onToggleFavoriteSport,
       handleChange,
       toggleSection,
       addStat,
