@@ -36,6 +36,7 @@ export const SPORTS_LIST = [
   "Surfing",
   "Skateboarding",
   "Gymnastics",
+  "Cheer Stunting",
   "Dance",
   "Track & Field",
   "Other",
