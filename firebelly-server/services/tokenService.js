@@ -24,6 +24,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   favoriteSports: Array.isArray(user.favoriteSports) ? user.favoriteSports : [],
   favoriteYogaStyles: Array.isArray(user.favoriteYogaStyles) ? user.favoriteYogaStyles : [],
   favoritePilatesStyles: Array.isArray(user.favoritePilatesStyles) ? user.favoritePilatesStyles : [],
+  workoutColors: user.workoutColors && typeof user.workoutColors === "object" ? user.workoutColors : {},
   autoPaymentReminders: user.autoPaymentReminders === true,
   timezone: user.timezone || "",
   notificationPrefs: user.notificationPrefs || {},

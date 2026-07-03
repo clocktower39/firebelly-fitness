@@ -7,6 +7,7 @@ export let user = {
     favoriteSports: [],
     favoriteYogaStyles: [],
     favoritePilatesStyles: [],
+    workoutColors: {},
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

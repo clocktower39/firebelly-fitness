@@ -54,6 +54,7 @@ const UserSchema = new mongoose.Schema({
     favoriteSports: { type: [String], default: [] },
     favoriteYogaStyles: { type: [String], default: [] },
     favoritePilatesStyles: { type: [String], default: [] },
+    workoutColors: { type: Object, default: () => ({}) },
     autoPaymentReminders: { type: Boolean, default: false },
     timezone: { type: String, default: "" }, // IANA tz, e.g. "America/New_York"; for local-time reminders
     notificationPrefs: {

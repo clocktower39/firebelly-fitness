@@ -50,6 +50,7 @@ import { WorkoutOptionModalView } from "../WorkoutOptionModal";
 import { normalizeSports, isCompetitiveSession } from "../../features/workout/utils/sportsUtils";
 import { normalizeYoga } from "../../features/workout/utils/yogaUtils";
 import { normalizePilates } from "../../features/workout/utils/pilatesUtils";
+import { resolveWorkoutColor } from "../../features/workout/utils/workoutColors";
 import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUnits";
 
 const WORKOUT_TYPES = [
@@ -679,6 +680,7 @@ export default function WorkoutOverview({
   } = workoutOptionModalViewProps;
   const dispatch = useDispatch();
   const weightUnit = normalizeWeightUnit(useSelector((state) => state.user.workoutWeightUnit));
+  const workoutColors = useSelector((state) => state.user.workoutColors) || {};
   const [selectedWorkout, setSelectedWorkout] = useState({});
   const [viewModes, setViewModes] = useState(
     localWorkouts.reduce((acc, workout) => {
@@ -876,6 +878,9 @@ export default function WorkoutOverview({
           const isPilatesWorkout = workout.workoutType === "Pilates";
           const isActivityCard =
             isCardioWorkout || isSportsWorkout || isYogaWorkout || isPilatesWorkout;
+          // Per-account custom color (by type, or by specific sport/style/activity); falls back to the
+          // built-in type color below when unset.
+          const customWorkoutColor = resolveWorkoutColor(workout, workoutColors);
 
           return (
             <React.Fragment key={`workout-${workout._id || index}`}>
@@ -884,8 +889,10 @@ export default function WorkoutOverview({
                 sx={{
                   margin: "5px",
                   padding: "8px",
-                  borderTop: isActivityCard ? "4px solid" : undefined,
-                  borderColor: isPilatesWorkout
+                  borderTop: customWorkoutColor || isActivityCard ? "4px solid" : undefined,
+                  borderColor: customWorkoutColor
+                    ? customWorkoutColor
+                    : isPilatesWorkout
                     ? "warning.main"
                     : isYogaWorkout
                     ? "success.main"

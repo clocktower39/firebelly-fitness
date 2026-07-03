@@ -28,6 +28,7 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "favoriteSports",
   "favoriteYogaStyles",
   "favoritePilatesStyles",
+  "workoutColors",
   "autoPaymentReminders",
   "timezone",
   "notificationPrefs",
