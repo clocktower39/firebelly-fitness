@@ -23,6 +23,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   defaultSessionLengthMinutes: user.defaultSessionLengthMinutes || 60,
   favoriteSports: Array.isArray(user.favoriteSports) ? user.favoriteSports : [],
   favoriteYogaStyles: Array.isArray(user.favoriteYogaStyles) ? user.favoriteYogaStyles : [],
+  favoritePilatesStyles: Array.isArray(user.favoritePilatesStyles) ? user.favoritePilatesStyles : [],
   autoPaymentReminders: user.autoPaymentReminders === true,
   timezone: user.timezone || "",
   notificationPrefs: user.notificationPrefs || {},

@@ -53,6 +53,7 @@ const UserSchema = new mongoose.Schema({
     defaultSessionLengthMinutes: { type: Number, default: 60, min: 5, max: 480 },
     favoriteSports: { type: [String], default: [] },
     favoriteYogaStyles: { type: [String], default: [] },
+    favoritePilatesStyles: { type: [String], default: [] },
     autoPaymentReminders: { type: Boolean, default: false },
     timezone: { type: String, default: "" }, // IANA tz, e.g. "America/New_York"; for local-time reminders
     notificationPrefs: {

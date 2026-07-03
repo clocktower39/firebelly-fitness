@@ -6,6 +6,7 @@ export let user = {
     defaultSessionLengthMinutes: 60,
     favoriteSports: [],
     favoriteYogaStyles: [],
+    favoritePilatesStyles: [],
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

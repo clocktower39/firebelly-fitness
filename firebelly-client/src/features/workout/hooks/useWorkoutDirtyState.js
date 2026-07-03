@@ -3,6 +3,7 @@ import deepEqual from "fast-deep-equal/react";
 import { normalizeCardio } from "../utils/workoutUtils";
 import { normalizeSports } from "../utils/sportsUtils";
 import { normalizeYoga } from "../utils/yogaUtils";
+import { normalizePilates } from "../utils/pilatesUtils";
 
 const normalizeWorkoutSnapshot = (obj) => {
   const clone = typeof structuredClone === "function" ? structuredClone(obj) : JSON.parse(JSON.stringify(obj ?? {}));
@@ -44,6 +45,7 @@ const normalizeWorkoutSnapshot = (obj) => {
   clone.cardio = normalizeCardio(clone.cardio);
   clone.sports = normalizeSports(clone.sports);
   clone.yoga = normalizeYoga(clone.yoga);
+  clone.pilates = normalizePilates(clone.pilates);
 
   return clone;
 };
@@ -52,6 +54,7 @@ export default function useWorkoutDirtyState({
   cardioDetails,
   sportsDetails,
   yogaDetails,
+  pilatesDetails,
   localTraining,
   trainingCategory,
   trainingTitle,
@@ -74,11 +77,13 @@ export default function useWorkoutDirtyState({
       cardio: cardioDetails,
       sports: sportsDetails,
       yoga: yogaDetails,
+      pilates: pilatesDetails,
     }),
     [
       cardioDetails,
       sportsDetails,
       yogaDetails,
+      pilatesDetails,
       localTraining,
       trainingCategory,
       trainingTitle,

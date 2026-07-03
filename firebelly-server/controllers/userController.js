@@ -27,6 +27,7 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "defaultSessionLengthMinutes",
   "favoriteSports",
   "favoriteYogaStyles",
+  "favoritePilatesStyles",
   "autoPaymentReminders",
   "timezone",
   "notificationPrefs",
