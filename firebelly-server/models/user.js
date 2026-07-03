@@ -52,6 +52,7 @@ const UserSchema = new mongoose.Schema({
     workoutWeightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
     defaultSessionLengthMinutes: { type: Number, default: 60, min: 5, max: 480 },
     favoriteSports: { type: [String], default: [] },
+    favoriteYogaStyles: { type: [String], default: [] },
     autoPaymentReminders: { type: Boolean, default: false },
     timezone: { type: String, default: "" }, // IANA tz, e.g. "America/New_York"; for local-time reminders
     notificationPrefs: {

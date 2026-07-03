@@ -35,6 +35,7 @@ const trainingSchema = new mongoose.Schema(
     workoutType: { type: String, default: "Strength" },
     cardio: { type: Object, default: () => ({}) },
     sports: { type: Object, default: () => ({}) },
+    yoga: { type: Object, default: () => ({}) },
     category: { type: Array, required: true },
     training: {
       type: [

@@ -22,6 +22,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   workoutWeightUnit: user.workoutWeightUnit === "kg" ? "kg" : "lbs",
   defaultSessionLengthMinutes: user.defaultSessionLengthMinutes || 60,
   favoriteSports: Array.isArray(user.favoriteSports) ? user.favoriteSports : [],
+  favoriteYogaStyles: Array.isArray(user.favoriteYogaStyles) ? user.favoriteYogaStyles : [],
   autoPaymentReminders: user.autoPaymentReminders === true,
   timezone: user.timezone || "",
   notificationPrefs: user.notificationPrefs || {},

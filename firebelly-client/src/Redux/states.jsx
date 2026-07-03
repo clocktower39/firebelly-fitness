@@ -5,6 +5,7 @@ export let user = {
     workoutWeightUnit: "lbs",
     defaultSessionLengthMinutes: 60,
     favoriteSports: [],
+    favoriteYogaStyles: [],
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

@@ -48,13 +48,14 @@ import { DragHandle as DragHandleIcon, Settings } from "@mui/icons-material";
 import { updateTraining, createTraining } from "../../Redux/actions";
 import { WorkoutOptionModalView } from "../WorkoutOptionModal";
 import { normalizeSports, isCompetitiveSession } from "../../features/workout/utils/sportsUtils";
+import { normalizeYoga } from "../../features/workout/utils/yogaUtils";
 import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUnits";
 
 const WORKOUT_TYPES = [
   { label: "Strength", value: "Strength", enabled: true },
   { label: "Cardio", value: "Cardio", enabled: true },
   { label: "Sports", value: "Sports", enabled: true },
-  { label: "Yoga", value: "Yoga", enabled: false, hint: "Coming soon" },
+  { label: "Yoga", value: "Yoga", enabled: true },
   { label: "Pilates", value: "Pilates", enabled: false, hint: "Coming soon" },
 ];
 
@@ -870,7 +871,8 @@ export default function WorkoutOverview({
           const currentViewMode = viewModes[workout._id] || "goals";
           const isCardioWorkout = workout.workoutType === "Cardio";
           const isSportsWorkout = workout.workoutType === "Sports";
-          const isActivityCard = isCardioWorkout || isSportsWorkout;
+          const isYogaWorkout = workout.workoutType === "Yoga";
+          const isActivityCard = isCardioWorkout || isSportsWorkout || isYogaWorkout;
 
           return (
             <React.Fragment key={`workout-${workout._id || index}`}>
@@ -880,7 +882,9 @@ export default function WorkoutOverview({
                   margin: "5px",
                   padding: "8px",
                   borderTop: isActivityCard ? "4px solid" : undefined,
-                  borderColor: isSportsWorkout
+                  borderColor: isYogaWorkout
+                    ? "success.main"
+                    : isSportsWorkout
                     ? "secondary.main"
                     : isCardioWorkout
                     ? "info.main"
@@ -901,7 +905,7 @@ export default function WorkoutOverview({
                 </Grid>
                 <Typography variant="h6">{workout.category.join(", ")}</Typography>
 
-                {!isSportsWorkout && (
+                {!isSportsWorkout && !isYogaWorkout && (
                   <ToggleButtonGroup
                     value={currentViewMode}
                     exclusive
@@ -950,6 +954,8 @@ export default function WorkoutOverview({
                         <CardioWorkoutPreview workout={workout} viewMode={currentViewMode} />
                       ) : isSportsWorkout ? (
                         <SportsWorkoutPreview workout={workout} />
+                      ) : isYogaWorkout ? (
+                        <YogaWorkoutPreview workout={workout} />
                       ) : (
                         <SortableContext items={circuitIds} strategy={verticalListSortingStrategy}>
                           {circuits.length > 0 ? (
@@ -1432,6 +1438,92 @@ const SportsWorkoutPreview = ({ workout }) => {
               Notes
             </Typography>
             <Typography variant="body2">{truncateCardioPreviewText(sports.notes, 140)}</Typography>
+          </Paper>
+        )}
+      </Stack>
+    </Box>
+  );
+};
+
+const YogaWorkoutPreview = ({ workout }) => {
+  const yoga = normalizeYoga(workout.yoga);
+  const detailChips = [
+    yoga.difficulty,
+    yoga.heated === "Heated" ? "Heated" : "",
+    yoga.instructor ? `w/ ${yoga.instructor}` : "",
+    yoga.studio,
+    yoga.feeling ? `Felt ${yoga.feeling}` : "",
+    hasSportsValue(yoga.meditationMinutes) ? `Med ${yoga.meditationMinutes} min` : "",
+    hasSportsValue(yoga.avgHeartRate) ? `${yoga.avgHeartRate} bpm` : "",
+    hasSportsValue(yoga.calories) ? `${yoga.calories} cal` : "",
+  ].filter(Boolean);
+  const tags = [...(yoga.focusAreas || []), ...(yoga.intentions || []), ...(yoga.props || [])];
+  const poses = (yoga.poses || []).filter((pose) => pose.name);
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        padding: 2,
+        border: "1px solid",
+        borderColor: "divider",
+        background: (theme) =>
+          `linear-gradient(135deg, ${theme.palette.success.light}18 0%, ${theme.palette.info.light}12 100%)`,
+      }}
+    >
+      <Stack spacing={1.5}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ flexWrap: "wrap", gap: "8px", alignItems: "center" }}
+        >
+          <Chip size="small" color="success" label={yoga.style || "Yoga"} />
+          {hasSportsValue(yoga.sessionType) && (
+            <Chip size="small" variant="outlined" label={yoga.sessionType} />
+          )}
+          {hasSportsValue(yoga.durationMinutes) && (
+            <Chip size="small" variant="outlined" label={`${yoga.durationMinutes} min`} />
+          )}
+          {hasSportsValue(yoga.rpe) && (
+            <Chip size="small" variant="outlined" label={`RPE ${yoga.rpe}`} />
+          )}
+        </Stack>
+
+        {detailChips.length > 0 && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+            {detailChips.slice(0, 6).map((detail) => (
+              <Chip key={`${workout._id}-${detail}`} label={detail} size="small" variant="outlined" />
+            ))}
+          </Stack>
+        )}
+
+        {tags.length > 0 && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: "8px" }}>
+            {tags.slice(0, 8).map((tag) => (
+              <Chip
+                key={`${workout._id}-tag-${tag}`}
+                label={tag}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ))}
+          </Stack>
+        )}
+
+        {poses.length > 0 && (
+          <Typography variant="body2" color="text.secondary">
+            Poses: {poses.slice(0, 6).map((pose) => pose.name).join(", ")}
+            {poses.length > 6 ? "…" : ""}
+          </Typography>
+        )}
+
+        {hasSportsValue(yoga.notes) && (
+          <Paper variant="outlined" sx={{ padding: 1.25, backgroundColor: "rgba(255,255,255,0.65)" }}>
+            <Typography variant="caption" color="text.secondary">
+              Notes
+            </Typography>
+            <Typography variant="body2">{truncateCardioPreviewText(yoga.notes, 140)}</Typography>
           </Paper>
         )}
       </Stack>

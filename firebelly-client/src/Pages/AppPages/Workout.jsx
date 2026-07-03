@@ -19,13 +19,16 @@ import { workoutApi } from "../../api/workoutApi";
 import Loading from "../../Components/Loading";
 import CardioDetailsEditor from "../../features/workout/components/cardio/CardioDetailsEditor";
 import SportsDetailsEditor from "../../features/workout/components/sports/SportsDetailsEditor";
+import YogaDetailsEditor from "../../features/workout/components/yoga/YogaDetailsEditor";
 import { buildCardioTitle } from "../../features/workout/utils/workoutUtils";
 import { buildSportsTitle } from "../../features/workout/utils/sportsUtils";
+import { buildYogaTitle } from "../../features/workout/utils/yogaUtils";
 import StrengthWorkoutEditor from "../../features/workout/components/StrengthWorkoutEditor";
 import WorkoutCategoryField from "../../features/workout/components/WorkoutCategoryField";
 import WorkoutHeader from "../../features/workout/components/WorkoutHeader";
 import useWorkoutCardio from "../../features/workout/hooks/useWorkoutCardio";
 import useWorkoutSports from "../../features/workout/hooks/useWorkoutSports";
+import useWorkoutYoga from "../../features/workout/hooks/useWorkoutYoga";
 import useWorkoutDirtyState from "../../features/workout/hooks/useWorkoutDirtyState";
 import useWorkoutScheduleEvent from "../../features/workout/hooks/useWorkoutScheduleEvent";
 import useWorkoutSocketSync from "../../features/workout/hooks/useWorkoutSocketSync";
@@ -110,7 +113,8 @@ export default function Workout({ socket }) {
   const activeWorkoutType = workoutType || training?.workoutType || "Strength";
   const isCardio = activeWorkoutType === "Cardio";
   const isSports = activeWorkoutType === "Sports";
-  const isActivityLog = isCardio || isSports;
+  const isYoga = activeWorkoutType === "Yoga";
+  const isActivityLog = isCardio || isSports || isYoga;
   const handleWorkoutWeightUnitChange = (event, nextUnit) => {
     if (!nextUnit) return;
     setActiveWorkoutWeightUnit(normalizeWeightUnit(nextUnit));
@@ -142,6 +146,12 @@ export default function Workout({ socket }) {
     hydrateSports,
   } = useWorkoutSports({ training });
 
+  const {
+    yoga: yogaDetails,
+    editorProps: yogaEditorProps,
+    hydrateYoga,
+  } = useWorkoutYoga({ training });
+
   const trainerAccessToken = user?.isTrainer
     ? getAccessToken()
     : getDelegatedReturnAccessToken("trainer");
@@ -155,6 +165,7 @@ export default function Workout({ socket }) {
   const { buildLocalComposite, isDirty, setBaseline } = useWorkoutDirtyState({
     cardioDetails,
     sportsDetails,
+    yogaDetails,
     localTraining,
     trainingCategory,
     trainingTitle,
@@ -199,6 +210,7 @@ export default function Workout({ socket }) {
       cardioHydratedIdRef.current = training._id;
       hydrateCardio(training.cardio, user?.isTrainer);
       hydrateSports(training.sports);
+      hydrateYoga(training.yoga);
       // Auto-title only when this workout has no manual title yet.
       setTitleAuto(!training.title);
     }
@@ -212,6 +224,7 @@ export default function Workout({ socket }) {
       workoutType: training.workoutType ?? "Strength",
       cardio: training.cardio ?? {},
       sports: training.sports ?? {},
+      yoga: training.yoga ?? {},
     });
 
     if (training.user?._id) {
@@ -222,6 +235,7 @@ export default function Workout({ socket }) {
   }, [
     hydrateCardio,
     hydrateSports,
+    hydrateYoga,
     isPersonalWorkout,
     setBaseline,
     setBorderHighlight,
@@ -249,6 +263,12 @@ export default function Workout({ socket }) {
     const suggested = buildSportsTitle(sportsDetails);
     if (suggested) setTrainingTitle(suggested);
   }, [isSports, titleAuto, sportsDetails]);
+
+  useEffect(() => {
+    if (!isYoga || !titleAuto) return;
+    const suggested = buildYogaTitle(yogaDetails);
+    if (suggested) setTrainingTitle(suggested);
+  }, [isYoga, titleAuto, yogaDetails]);
 
   // Warn before a browser refresh / tab-close / external navigation drops unsaved changes.
   useEffect(() => {
@@ -411,6 +431,7 @@ export default function Workout({ socket }) {
       workoutType: activeWorkoutType,
       cardio: cardioDetails,
       sports: sportsDetails,
+      yoga: yogaDetails,
     };
 
     return dispatch(
@@ -553,6 +574,8 @@ export default function Workout({ socket }) {
                     <CardioDetailsEditor {...cardioEditorProps} />
                   ) : isSports ? (
                     <SportsDetailsEditor {...sportsEditorProps} />
+                  ) : isYoga ? (
+                    <YogaDetailsEditor {...yogaEditorProps} />
                   ) : (
                     <WorkoutCategoryField
                       categories={categories}
@@ -561,7 +584,7 @@ export default function Workout({ socket }) {
                     />
                   )}
                 </Grid>
-                {!isCardio && !isSports && (
+                {!isCardio && !isSports && !isYoga && (
                   <StrengthWorkoutEditor
                     activeStep={activeStep}
                     activeWorkoutWeightUnit={activeWorkoutWeightUnit}
