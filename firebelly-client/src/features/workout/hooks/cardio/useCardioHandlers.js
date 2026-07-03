@@ -21,6 +21,7 @@ export default function useCardioHandlers({
   cardioViewMode,
   isCardio,
   planClientPrompts,
+  showPlanResults,
   setCardioAuto,
   setCardioDetails,
   setCardioEditorMode,
@@ -71,19 +72,23 @@ export default function useCardioHandlers({
   const hydrateCardio = useCallback((cardio, isTrainer) => {
     const normalizedCardio = normalizeCardio(cardio);
     const nextEditorMode = isTrainer ? "full" : "quick";
+    // Solo logging has no Plan/Results toggle, so land on Results (what you did) — that is where solo
+    // logs are stored and shown. Trainer-involved workouts still open on the Plan (the prescription).
+    const nextViewMode = showPlanResults ? "plan" : "actual";
+    const activeSide = normalizedCardio[nextViewMode] || normalizedCardio.plan;
 
     setCardioDetails(normalizedCardio);
     setCardioAuto(buildCardioAuto(normalizedCardio));
-    setCardioViewMode("plan");
+    setCardioViewMode(nextViewMode);
     setCardioEditorMode(nextEditorMode);
     setCardioSectionsOpen(
       getCardioAutoOpenSections({
-        cardioFields: normalizedCardio.plan,
-        promptKeys: normalizedCardio.plan?.clientPrompts || [],
+        cardioFields: activeSide,
+        promptKeys: activeSide?.clientPrompts || [],
         editorMode: nextEditorMode,
       })
     );
-  }, []);
+  }, [showPlanResults]);
 
   const handleCardioNoticeClose = () => {
     setCardioNotice((prev) => ({ ...prev, open: false }));

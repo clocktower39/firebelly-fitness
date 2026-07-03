@@ -13,9 +13,17 @@ import useCardioSections from "./useCardioSections";
 import useCardioShoeMileage from "./useCardioShoeMileage";
 
 export default function useWorkoutCardio({ isCardio, training, user }) {
+  const isTrainerEditingClient =
+    !!user?.isTrainer && !!training?.user?._id && String(user._id) !== String(training.user._id);
+  // Plan vs Results only matters when a trainer is involved (prescribe -> log). Solo logging gets a
+  // single "Results" view (what you did) — no toggle. Based on the relationship (not plan data) so it
+  // doesn't flip once you enter data.
+  const showPlanResults =
+    isTrainerEditingClient || Boolean(user?.trainerId) || Boolean(training?.user?.trainerId);
+
   const [cardioDetails, setCardioDetails] = useState(() => normalizeCardio(training?.cardio));
   const [cardioAuto, setCardioAuto] = useState(() => buildCardioAuto(normalizeCardio(training?.cardio)));
-  const [cardioViewMode, setCardioViewMode] = useState("plan");
+  const [cardioViewMode, setCardioViewMode] = useState(showPlanResults ? "plan" : "actual");
   const [cardioSectionsOpen, setCardioSectionsOpen] = useState(DEFAULT_CARDIO_SECTION_STATE);
   const [cardioEditorMode, setCardioEditorMode] = useState(user?.isTrainer ? "full" : "quick");
   const [cardioNotice, setCardioNotice] = useState({
@@ -27,13 +35,6 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
   const activeCardio = cardioDetails?.[cardioViewMode] || normalizeCardioFields({});
   const plannedCardio = cardioDetails?.plan || normalizeCardioFields({});
   const actualCardio = cardioDetails?.actual || normalizeCardioFields({});
-  const isTrainerEditingClient =
-    !!user?.isTrainer && !!training?.user?._id && String(user._id) !== String(training.user._id);
-  // Plan vs Results only matters when a trainer is involved (prescribe -> log). Solo logging gets a
-  // single view. Based on the relationship (not plan data) so it doesn't flip once you enter data.
-  const showPlanResults =
-    isTrainerEditingClient || Boolean(user?.trainerId) || Boolean(training?.user?.trainerId);
-
   const derivedMetrics = useCardioDerivedMetrics({
     activeCardio,
     actualCardio,
@@ -81,6 +82,7 @@ export default function useWorkoutCardio({ isCardio, training, user }) {
     cardioViewMode,
     isCardio,
     planClientPrompts: derivedMetrics.planClientPrompts,
+    showPlanResults,
     setCardioAuto,
     setCardioDetails,
     setCardioEditorMode,
