@@ -24,6 +24,7 @@ import {
   YOGA_HEATED_OPTIONS,
   YOGA_INTENTIONS,
   YOGA_OPTIONAL_SECTIONS,
+  YOGA_POSES,
   YOGA_PROPS,
   YOGA_SESSION_TYPES,
   YOGA_STYLES,
@@ -400,12 +401,16 @@ export default function YogaDetailsEditor({
               ) : (
                 (yoga.poses || []).map((pose, index) => (
                   <Stack key={`pose-${index}`} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <TextField
-                      label="Pose"
-                      placeholder="Warrior II"
-                      value={pose.name}
-                      onChange={changePose(index, "name")}
+                    <Autocomplete
+                      freeSolo
+                      disableClearable
+                      options={YOGA_POSES}
+                      inputValue={pose.name || ""}
+                      onInputChange={(event, newValue) => changePose(index, "name")(newValue || "")}
                       sx={{ flex: 2 }}
+                      renderInput={(params) => (
+                        <TextField {...params} label="Pose" placeholder="Warrior II" />
+                      )}
                     />
                     <TextField
                       label="Hold"
