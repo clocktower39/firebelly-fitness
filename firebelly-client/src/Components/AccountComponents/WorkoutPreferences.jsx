@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { editUser } from "../../Redux/actions";
+import WorkoutColors from "./WorkoutColors";
 import { WEIGHT_UNIT_OPTIONS, normalizeWeightUnit } from "../../utils/weightUnits";
 import {
   Button,
@@ -224,6 +225,7 @@ export default function WorkoutPreferences() {
               Save
             </Button>
           </Grid>
+          <WorkoutColors />
         </Grid>
       </Paper>
     </Container>

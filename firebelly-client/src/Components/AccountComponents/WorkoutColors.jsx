@@ -6,13 +6,12 @@ import {
   Autocomplete,
   Box,
   Button,
-  Container,
+  Divider,
   FormControl,
   Grid,
   IconButton,
   InputLabel,
   MenuItem,
-  Paper,
   Popover,
   Select,
   Stack,
@@ -113,6 +112,8 @@ function ColorSwatchPicker({ value, onChange, label }) {
   );
 }
 
+// Embeddable "Workout Colors" section (rendered inside the Workout Preferences page). Changes persist
+// immediately via updateUserSettings, so it has no Save button of its own.
 export default function WorkoutColors() {
   const dispatch = useDispatch();
   const colorMap = useSelector((state) => state.user.workoutColors) || {};
@@ -140,130 +141,122 @@ export default function WorkoutColors() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ height: "100%" }}>
-      <Grid container size={12} sx={{ padding: "15px" }}>
-        <Typography color="primary.contrastText" variant="h5" gutterBottom>
+    <>
+      <Grid size={12} sx={{ mt: 2 }}>
+        <Divider />
+      </Grid>
+      <Grid size={12} sx={{ mt: 1 }}>
+        <Typography variant="subtitle1" gutterBottom>
           Workout Colors
         </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Color-code your workouts however you like. Set a color per type, and optionally give a specific
+          sport, style, or activity its own color (e.g., Jiu-Jitsu purple, Basketball orange). Colors show
+          on your workout cards and save automatically.
+        </Typography>
       </Grid>
-      <Paper>
-        <Grid container spacing={2} sx={{ padding: "15px" }}>
-          <Grid size={12}>
-            <Typography variant="body2" color="text.secondary">
-              Color-code your workouts however you like. Set a color per type, and optionally give a
-              specific sport, style, or activity its own color (e.g., Jiu-Jitsu purple, Basketball
-              orange). Colors show on your workout cards.
-            </Typography>
-          </Grid>
 
-          <Grid size={12} sx={{ mt: 1 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              By type
-            </Typography>
-          </Grid>
-          {WORKOUT_TYPE_ORDER.map((type) => (
-            <Grid key={type} size={12}>
-              <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-                <ColorSwatchPicker
-                  label={`${type} color`}
-                  value={colorMap[typeColorKey(type)] || ""}
-                  onChange={(hex) => setColor(typeColorKey(type), hex)}
-                />
-                <Typography variant="body1">{type}</Typography>
-              </Stack>
-            </Grid>
-          ))}
-
-          <Grid size={12} sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Specific sports, styles & activities
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              These override the type color for that specific value.
-            </Typography>
-          </Grid>
-
-          {subValueEntries.length > 0 && (
-            <Grid size={12}>
-              <Stack spacing={1}>
-                {subValueEntries.map((entry) => (
-                  <Stack
-                    key={entry.key}
-                    direction="row"
-                    spacing={2}
-                    sx={{ alignItems: "center" }}
-                  >
-                    <ColorSwatchPicker
-                      label={`${entry.value} color`}
-                      value={entry.color || ""}
-                      onChange={(hex) => setColor(entry.key, hex)}
-                    />
-                    <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                      {entry.type} · {entry.value}
-                    </Typography>
-                    <Tooltip title="Remove">
-                      <IconButton aria-label="remove" onClick={() => setColor(entry.key, null)}>
-                        <RemoveCircle fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                ))}
-              </Stack>
-            </Grid>
-          )}
-
-          <Grid size={12}>
-            <Stack
-              direction="row"
-              spacing={1.5}
-              sx={{ alignItems: "center", flexWrap: "wrap", gap: "12px" }}
-            >
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel id="add-color-type-label">Type</InputLabel>
-                <Select
-                  labelId="add-color-type-label"
-                  label="Type"
-                  value={addType}
-                  onChange={(event) => {
-                    setAddType(event.target.value);
-                    setAddValue("");
-                  }}
-                >
-                  {SUB_VALUE_TYPES.map((entry) => (
-                    <MenuItem key={entry.type} value={entry.type}>
-                      {entry.type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Autocomplete
-                freeSolo
-                options={activeTypeMeta.options}
-                inputValue={addValue}
-                onInputChange={(event, newValue) => setAddValue(newValue || "")}
-                sx={{ minWidth: 200 }}
-                renderInput={(params) => (
-                  <TextField {...params} size="small" label={activeTypeMeta.label} />
-                )}
-              />
-              <ColorSwatchPicker
-                label="new color"
-                value={addColor}
-                onChange={(hex) => setAddColor(hex || "")}
-              />
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<Add />}
-                disabled={!addValue.trim() || !addColor}
-                onClick={handleAddSpecific}
-              >
-                Add
-              </Button>
-            </Stack>
-          </Grid>
+      <Grid size={12}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          By type
+        </Typography>
+      </Grid>
+      {WORKOUT_TYPE_ORDER.map((type) => (
+        <Grid key={type} size={12}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+            <ColorSwatchPicker
+              label={`${type} color`}
+              value={colorMap[typeColorKey(type)] || ""}
+              onChange={(hex) => setColor(typeColorKey(type), hex)}
+            />
+            <Typography variant="body1">{type}</Typography>
+          </Stack>
         </Grid>
-      </Paper>
-    </Container>
+      ))}
+
+      <Grid size={12} sx={{ mt: 1 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Specific sports, styles & activities
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          These override the type color for that specific value.
+        </Typography>
+      </Grid>
+
+      {subValueEntries.length > 0 && (
+        <Grid size={12}>
+          <Stack spacing={1}>
+            {subValueEntries.map((entry) => (
+              <Stack key={entry.key} direction="row" spacing={2} sx={{ alignItems: "center" }}>
+                <ColorSwatchPicker
+                  label={`${entry.value} color`}
+                  value={entry.color || ""}
+                  onChange={(hex) => setColor(entry.key, hex)}
+                />
+                <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                  {entry.type} · {entry.value}
+                </Typography>
+                <Tooltip title="Remove">
+                  <IconButton aria-label="remove" onClick={() => setColor(entry.key, null)}>
+                    <RemoveCircle fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            ))}
+          </Stack>
+        </Grid>
+      )}
+
+      <Grid size={12}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ alignItems: "center", flexWrap: "wrap", gap: "12px" }}
+        >
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="add-color-type-label">Type</InputLabel>
+            <Select
+              labelId="add-color-type-label"
+              label="Type"
+              value={addType}
+              onChange={(event) => {
+                setAddType(event.target.value);
+                setAddValue("");
+              }}
+            >
+              {SUB_VALUE_TYPES.map((entry) => (
+                <MenuItem key={entry.type} value={entry.type}>
+                  {entry.type}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Autocomplete
+            freeSolo
+            options={activeTypeMeta.options}
+            inputValue={addValue}
+            onInputChange={(event, newValue) => setAddValue(newValue || "")}
+            sx={{ minWidth: 200 }}
+            renderInput={(params) => (
+              <TextField {...params} size="small" label={activeTypeMeta.label} />
+            )}
+          />
+          <ColorSwatchPicker
+            label="new color"
+            value={addColor}
+            onChange={(hex) => setAddColor(hex || "")}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<Add />}
+            disabled={!addValue.trim() || !addColor}
+            onClick={handleAddSpecific}
+          >
+            Add
+          </Button>
+        </Stack>
+      </Grid>
+    </>
   );
 }
