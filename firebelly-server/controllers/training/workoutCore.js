@@ -314,17 +314,11 @@ const get_next_workout = async (req, res, next) => {
       if (!rel) return res.status(403).json({ error: "Unauthorized access." });
     }
 
-    // Accessible owners: self, plus (for trainers) every accepted client.
-    const accessibleIds = [res.locals.user._id];
-    if (res.locals.user.isTrainer) {
-      const rels = await Relationship.find({ trainer: res.locals.user._id, accepted: true })
-        .select("client")
-        .lean();
-      rels.forEach((r) => accessibleIds.push(r.client));
-    }
-
+    // "Next" is the next workout in the SAME owner's dated flow — never another account. A trainer on
+    // their own workout must not roll into a client's workout (and vice-versa); the access check above
+    // already authorized viewing this owner's workouts.
     const next = await Training.findOne({
-      user: { $in: accessibleIds },
+      user: current.user,
       isTemplate: { $ne: true },
       $or: [
         { date: { $gt: current.date } },
