@@ -8,6 +8,7 @@ export let user = {
     favoriteYogaStyles: [],
     favoritePilatesStyles: [],
     workoutColors: {},
+    workoutTypeOrder: [],
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

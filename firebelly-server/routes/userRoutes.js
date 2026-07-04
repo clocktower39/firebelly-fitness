@@ -56,6 +56,7 @@ const updateUserValidate = {
         favoriteYogaStyles: Joi.array().items(Joi.string().allow("")),
         favoritePilatesStyles: Joi.array().items(Joi.string().allow("")),
         workoutColors: Joi.object().pattern(Joi.string(), Joi.string().allow("")).unknown(true),
+        workoutTypeOrder: Joi.array().items(Joi.string().allow("")),
         autoPaymentReminders: Joi.boolean(),
         timezone: Joi.string().allow(""),
         notificationPrefs: Joi.object({

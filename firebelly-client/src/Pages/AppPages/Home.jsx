@@ -11,6 +11,7 @@ import CardioSummaryCard from "../../features/workout/components/cardio/CardioSu
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
+import { sortWorkoutsByTypeOrder } from "../../features/workout/utils/workoutOrder";
 import WeeklyTrainingStatus from "../../Components/TrainingComponents/WeeklyTrainingStatus";
 import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL, getMyReadiness } from "../../Redux/actions";
 import { Avatar, Button, Grid, Paper, Stack, Typography } from '@mui/material';
@@ -23,6 +24,7 @@ dayjs.extend(customParseFormat);
 const EMPTY_WORKOUTS = [];
 const EMPTY_WORKOUT_USER = {};
 const EMPTY_DATES = [];
+const EMPTY_TYPE_ORDER = [];
 const DATE_QUERY_FORMAT = "YYYYMMDD";
 const DATE_INPUT_FORMAT = "YYYY-MM-DD";
 
@@ -52,6 +54,8 @@ function Home() {
   const loadedWorkoutDates = useSelector((state) => {
     return state.workouts?.[workoutAccountId]?.loadedDates ?? EMPTY_DATES;
   });
+  // Per-account preferred order of workout types on the daily overview (empty = keep existing order).
+  const workoutTypeOrder = useSelector((state) => state.user?.workoutTypeOrder) || EMPTY_TYPE_ORDER;
   const latestMetric = useSelector(
     (state) => state.metrics.latestByUser[(client || user._id)] || null
   );
@@ -94,8 +98,11 @@ function Home() {
   });
 
   const handleCancelEdit = () => {
-    const matchedDateWorkouts = workouts.filter((workout) =>
-      dayjs.utc(workout.date).isSame(dayjs.utc(selectedDate), "day")
+    const matchedDateWorkouts = sortWorkoutsByTypeOrder(
+      workouts.filter((workout) =>
+        dayjs.utc(workout.date).isSame(dayjs.utc(selectedDate), "day")
+      ),
+      workoutTypeOrder
     );
     setLocalWorkouts([...matchedDateWorkouts]);
   };
@@ -126,8 +133,11 @@ function Home() {
   }, [selectedDateKey, weeklyStatusDateLocked]);
 
   useEffect(() => {
-    const matchedDateWorkouts = workouts.filter((workout) =>
-      dayjs.utc(workout.date).isSame(dayjs.utc(selectedDate), "day")
+    const matchedDateWorkouts = sortWorkoutsByTypeOrder(
+      workouts.filter((workout) =>
+        dayjs.utc(workout.date).isSame(dayjs.utc(selectedDate), "day")
+      ),
+      workoutTypeOrder
     );
 
     const isDifferent =
@@ -137,7 +147,7 @@ function Home() {
     if (isDifferent) {
       setLocalWorkouts(matchedDateWorkouts);
     }
-  }, [workouts, selectedDate]);
+  }, [workouts, selectedDate, workoutTypeOrder]);
 
   useEffect(() => {
     if (selectedDate) {
