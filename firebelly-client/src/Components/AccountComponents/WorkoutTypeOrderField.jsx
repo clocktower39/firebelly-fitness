@@ -1,13 +1,66 @@
 import React, { useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUserSettings } from "../../Redux/actions";
-import { ArrowDownward, ArrowUpward } from "@mui/icons-material";
-import { Button, Divider, Grid, IconButton, Stack, Typography } from "@mui/material";
+import { DragHandle as DragHandleIcon } from "@mui/icons-material";
+import { Box, Button, Divider, Grid, Paper, Stack, Typography } from "@mui/material";
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToVerticalAxis, restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { WORKOUT_TYPE_ORDER } from "../../features/workout/utils/workoutOrder";
 
-// Embeddable "Daily Overview Order" section (rendered inside Workout Preferences). Lets a user set the
-// order workout types appear on the daily overview when there is more than one workout that day. Empty
-// setting = keep the existing order (the default). Saves automatically.
+function SortableTypeRow({ type, index }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: type,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <Paper ref={setNodeRef} style={style} variant="outlined" sx={{ p: 1, mb: 0.75 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+        <Box
+          {...attributes}
+          {...listeners}
+          aria-label={`drag ${type}`}
+          sx={{
+            touchAction: "none",
+            cursor: "grab",
+            display: "flex",
+            alignItems: "center",
+            color: "text.secondary",
+          }}
+        >
+          <DragHandleIcon fontSize="small" />
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ width: 22 }}>
+          {index + 1}.
+        </Typography>
+        <Typography variant="body1">{type}</Typography>
+      </Stack>
+    </Paper>
+  );
+}
+
+// Embeddable "Daily Overview Order" section (rendered inside Workout Preferences). Drag to set the order
+// workout types appear on the daily overview when there is more than one workout that day. Empty setting =
+// keep the existing order (the default). Saves automatically.
 export default function WorkoutTypeOrderField() {
   const dispatch = useDispatch();
   const saved = useSelector((state) => state.user.workoutTypeOrder) || [];
@@ -22,12 +75,18 @@ export default function WorkoutTypeOrderField() {
     return [...base, ...missing];
   }, [saved, isCustom]);
 
-  const move = (index, direction) => {
-    const target = index + direction;
-    if (target < 0 || target >= order.length) return;
-    const next = [...order];
-    [next[index], next[target]] = [next[target], next[index]];
-    dispatch(updateUserSettings({ workoutTypeOrder: next }));
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = order.indexOf(active.id);
+    const newIndex = order.indexOf(over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    dispatch(updateUserSettings({ workoutTypeOrder: arrayMove(order, oldIndex, newIndex) }));
   };
 
   const reset = () => dispatch(updateUserSettings({ workoutTypeOrder: [] }));
@@ -43,39 +102,25 @@ export default function WorkoutTypeOrderField() {
         </Typography>
         <Typography variant="body2" color="text.secondary">
           When you have more than one workout on a day, this sets the order the types appear on your daily
-          overview. By default they stay in the order they were added — set a custom order to always show
-          your favorite first (e.g., Cardio first for a runner). Saves automatically.
+          overview. By default they stay in the order they were added — drag the handles to set a custom
+          order (e.g., Cardio first for a runner). Saves automatically.
         </Typography>
       </Grid>
       <Grid size={12}>
-        <Stack spacing={0.5} sx={{ maxWidth: 360 }}>
-          {order.map((type, index) => (
-            <Stack key={type} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Typography variant="body2" color="text.secondary" sx={{ width: 22 }}>
-                {index + 1}.
-              </Typography>
-              <Typography variant="body1" sx={{ flexGrow: 1 }}>
-                {type}
-              </Typography>
-              <IconButton
-                size="small"
-                disabled={index === 0}
-                onClick={() => move(index, -1)}
-                aria-label={`move ${type} up`}
-              >
-                <ArrowUpward fontSize="small" />
-              </IconButton>
-              <IconButton
-                size="small"
-                disabled={index === order.length - 1}
-                onClick={() => move(index, 1)}
-                aria-label={`move ${type} down`}
-              >
-                <ArrowDownward fontSize="small" />
-              </IconButton>
-            </Stack>
-          ))}
-        </Stack>
+        <Box sx={{ maxWidth: 360 }}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+            modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+          >
+            <SortableContext items={order} strategy={verticalListSortingStrategy}>
+              {order.map((type, index) => (
+                <SortableTypeRow key={type} type={type} index={index} />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </Box>
       </Grid>
       <Grid size={12}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
