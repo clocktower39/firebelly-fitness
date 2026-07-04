@@ -30,6 +30,7 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "favoritePilatesStyles",
   "workoutColors",
   "workoutTypeOrder",
+  "dailyOverviewOrder",
   "autoPaymentReminders",
   "timezone",
   "notificationPrefs",

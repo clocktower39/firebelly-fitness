@@ -56,6 +56,8 @@ const UserSchema = new mongoose.Schema({
     favoritePilatesStyles: { type: [String], default: [] },
     workoutColors: { type: Object, default: () => ({}) },
     workoutTypeOrder: { type: [String], default: [] },
+    dailyOverviewOrder: { type: [String], default: [] }, // ordered section keys for the daily overview page
+
     autoPaymentReminders: { type: Boolean, default: false },
     timezone: { type: String, default: "" }, // IANA tz, e.g. "America/New_York"; for local-time reminders
     notificationPrefs: {

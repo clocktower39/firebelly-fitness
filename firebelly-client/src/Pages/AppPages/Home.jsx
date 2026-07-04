@@ -12,6 +12,7 @@ import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
 import { sortWorkoutsByTypeOrder } from "../../features/workout/utils/workoutOrder";
+import { DAILY_OVERVIEW_ORDER, resolveDailyOverviewOrder } from "../../utils/dailyOverviewSections";
 import WeeklyTrainingStatus from "../../Components/TrainingComponents/WeeklyTrainingStatus";
 import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL, getMyReadiness } from "../../Redux/actions";
 import { Avatar, Button, Grid, Paper, Stack, Typography } from '@mui/material';
@@ -56,6 +57,8 @@ function Home() {
   });
   // Per-account preferred order of workout types on the daily overview (empty = keep existing order).
   const workoutTypeOrder = useSelector((state) => state.user?.workoutTypeOrder) || EMPTY_TYPE_ORDER;
+  // Per-account preferred order of the daily overview's cards/sections (empty = keep the default order).
+  const dailyOverviewOrder = useSelector((state) => state.user?.dailyOverviewOrder) || EMPTY_TYPE_ORDER;
   const latestMetric = useSelector(
     (state) => state.metrics.latestByUser[(client || user._id)] || null
   );
@@ -193,6 +196,112 @@ function Home() {
     if (isPersonalWorkout() && !readiness.loaded) dispatch(getMyReadiness());
   }, [dispatch, isPersonalWorkout, readiness.loaded]);
 
+  // Build the reorderable daily-overview cards as keyed section nodes (null = not shown for this
+  // context). The date selector + weekly status strip above stay pinned and are not part of this.
+  const personal = isPersonalWorkout();
+  const sectionNodes = {
+    checkin:
+      personal && readiness.loaded ? (
+        <Grid container size={12} sx={{ p: 1 }}>
+          <DailyCheckinCard />
+        </Grid>
+      ) : !personal && client ? (
+        <Grid container size={12} sx={{ p: 1 }}>
+          <DailyCheckinCard clientId={client} />
+        </Grid>
+      ) : null,
+    metrics: latestMetric ? (
+      <Grid container size={12} sx={{ marginTop: "10px" }}>
+        <Paper elevation={5} sx={{ width: "100%", padding: "5px", margin: "5px" }}>
+          <Stack
+            direction="row"
+            sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
+          >
+            <Typography variant="h6" color="text.primary">Latest Body Metrics</Typography>
+            <Button
+              component={Link}
+              to={`/progress?${client ? `client=${client}&` : ""}tab=metrics`}
+              size="small"
+              variant="outlined"
+            >
+              View Body Metrics
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            {new Date(latestMetric.recordedAt).toLocaleDateString()}{" "}
+            {new Date(latestMetric.recordedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </Typography>
+          <Paper sx={{ padding: "4px 8px", marginTop: "6px" }}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              sx={{ "& p": { color: "text.primary" } }}
+            >
+              <Typography variant="body1">
+                Weight: {formatWeightWithUnit(latestMetric.weight, weightUnit) || "—"}
+              </Typography>
+              <Typography variant="body1">Body Fat: {latestMetric.bodyFatPercent ?? "—"}%</Typography>
+              <Typography variant="body1">BMI: {latestMetric.bmi ?? "—"}</Typography>
+              <Typography variant="body1">RHR: {latestMetric.restingHeartRate ?? "—"} bpm</Typography>
+            </Stack>
+          </Paper>
+        </Paper>
+      </Grid>
+    ) : null,
+    workouts: localWorkouts ? (
+      <WorkoutOverview
+        localWorkouts={localWorkouts}
+        setLocalWorkouts={setLocalWorkouts}
+        selectedDate={selectedDate}
+        handleCancelEdit={handleCancelEdit}
+        workoutOptionModalViewProps={{
+          modalOpen,
+          handleModalToggle,
+          handleSetModalAction,
+          modalActionType,
+          openCreateWorkoutDialog,
+          handleOpenCreateWorkoutDialog,
+          handleCloseCreateWorkoutDialog,
+          setSelectedDate,
+        }}
+        user={activeWorkoutUser}
+      />
+    ) : null,
+    cardio: <CardioSummaryCard client={client} />,
+    coverage:
+      user.isTrainer && !client ? (
+        <WeeklyClientWorkoutTracker
+          selectedDate={selectedDate}
+          mode="day"
+          title="Daily Coverage"
+          description={`Quick view of clients expected on ${dayjs(selectedDate).format(
+            "dddd, MMM D"
+          )} and who still needs workouts entered.`}
+          showViewFullButton
+        />
+      ) : null,
+  };
+
+  // Resolve the render order. A custom order is honored literally; otherwise use the default order but
+  // keep the existing nicety: today's check-in sits at the top until it's done, then drops below the
+  // workout (and a client's check-in shows below like before).
+  const hasCustomLayout = Array.isArray(dailyOverviewOrder) && dailyOverviewOrder.length > 0;
+  let orderedKeys;
+  if (hasCustomLayout) {
+    orderedKeys = resolveDailyOverviewOrder(dailyOverviewOrder);
+  } else {
+    orderedKeys = DAILY_OVERVIEW_ORDER.filter((key) => key !== "checkin");
+    if (personal && !todayCheckinDone) {
+      orderedKeys.unshift("checkin");
+    } else {
+      const cardioIndex = orderedKeys.indexOf("cardio");
+      orderedKeys.splice(cardioIndex + 1, 0, "checkin");
+    }
+  }
+
+  const orderedSections = orderedKeys.map((key) =>
+    sectionNodes[key] ? <React.Fragment key={key}>{sectionNodes[key]}</React.Fragment> : null
+  );
 
   return loading ? (
     <Loading />
@@ -223,90 +332,7 @@ function Home() {
         setVisibleDateLocked={setWeeklyStatusDateLocked}
         workouts={workouts}
       />
-      {isPersonalWorkout() && readiness.loaded && !todayCheckinDone && (
-        <Grid container size={12} sx={{ p: 1 }}>
-          <DailyCheckinCard />
-        </Grid>
-      )}
-      {latestMetric && (
-        <Grid container size={12} sx={{ marginTop: "10px" }}>
-          <Paper elevation={5} sx={{ width: "100%", padding: "5px", margin: "5px" }}>
-            <Stack
-              direction="row"
-              sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
-            >
-              <Typography variant="h6" color="text.primary">Latest Body Metrics</Typography>
-              <Button
-                component={Link}
-                to={`/progress?${client ? `client=${client}&` : ""}tab=metrics`}
-                size="small"
-                variant="outlined"
-              >
-                View Body Metrics
-              </Button>
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              {new Date(latestMetric.recordedAt).toLocaleDateString()}{" "}
-              {new Date(latestMetric.recordedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </Typography>
-            <Paper sx={{ padding: "4px 8px", marginTop: "6px" }}>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={2}
-                sx={{ "& p": { color: "text.primary" } }}
-              >
-                <Typography variant="body1">
-                  Weight: {formatWeightWithUnit(latestMetric.weight, weightUnit) || "—"}
-                </Typography>
-                <Typography variant="body1">Body Fat: {latestMetric.bodyFatPercent ?? "—"}%</Typography>
-                <Typography variant="body1">BMI: {latestMetric.bmi ?? "—"}</Typography>
-                <Typography variant="body1">RHR: {latestMetric.restingHeartRate ?? "—"} bpm</Typography>
-              </Stack>
-            </Paper>
-          </Paper>
-        </Grid>
-      )}
-      {localWorkouts && (
-        <WorkoutOverview
-          localWorkouts={localWorkouts}
-          setLocalWorkouts={setLocalWorkouts}
-          selectedDate={selectedDate}
-          handleCancelEdit={handleCancelEdit}
-          workoutOptionModalViewProps={{
-            modalOpen,
-            handleModalToggle,
-            handleSetModalAction,
-            modalActionType,
-            openCreateWorkoutDialog,
-            handleOpenCreateWorkoutDialog,
-            handleCloseCreateWorkoutDialog,
-            setSelectedDate,
-          }}
-          user={activeWorkoutUser}
-        />
-      )}
-      <CardioSummaryCard client={client} />
-      {isPersonalWorkout() && readiness.loaded && todayCheckinDone && (
-        <Grid container size={12} sx={{ p: 1 }}>
-          <DailyCheckinCard />
-        </Grid>
-      )}
-      {!isPersonalWorkout() && client && (
-        <Grid container size={12} sx={{ p: 1 }}>
-          <DailyCheckinCard clientId={client} />
-        </Grid>
-      )}
-      {user.isTrainer && !client && (
-        <WeeklyClientWorkoutTracker
-          selectedDate={selectedDate}
-          mode="day"
-          title="Daily Coverage"
-          description={`Quick view of clients expected on ${dayjs(selectedDate).format(
-            "dddd, MMM D"
-          )} and who still needs workouts entered.`}
-          showViewFullButton
-        />
-      )}
+      {orderedSections}
     </>
   );
 }

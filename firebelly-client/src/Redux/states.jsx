@@ -9,6 +9,7 @@ export let user = {
     favoritePilatesStyles: [],
     workoutColors: {},
     workoutTypeOrder: [],
+    dailyOverviewOrder: [],
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

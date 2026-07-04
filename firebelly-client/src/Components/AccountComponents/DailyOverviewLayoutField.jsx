@@ -21,11 +21,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToVerticalAxis, restrictToWindowEdges } from "@dnd-kit/modifiers";
-import { WORKOUT_TYPE_ORDER } from "../../features/workout/utils/workoutOrder";
+import {
+  DAILY_OVERVIEW_SECTIONS,
+  DAILY_OVERVIEW_LABELS,
+  resolveDailyOverviewOrder,
+} from "../../utils/dailyOverviewSections";
 
-function SortableTypeRow({ type, index }) {
+function SortableSectionRow({ id, label, index }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: type,
+    id,
   });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -38,7 +42,7 @@ function SortableTypeRow({ type, index }) {
         <Box
           {...attributes}
           {...listeners}
-          aria-label={`drag ${type}`}
+          aria-label={`drag ${label}`}
           sx={{
             touchAction: "none",
             cursor: "grab",
@@ -52,28 +56,35 @@ function SortableTypeRow({ type, index }) {
         <Typography variant="body2" color="text.secondary" sx={{ width: 22 }}>
           {index + 1}.
         </Typography>
-        <Typography variant="body1">{type}</Typography>
+        <Typography variant="body1">{label}</Typography>
       </Stack>
     </Paper>
   );
 }
 
-// Embeddable "Daily Overview Order" section (rendered inside Workout Preferences). Drag to set the order
-// workout types appear on the daily overview when there is more than one workout that day. Empty setting =
-// keep the existing order (the default). Saves automatically.
-export default function WorkoutTypeOrderField() {
+// Embeddable "Daily Overview Layout" section (rendered inside Workout Preferences). Drag to set the order
+// the cards appear on the daily overview screen. The date selector and weekly status strip stay pinned at
+// the top and are not listed here. Empty setting = keep the default order. Saves automatically.
+export default function DailyOverviewLayoutField() {
   const dispatch = useDispatch();
-  const saved = useSelector((state) => state.user.workoutTypeOrder) || [];
+  const isTrainer = useSelector((state) => state.user.isTrainer);
+  const saved = useSelector((state) => state.user.dailyOverviewOrder) || [];
   const isCustom = Array.isArray(saved) && saved.length > 0;
 
-  // Always show all five types: a custom saved order (dropping unknowns, appending any missing in
-  // canonical order), or the canonical default when not customized.
-  const order = useMemo(() => {
-    if (!isCustom) return [...WORKOUT_TYPE_ORDER];
-    const base = saved.filter((type) => WORKOUT_TYPE_ORDER.includes(type));
-    const missing = WORKOUT_TYPE_ORDER.filter((type) => !base.includes(type));
-    return [...base, ...missing];
-  }, [saved, isCustom]);
+  // Only sections relevant to this account are shown/reordered (e.g. Daily Coverage is trainer-only).
+  const visibleKeys = useMemo(
+    () =>
+      DAILY_OVERVIEW_SECTIONS.filter((section) => !section.trainerOnly || isTrainer).map(
+        (section) => section.key
+      ),
+    [isTrainer]
+  );
+
+  // Resolve the full saved order, then drop any sections that don't apply to this account.
+  const order = useMemo(
+    () => resolveDailyOverviewOrder(saved).filter((key) => visibleKeys.includes(key)),
+    [saved, visibleKeys]
+  );
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
@@ -86,10 +97,10 @@ export default function WorkoutTypeOrderField() {
     const oldIndex = order.indexOf(active.id);
     const newIndex = order.indexOf(over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    dispatch(updateUserSettings({ workoutTypeOrder: arrayMove(order, oldIndex, newIndex) }));
+    dispatch(updateUserSettings({ dailyOverviewOrder: arrayMove(order, oldIndex, newIndex) }));
   };
 
-  const reset = () => dispatch(updateUserSettings({ workoutTypeOrder: [] }));
+  const reset = () => dispatch(updateUserSettings({ dailyOverviewOrder: [] }));
 
   return (
     <>
@@ -98,12 +109,12 @@ export default function WorkoutTypeOrderField() {
       </Grid>
       <Grid size={12} sx={{ mt: 1 }}>
         <Typography variant="subtitle1" gutterBottom>
-          Workout Type Order
+          Daily Overview Layout
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          When you have more than one workout on a day, this sets the order the types appear inside the
-          workouts card on your daily overview. By default they stay in the order they were added — drag
-          the handles to set a custom order (e.g., Cardio first for a runner). Saves automatically.
+          Set the order the cards appear on your daily overview screen. The date selector and weekly
+          status bar stay pinned at the top. Drag the handles to reorder (e.g., put your check-in or
+          cardio summary first). Saves automatically.
         </Typography>
       </Grid>
       <Grid size={12}>
@@ -115,8 +126,13 @@ export default function WorkoutTypeOrderField() {
             modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
           >
             <SortableContext items={order} strategy={verticalListSortingStrategy}>
-              {order.map((type, index) => (
-                <SortableTypeRow key={type} type={type} index={index} />
+              {order.map((key, index) => (
+                <SortableSectionRow
+                  key={key}
+                  id={key}
+                  label={DAILY_OVERVIEW_LABELS[key] || key}
+                  index={index}
+                />
               ))}
             </SortableContext>
           </DndContext>
@@ -129,7 +145,7 @@ export default function WorkoutTypeOrderField() {
           </Button>
           {isCustom && (
             <Typography variant="caption" color="text.secondary">
-              Custom order active
+              Custom layout active
             </Typography>
           )}
         </Stack>
