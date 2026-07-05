@@ -367,8 +367,10 @@ export default function ProgramBuilder() {
   const handleEditDay = useCallback(
     (weekIndex, dayIndex, workoutId) => {
       if (workoutId) {
+        // Pass the programId so the editor can cascade an exercise swap across the program.
+        const programParam = program?._id ? `&programId=${program._id}` : "";
         navigate(
-          `/workout/${workoutId}?source=program&return=${encodeURIComponent(
+          `/workout/${workoutId}?source=program${programParam}&return=${encodeURIComponent(
             location.pathname
           )}`
         );
@@ -376,7 +378,7 @@ export default function ProgramBuilder() {
       }
       createWorkoutForDay(weekIndex, dayIndex);
     },
-    [createWorkoutForDay, location.pathname, navigate]
+    [createWorkoutForDay, location.pathname, navigate, program]
   );
 
   const loadTemplates = useCallback(async () => {

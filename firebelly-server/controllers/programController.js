@@ -343,6 +343,11 @@ const assign_program = async (req, res, next) => {
           training: template.training || [],
           workoutFeedback: { difficulty: 1, comments: [] },
           complete: false,
+          // Link the assigned copy back to its program so per-client edits (e.g. cascading an
+          // exercise swap to future workouts) can reliably scope to this program.
+          programId: program._id,
+          assignedBy: trainerId,
+          assignedAt: new Date(),
         });
       });
     });

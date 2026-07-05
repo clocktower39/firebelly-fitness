@@ -38,11 +38,22 @@ const idBodyValidate = {
     _id: objectId.required(),
   }).unknown(true),
 };
+const swapExerciseValidate = {
+  body: Joi.object({
+    anchorWorkoutId: objectId.required(),
+    fromExercise: objectId.required(),
+    toExercise: objectId.required(),
+    scope: Joi.string().valid("single", "forward").optional(),
+    programId: objectId.optional(),
+    clientId: objectId.optional(),
+  }),
+};
 
 router.post('/training', verifyAccessToken, trainingController.get_training_by_id);
 router.post('/nextWorkout', verifyAccessToken, trainingController.get_next_workout);
 router.post('/workouts', verifyAccessToken, trainingController.get_workouts_by_date);
 router.post('/updateTraining', validate(updateTrainingValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.update_training);
+router.post('/swapExerciseForward', validate(swapExerciseValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.swap_exercise_forward);
 router.post('/createTraining', validate(createTrainingValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.create_training);
 router.post('/trainingWeek', verifyAccessToken, trainingController.get_weekly_training);
 router.post('/exerciseHistory', verifyAccessToken, trainingController.get_exercise_history);

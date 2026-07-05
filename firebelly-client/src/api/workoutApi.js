@@ -49,6 +49,12 @@ export const workoutApi = {
       body: { _id, training },
     }),
 
+  swapExerciseForward: (payload) =>
+    apiFetch("/swapExerciseForward", {
+      method: "POST",
+      body: payload,
+    }),
+
   updateWorkoutDateById: ({ _id, newDate, newTitle }) =>
     apiFetch("/updateWorkoutDateById", {
       method: "POST",

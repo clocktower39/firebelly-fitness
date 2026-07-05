@@ -40,6 +40,7 @@ import {
 } from "../../utils/techniqueRegistry";
 import TechniqueDrawer from "./TechniqueDrawer";
 import TechniqueLogger from "./TechniqueLogger";
+import SwapExerciseDialog from "./SwapExerciseDialog";
 
 export default function Exercise(props) {
   const {
@@ -59,6 +60,7 @@ export default function Exercise(props) {
   const [techniqueDrawerOpen, setTechniqueDrawerOpen] = useState(false);
   const [techInfoAnchor, setTechInfoAnchor] = useState(null);
   const [techInfo, setTechInfo] = useState(null);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   const updateTechniques = (nextTechniques) =>
     setLocalTraining((prev) =>
@@ -646,6 +648,16 @@ export default function Exercise(props) {
                 >
                   View Progress Chart
                 </MenuItem>
+                {user?.isTrainer && (
+                  <MenuItem
+                    onClick={() => {
+                      setSwapOpen(true);
+                      handleExerciseOptionsClose();
+                    }}
+                  >
+                    Swap exercise…
+                  </MenuItem>
+                )}
                 <MenuItem
                   onClick={() =>
                     setEditMode((prev) => {
@@ -657,6 +669,18 @@ export default function Exercise(props) {
                   Edit Exercise
                 </MenuItem>
               </Menu>
+              <SwapExerciseDialog
+                open={swapOpen}
+                onClose={() => setSwapOpen(false)}
+                currentExercise={title}
+                onApplied={(replacement) => {
+                  if (!replacement) return;
+                  // Reflect the swap in the open editor entry immediately (the anchor also
+                  // re-hydrates from the server, but this entry component won't remount).
+                  setTitle(replacement);
+                  if (replacement.measurementType === "time") setExerciseType("Time");
+                }}
+              />
               <LogLoader
                 fields={LoggedFields()}
                 exercise={exercise}

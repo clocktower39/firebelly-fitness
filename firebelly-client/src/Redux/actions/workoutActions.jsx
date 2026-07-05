@@ -272,6 +272,23 @@ export function updateTraining(trainingId, updatedTraining) {
   };
 }
 
+// Swap an exercise for another and cascade it to later workouts in the same program.
+// The server preserves each downstream workout's programmed scheme (only the exercise
+// changes) and returns every updated workout (populated) so we upsert each into Redux.
+export function swapExerciseForward(payload) {
+  return async (dispatch) => {
+    const data = await workoutApi.swapExerciseForward(payload);
+
+    if (data?.error) {
+      dispatch({ type: ERROR, error: data.error });
+      return null;
+    }
+
+    (data.workouts || []).forEach((workout) => dispatch(upsertWorkout(workout)));
+    return data;
+  };
+}
+
 // Append an exercise to an existing workout as a new circuit, then save.
 export function addExerciseToWorkout({ exercise, workout, setCount = 4 }) {
   return async (dispatch) => {
