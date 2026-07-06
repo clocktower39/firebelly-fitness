@@ -108,7 +108,6 @@ export function ModalAction(props) {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [deleteResult, setDeleteResult] = useState(null);
     const [copyOption, setCopyOption] = useState(null);
-    const [autoSummary, setAutoSummary] = useState("");
     const [newAccount, setNewAccount] = useState({
       label: `${training?.user?.lastName}, ${training?.user?.firstName}`,
       value: training?.user?._id,
@@ -220,15 +219,7 @@ export function ModalAction(props) {
           return;
         }
         setActionError(false);
-        // For an autoregulated copy, keep the modal open and show what changed so the
-        // trainer can see the per-exercise decisions before moving on.
-        if (isAuto && res?.autoregulation) {
-          const t = res.autoregulation;
-          setAutoSummary(
-            `Next session created — ${t.progress} progressed, ${t.push} pushed harder, ${t.hold} held, ${t.backoff} backed off.`
-          );
-          return;
-        }
+        // Close and jump to the copied date, same as every other copy/move.
         handleModalToggle();
         !isPersonalWorkout()
           ? navigate("/clients")
@@ -811,13 +802,6 @@ export function ModalAction(props) {
                 <Grid container size={12} sx={{ justifyContent: "center" }}>
                   <Typography variant="caption" sx={{ color: "red" }}>
                     {actionError}
-                  </Typography>
-                </Grid>
-              )}
-              {autoSummary && (
-                <Grid container size={12} sx={{ justifyContent: "center", mt: 1 }}>
-                  <Typography variant="caption" sx={{ color: "success.main", textAlign: "center" }}>
-                    {autoSummary}
                   </Typography>
                 </Grid>
               )}
