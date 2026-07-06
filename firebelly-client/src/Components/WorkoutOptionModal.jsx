@@ -607,8 +607,12 @@ export function ModalAction(props) {
           { label: "Copy achieved as the new goal", value: "achievedToNewGoal" },
           { label: "Copy goal only", value: "copyGoalOnly" },
         ];
-        // Autoregulation needs logged results + feedback, so only offer it on a completed workout.
-        if (training?.complete) {
+        // Autoregulate adjusts each exercise from its logged results. Offer it for a Date-range
+        // copy (it applies per-workout across the whole range), and for a Single copy only when
+        // that workout is completed. (Previously gated solely on the clicked workout's complete
+        // flag, so whether it appeared depended on which workout you opened the copy dialog from —
+        // which is why it showed inconsistently across devices.)
+        if (moveMode === "range" || training?.complete) {
           copyOptions.push({
             label: "Auto-adjust from results (autoregulate)",
             value: "autoregulate",

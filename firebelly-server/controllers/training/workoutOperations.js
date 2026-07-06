@@ -617,7 +617,15 @@ const bulk_move_copy_workouts = async (req, res, next) => {
           copyData.title = `${titlePrefix}${copyData.title}${titleSuffix}`;
         }
 
-        resetWorkoutForCopy(copyData, option);
+        if (option === "autoregulate") {
+          // Bring each exercise's next-session goals from its logged results (+ difficulty
+          // feedback), reset achieved, and leave the copy UNcompleted — it's a fresh workout to
+          // perform, so the new numbers belong in the goals, not achieved.
+          copyData.complete = false;
+          await applyAutoregulation(copyData.training, { scheme: req.body.scheme || "linear" });
+        } else {
+          resetWorkoutForCopy(copyData, option);
+        }
 
         insertDocs.push(copyData);
       }
