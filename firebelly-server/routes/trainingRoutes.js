@@ -54,6 +54,8 @@ router.post('/workoutsRange', verifyAccessToken, trainingController.get_workouts
 router.post('/trainingRangeEnd', verifyAccessToken, trainingController.get_training_range_end);
 router.post('/bulkMoveCopyWorkouts', verifyAccessToken, ensureWriteAccess, trainingController.bulk_move_copy_workouts);
 router.post('/undoBulkMoveCopy', verifyAccessToken, ensureWriteAccess, trainingController.undo_bulk_move_copy);
+router.post('/bulkDeleteWorkouts', verifyAccessToken, ensureWriteAccess, trainingController.bulk_delete_workouts);
+router.post('/undoBulkDelete', verifyAccessToken, ensureWriteAccess, trainingController.undo_bulk_delete);
 router.post('/deleteWorkoutById', validate(idBodyValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.delete_workout_by_id);
 router.post('/getWorkoutHistory', verifyAccessToken, trainingController.workout_history_request);
 router.post('/workoutMonth', verifyAccessToken, trainingController.workout_month_request);

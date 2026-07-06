@@ -35,6 +35,8 @@ import {
   deleteWorkoutById,
   requestWorkoutsByRange,
   undoBulkMoveCopy,
+  bulkDeleteWorkouts,
+  undoBulkDelete,
 } from "../Redux/actions";
 import SelectedDate from "./SelectedDate";
 import WorkoutReorderEditor from "./TrainingComponents/WorkoutReorderEditor";
@@ -104,6 +106,7 @@ export function ModalAction(props) {
     const [includeCompleted, setIncludeCompleted] = useState(false);
     const [previewWorkouts, setPreviewWorkouts] = useState([]);
     const [previewLoading, setPreviewLoading] = useState(false);
+    const [deleteResult, setDeleteResult] = useState(null);
     const [copyOption, setCopyOption] = useState(null);
     const [autoSummary, setAutoSummary] = useState("");
     const [newAccount, setNewAccount] = useState({
@@ -288,6 +291,38 @@ export function ModalAction(props) {
         handleModalToggle();
       });
     };
+
+    const handleDeleteRange = () => {
+      dispatch(
+        bulkDeleteWorkouts({
+          rangeStart,
+          rangeEnd,
+          userId: training?.user?._id,
+          filters: { includeCompleted },
+        })
+      ).then((res) => {
+        if (res?.error !== undefined) {
+          setActionError(res.error);
+        } else if (!res?.count) {
+          setActionError("No workouts matched the range and filters.");
+        } else {
+          setActionError(false);
+          setDeleteResult(res.count);
+          setPreviewWorkouts([]);
+        }
+      });
+    };
+
+    const handleUndoBulkDelete = () => {
+      dispatch(undoBulkDelete(lastBulkOperation)).then((res) => {
+        if (res?.error !== undefined) {
+          setActionError(res.error);
+        } else {
+          setActionError(false);
+          handleModalToggle();
+        }
+      });
+    };
   
     const handleAutofillWorkout = () => {
       setLocalTraining((prev) => {
@@ -353,6 +388,7 @@ export function ModalAction(props) {
       setIncludeCompleted(actionType === "copy");
       setPreviewWorkouts([]);
       setPreviewLoading(false);
+      setDeleteResult(null);
     }, [actionType, modalOpen]);
 
     useEffect(() => {
@@ -787,31 +823,146 @@ export function ModalAction(props) {
       case "delete":
         return (
           <>
-            <Grid container spacing={1} >
-              <Grid container>
-                <Grid container size={12} >
-                  <Typography color="text.primary">
-                    Are you sure you would like to delete the following training:
-                  </Typography>
+            <TextField
+              fullWidth
+              select
+              label="Mode"
+              value={moveMode}
+              onChange={handleMoveModeChange}
+              sx={{ marginBottom: "10px" }}
+            >
+              <MenuItem value="single">Single training</MenuItem>
+              <MenuItem value="range">Date range</MenuItem>
+            </TextField>
+
+            {moveMode === "single" ? (
+              <Grid container spacing={1}>
+                <Grid container>
+                  <Grid container size={12}>
+                    <Typography color="text.primary">
+                      Are you sure you would like to delete the following training:
+                    </Typography>
+                  </Grid>
+                  <Grid container size={12} sx={{ justifyContent: "center" }}>
+                    <Typography color="text.primary">{training?.title}</Typography>
+                  </Grid>
+                  <Grid container size={12} sx={{ justifyContent: "center" }}>
+                    <Typography color="text.primary">
+                      {dayjs.utc(selectedDate).format("MMMM Do YYYY")}
+                    </Typography>
+                  </Grid>
+                  <Grid container size={12} sx={{ justifyContent: "center" }}>
+                    <Typography color="text.primary">{training.category.join(", ")}</Typography>
+                  </Grid>
                 </Grid>
                 <Grid container size={12} sx={{ justifyContent: "center" }}>
-                  <Typography color="text.primary">{training?.title}</Typography>
-                </Grid>
-                <Grid container size={12} sx={{ justifyContent: "center" }}>
-                  <Typography color="text.primary">
-                    {dayjs.utc(selectedDate).format("MMMM Do YYYY")}
-                  </Typography>
-                </Grid>
-                <Grid container size={12} sx={{ justifyContent: "center" }}>
-                  <Typography color="text.primary">{training.category.join(", ")}</Typography>
+                  <Button variant="contained" color="error" onClick={handleDelete}>
+                    Confirm
+                  </Button>
                 </Grid>
               </Grid>
+            ) : deleteResult != null ? (
+              <Grid container spacing={1} sx={{ justifyContent: "center" }}>
+                <Grid container size={12} sx={{ justifyContent: "center" }}>
+                  <Typography color="text.primary">
+                    Deleted {deleteResult} workout{deleteResult === 1 ? "" : "s"}.
+                  </Typography>
+                </Grid>
+                <Grid container size={12} sx={{ justifyContent: "center", gap: 1 }}>
+                  {canUndoBulk && (
+                    <Button variant="outlined" onClick={handleUndoBulkDelete}>
+                      Undo delete
+                    </Button>
+                  )}
+                  <Button variant="contained" onClick={handleModalToggle}>
+                    Close
+                  </Button>
+                </Grid>
+              </Grid>
+            ) : (
+              <>
+                <Grid container spacing={1} sx={{ justifyContent: "center", marginBottom: "10px" }}>
+                  <TextField
+                    fullWidth
+                    label="Range Start"
+                    type="date"
+                    value={rangeStart}
+                    onChange={handleRangeStartChange}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Range End"
+                    type="date"
+                    value={rangeEnd}
+                    onChange={handleRangeEndChange}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox checked={includeCompleted} onChange={handleIncludeCompletedChange} />
+                    }
+                    label="Include completed"
+                  />
+                  <Grid container size={12} sx={{ justifyContent: "center" }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Permanently deletes every workout in the range
+                      {includeCompleted ? "" : " (completed workouts are kept)"}. You can undo right
+                      after. Range end auto-fills to the latest workout on/after the start date.
+                    </Typography>
+                  </Grid>
+                  <Grid container size={12} sx={{ justifyContent: "center" }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {previewLoading
+                        ? "Loading preview..."
+                        : `Preview: ${previewWorkouts.length} workout(s) will be deleted`}
+                    </Typography>
+                  </Grid>
+                  {!previewLoading && previewWorkouts.length > 0 && (
+                    <Box sx={{ maxHeight: 140, overflowY: "auto", width: "100%" }}>
+                      {previewWorkouts
+                        .slice()
+                        .sort((a, b) => dayjs.utc(a.date).valueOf() - dayjs.utc(b.date).valueOf())
+                        .slice(0, 8)
+                        .map((workout) => (
+                          <Typography variant="caption" key={workout._id} display="block">
+                            {dayjs.utc(workout.date).format("MMM D")} - {workout.title || "Untitled"}
+                          </Typography>
+                        ))}
+                      {previewWorkouts.length > 8 && (
+                        <Typography variant="caption" display="block">
+                          +{previewWorkouts.length - 8} more
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+                </Grid>
+                <Grid container sx={{ justifyContent: "center" }}>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    onClick={handleDeleteRange}
+                    disabled={!rangeStart || !rangeEnd}
+                  >
+                    Delete Range
+                  </Button>
+                </Grid>
+                {canUndoBulk && (
+                  <Grid container sx={{ justifyContent: "center", marginTop: "10px" }}>
+                    <Button variant="outlined" onClick={handleUndoBulkDelete}>
+                      Undo last bulk action
+                    </Button>
+                  </Grid>
+                )}
+              </>
+            )}
+            {actionError && (
               <Grid container size={12} sx={{ justifyContent: "center" }}>
-                <Button variant="contained" onClick={handleDelete}>
-                  Confrim
-                </Button>
+                <Typography variant="caption" sx={{ color: "red" }}>
+                  {actionError}
+                </Typography>
               </Grid>
-            </Grid>
+            )}
           </>
         );
       case "autofill_workout":

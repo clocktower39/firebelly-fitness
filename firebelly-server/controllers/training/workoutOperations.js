@@ -889,6 +889,145 @@ const delete_workout_by_id = async (req, res, next) => {
   }
 };
 
+// Bulk-delete a client's (or your own) workouts in a date range, mirroring
+// bulk_move_copy_workouts' selection model (date range + filters). Completed workouts and
+// templates are excluded unless the caller opts in, so logged history is protected by default.
+// The full deleted docs are returned inside `operation` so the client can undo by sending them
+// back to undo_bulk_delete (matches the move/copy "operation lives client-side" design).
+const bulk_delete_workouts = async (req, res, next) => {
+  try {
+    const { rangeStart, rangeEnd, userId, filters = {} } = req.body;
+
+    if (!rangeStart) {
+      return res.status(400).json({ error: "Missing required fields." });
+    }
+
+    let targetUserId = res.locals.user._id;
+    if (userId && String(userId) !== String(res.locals.user._id)) {
+      const relationship = await Relationship.findOne({
+        trainer: res.locals.user._id,
+        client: userId,
+        accepted: true,
+      });
+      if (!relationship) {
+        return res.status(403).json({ error: "Unauthorized access." });
+      }
+      targetUserId = userId;
+    }
+    const accountId = String(targetUserId);
+
+    const startDate = dayjs.utc(rangeStart).startOf("day");
+    let endDate = rangeEnd ? dayjs.utc(rangeEnd).endOf("day") : null;
+    if (!endDate) {
+      const maxTraining = await Training.findOne({
+        user: targetUserId,
+        date: { $gte: startDate.toDate() },
+      })
+        .sort({ date: -1 })
+        .select("date")
+        .lean();
+      if (!maxTraining?.date) {
+        return res.send({ deletedIds: [], count: 0, operation: null, accountId });
+      }
+      endDate = dayjs(maxTraining.date).endOf("day");
+    }
+    if (endDate.isBefore(startDate)) {
+      return res.status(400).json({ error: "Range end must be on or after start." });
+    }
+
+    const workoutQuery = {
+      user: targetUserId,
+      date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
+    };
+    if (filters?.categoriesInclude?.length || filters?.categoriesExclude?.length) {
+      workoutQuery.category = {};
+      if (filters.categoriesInclude?.length) workoutQuery.category.$in = filters.categoriesInclude;
+      if (filters.categoriesExclude?.length) workoutQuery.category.$nin = filters.categoriesExclude;
+    }
+    // Protect logged history and program templates by default; caller must opt in to include them.
+    if (filters?.includeCompleted !== true) workoutQuery.complete = { $ne: true };
+    if (filters?.includeTemplates !== true) workoutQuery.isTemplate = { $ne: true };
+
+    // Stash the full docs before deleting so undo can re-insert them verbatim (ids preserved).
+    const deletedDocs = await Training.find(workoutQuery).lean();
+    if (!deletedDocs.length) {
+      return res.send({ deletedIds: [], count: 0, operation: null, accountId });
+    }
+    const ids = deletedDocs.map((d) => d._id);
+    const deletedIds = ids.map(String);
+
+    await Training.deleteMany({ _id: { $in: ids } });
+
+    // Cross-device parity: reuse the single-delete socket event the client already handles.
+    deletedIds.forEach((id) =>
+      global.io?.to(`workouts:${accountId}`).emit("workoutDeleted", { workoutId: id, accountId })
+    );
+
+    const operation = {
+      action: "delete",
+      userId: accountId,
+      deletedIds,
+      deletedDocs, // full snapshots for undo
+      timestamp: new Date(),
+    };
+
+    return res.send({ deletedIds, count: deletedIds.length, operation, accountId });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Undo a bulk delete by re-inserting the stashed docs (idempotent — skips any already restored).
+const undo_bulk_delete = async (req, res, next) => {
+  try {
+    const { operation } = req.body;
+    if (!operation || operation.action !== "delete" || !Array.isArray(operation.deletedDocs)) {
+      return res.status(400).json({ error: "Invalid undo operation." });
+    }
+
+    let targetUserId = res.locals.user._id;
+    if (operation.userId && String(operation.userId) !== String(res.locals.user._id)) {
+      const relationship = await Relationship.findOne({
+        trainer: res.locals.user._id,
+        client: operation.userId,
+        accepted: true,
+      });
+      if (!relationship) {
+        return res.status(403).json({ error: "Unauthorized access." });
+      }
+      targetUserId = operation.userId;
+    }
+    const accountId = String(targetUserId);
+
+    // Only restore docs that belong to the authorized target and aren't already back.
+    const wanted = operation.deletedDocs.filter((d) => d && String(d.user) === accountId);
+    const wantedIds = wanted.map((d) => d._id);
+    const existing = await Training.find({ _id: { $in: wantedIds } }).select("_id").lean();
+    const existingSet = new Set(existing.map((e) => String(e._id)));
+    const toInsert = wanted.filter((d) => !existingSet.has(String(d._id)));
+
+    if (toInsert.length) {
+      // Mongoose insertMany casts the JSON-round-tripped strings back to ObjectIds/Dates and
+      // preserves the provided _id values.
+      await Training.insertMany(toInsert, { ordered: false });
+    }
+
+    const restored = await Training.find({ _id: { $in: wantedIds } })
+      .populate({ path: "training.exercise", model: "Exercise", select: "_id exerciseTitle" })
+      .populate({ path: "user", model: "User", select: "_id firstName lastName profilePicture" })
+      .lean();
+
+    return res.send({
+      workouts: restored,
+      user: restored[0]?.user ?? { _id: targetUserId },
+      accountId,
+      restoredCount: toInsert.length,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   update_workout_date_by_id,
   copy_workout_by_id,
@@ -897,5 +1036,7 @@ module.exports = {
   get_workouts_by_range,
   undo_bulk_move_copy,
   debug_training_by_ids,
-  delete_workout_by_id
+  delete_workout_by_id,
+  bulk_delete_workouts,
+  undo_bulk_delete,
 };
