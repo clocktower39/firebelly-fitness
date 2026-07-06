@@ -492,6 +492,65 @@ export function undoBulkMoveCopy(operation) {
   };
 }
 
+// Bulk-delete workouts in a date range (mirrors bulkMoveCopyWorkouts). The returned operation
+// carries the full deleted docs so an undo can re-insert them.
+export function bulkDeleteWorkouts({ rangeStart, rangeEnd, userId, filters = {} }) {
+  return async (dispatch) => {
+    const data = await workoutApi.bulkDeleteWorkouts({ rangeStart, rangeEnd, userId, filters });
+
+    if (data.error) {
+      return dispatch({
+        type: ERROR,
+        error: data.error,
+      });
+    }
+
+    if (data.operation) {
+      dispatch({
+        type: SET_LAST_BULK_OPERATION,
+        operation: data.operation,
+      });
+    }
+
+    if (data.deletedIds?.length) {
+      dispatch({
+        type: REMOVE_WORKOUTS,
+        accountId: data.accountId,
+        workoutIds: data.deletedIds,
+      });
+    }
+
+    return data;
+  };
+}
+
+export function undoBulkDelete(operation) {
+  return async (dispatch) => {
+    const data = await workoutApi.undoBulkDelete(operation);
+
+    if (data.error) {
+      return dispatch({
+        type: ERROR,
+        error: data.error,
+      });
+    }
+
+    if (data.workouts?.length) {
+      dispatch({
+        type: EDIT_WORKOUTS,
+        workouts: [...data.workouts],
+        user: data.user,
+        accountId: data.accountId,
+      });
+    }
+
+    dispatch({
+      type: CLEAR_LAST_BULK_OPERATION,
+    });
+    return data;
+  };
+}
+
 // Delete a training record
 export function deleteWorkoutById(trainingId, accountId) {
   return async (dispatch) => {

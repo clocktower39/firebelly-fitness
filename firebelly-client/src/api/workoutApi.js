@@ -95,6 +95,18 @@ export const workoutApi = {
       body: { operation },
     }),
 
+  bulkDeleteWorkouts: (payload) =>
+    apiFetch("/bulkDeleteWorkouts", {
+      method: "POST",
+      body: payload,
+    }),
+
+  undoBulkDelete: (operation) =>
+    apiFetch("/undoBulkDelete", {
+      method: "POST",
+      body: { operation },
+    }),
+
   deleteWorkoutById: (_id) =>
     apiFetch("/deleteWorkoutById", {
       method: "POST",

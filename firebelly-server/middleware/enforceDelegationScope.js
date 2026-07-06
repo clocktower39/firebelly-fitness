@@ -28,7 +28,8 @@ const AREA_PATTERNS = {
     /^\/training$/, /^\/workouts$/, /^\/nextWorkout$/, /^\/createTraining$/, /^\/updateTraining$/,
     /^\/trainingWeek$/, /^\/exerciseHistory$/, /^\/exerciseProgressSummary$/, /^\/myExerciseList$/,
     /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/, /^\/workoutsRange$/, /^\/trainingRangeEnd$/,
-    /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/deleteWorkoutById$/, /^\/getWorkoutHistory$/,
+    /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/bulkDeleteWorkouts$/, /^\/undoBulkDelete$/,
+    /^\/deleteWorkoutById$/, /^\/getWorkoutHistory$/,
     /^\/workoutMonth$/, /^\/workoutYear$/, /^\/workoutTemplates$/, /^\/getWorkoutQueue$/,
     /^\/programs(\/|$)/,
   ],
@@ -50,7 +51,8 @@ const AREA_PATTERNS = {
 const WRITE_PATTERNS = {
   workouts: [
     /^\/createTraining$/, /^\/updateTraining$/, /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/,
-    /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/deleteWorkoutById$/,
+    /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/bulkDeleteWorkouts$/, /^\/undoBulkDelete$/,
+    /^\/deleteWorkoutById$/,
     /^\/programs$/, /^\/programs\/[^/]+$/, /^\/programs\/[^/]+\/(days|publish|assign)/,
   ],
   goals: [
