@@ -6,6 +6,7 @@ import {
   ADD_MESSAGE,
   REMOVE_MESSAGE,
   MARK_CONVO_READ,
+  SET_CONVO_MUTED,
   ERROR,
 } from "../actionTypes";
 
@@ -62,6 +63,19 @@ export function markConversationRead(conversationId) {
   return async (dispatch) => {
     dispatch({ type: MARK_CONVO_READ, conversationId }); // optimistic clear
     await conversationApi.markRead(conversationId);
+  };
+}
+
+// Mute/unmute a conversation for me (suppresses its new-message notifications). Optimistic.
+export function setConversationMuted(conversationId, muted) {
+  return async (dispatch, getState) => {
+    const meId = getState().user?._id;
+    dispatch({ type: SET_CONVO_MUTED, conversationId, muted, meId });
+    const res = await conversationApi.muteConversation(conversationId, muted);
+    if (res?.error) {
+      dispatch({ type: SET_CONVO_MUTED, conversationId, muted: !muted, meId }); // revert
+      dispatch({ type: ERROR, error: res.error });
+    }
   };
 }
 

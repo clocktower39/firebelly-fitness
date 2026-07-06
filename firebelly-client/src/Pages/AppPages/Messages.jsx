@@ -25,6 +25,7 @@ import {
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from "@mui/material";
@@ -35,6 +36,8 @@ import {
   Campaign,
   Close,
   Delete,
+  Notifications,
+  NotificationsOff,
   Quickreply,
   Search,
   Send,
@@ -47,6 +50,7 @@ import {
   loadMessages,
   sendMessageTo,
   markConversationRead,
+  setConversationMuted,
   removeMessage,
   requestClients,
   requestMyTrainers,
@@ -58,6 +62,11 @@ const fullName = (u) =>
 
 const otherParticipants = (convo, meId) =>
   (convo?.participants || []).filter((p) => String(p.user?._id || p.user) !== String(meId));
+
+const mutedForMe = (convo, meId) =>
+  (convo?.participants || []).some(
+    (p) => String(p.user?._id || p.user) === String(meId) && p.muted
+  );
 
 const convoTitle = (convo, meId) => {
   if (convo?.title) return convo.title;
@@ -377,6 +386,23 @@ export default function Messages() {
                   }}
                   secondaryTypographyProps={{ noWrap: true }}
                 />
+                <Tooltip title={mutedForMe(c, meId) ? "Muted — tap to unmute" : "Mute this chat"}>
+                  <IconButton
+                    size="small"
+                    edge="end"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dispatch(setConversationMuted(c._id, !mutedForMe(c, meId)));
+                    }}
+                    sx={{ ml: 0.5 }}
+                  >
+                    {mutedForMe(c, meId) ? (
+                      <NotificationsOff fontSize="small" color="warning" />
+                    ) : (
+                      <Notifications fontSize="small" sx={{ opacity: 0.35 }} />
+                    )}
+                  </IconButton>
+                </Tooltip>
               </ListItemButton>
             );
           })}
@@ -395,9 +421,27 @@ export default function Messages() {
                 <ArrowBackIosNew fontSize="small" />
               </IconButton>
             )}
-            <Typography variant="h6" noWrap>
+            <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
               {convoTitle(activeConvo, meId)}
             </Typography>
+            <Tooltip
+              title={mutedForMe(activeConvo, meId) ? "Unmute notifications" : "Mute notifications"}
+            >
+              <IconButton
+                size="small"
+                onClick={() =>
+                  dispatch(
+                    setConversationMuted(activeConvo._id, !mutedForMe(activeConvo, meId))
+                  )
+                }
+              >
+                {mutedForMe(activeConvo, meId) ? (
+                  <NotificationsOff fontSize="small" color="warning" />
+                ) : (
+                  <Notifications fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
           </Stack>
           <Divider />
           <Box sx={{ flex: 1, overflowY: "auto", p: 2 }}>

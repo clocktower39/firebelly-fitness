@@ -8,6 +8,9 @@ const participantSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     role: { type: String, default: "member" },
     lastReadAt: { type: Date, default: null },
+    // When true, this participant gets NO new-message notification/push for this conversation
+    // (messages still deliver live; they're just not pinged). Per-user, per-conversation.
+    muted: { type: Boolean, default: false },
   },
   { _id: false }
 );

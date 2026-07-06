@@ -33,6 +33,7 @@ import {
   ADD_MESSAGE,
   REMOVE_MESSAGE,
   MARK_CONVO_READ,
+  SET_CONVO_MUTED,
   EDIT_SCHEDULE_EVENTS,
   EDIT_SESSION_SUMMARY,
   EDIT_WORKOUT_QUEUE,
@@ -585,6 +586,22 @@ export let reducer = (
         ...state,
         conversations: state.conversations.map((c) =>
           String(c._id) === String(action.conversationId) ? { ...c, unread: 0 } : c
+        ),
+      };
+    case SET_CONVO_MUTED:
+      return {
+        ...state,
+        conversations: state.conversations.map((c) =>
+          String(c._id) === String(action.conversationId)
+            ? {
+                ...c,
+                participants: (c.participants || []).map((p) =>
+                  String(p.user?._id || p.user) === String(action.meId)
+                    ? { ...p, muted: action.muted }
+                    : p
+                ),
+              }
+            : c
         ),
       };
     case EDIT_SCHEDULE_EVENTS:

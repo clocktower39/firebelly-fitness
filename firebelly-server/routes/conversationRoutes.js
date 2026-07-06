@@ -42,6 +42,7 @@ router.post(
   conversationController.send_message
 );
 router.post("/conversations/:id/read", verifyAccessToken, conversationController.mark_read);
+router.post("/conversations/:id/mute", verifyAccessToken, conversationController.mute_conversation);
 router.post(
   "/messages/:id/delete",
   verifyAccessToken,

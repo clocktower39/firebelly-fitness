@@ -170,8 +170,10 @@ const send_message = async (req, res, next) => {
             message,
           });
         }
+        // Notify on the first unread only (burst batching), and skip anyone who muted this
+        // conversation — they still got the live message above, just no ping.
         const unread = await unreadFor(convo._id, p.user, p.lastReadAt);
-        if (unread === 1) {
+        if (unread === 1 && !p.muted) {
           await createNotification({
             userId: p.user,
             type: "MESSAGE",
@@ -199,6 +201,23 @@ const mark_read = async (req, res, next) => {
     );
     if (!result.matchedCount) return res.status(403).send({ error: "Not a participant." });
     return res.send({ status: "success", lastReadAt: now });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Mute or unmute this conversation for me (suppresses new-message notifications; messages still
+// arrive). Per-user via the positional participant match, so it works for direct and group.
+const mute_conversation = async (req, res, next) => {
+  try {
+    const meId = res.locals.user._id;
+    const muted = req.body.muted !== false; // default to muting; pass { muted: false } to unmute
+    const result = await Conversation.updateOne(
+      { _id: req.params.id, "participants.user": meId },
+      { $set: { "participants.$.muted": muted } }
+    );
+    if (!result.matchedCount) return res.status(403).send({ error: "Not a participant." });
+    return res.send({ status: "success", conversationId: req.params.id, muted });
   } catch (err) {
     return next(err);
   }
@@ -335,13 +354,16 @@ const broadcast_message = async (req, res, next) => {
           .to(clientId)
           .emit("message:new", { conversationId: String(convo._id), message });
       }
-      await createNotification({
-        userId: clientId,
-        type: "MESSAGE",
-        title: senderName,
-        body: preview,
-        link: `/messages?c=${convo._id}`,
-      });
+      const clientP = convo.participants.find((p) => String(p.user) === clientId);
+      if (!clientP?.muted) {
+        await createNotification({
+          userId: clientId,
+          type: "MESSAGE",
+          title: senderName,
+          body: preview,
+          link: `/messages?c=${convo._id}`,
+        });
+      }
       sent += 1;
     }
     return res.send({ sent });
@@ -417,6 +439,7 @@ module.exports = {
   get_messages,
   send_message,
   mark_read,
+  mute_conversation,
   delete_message,
   upload_attachment,
   get_attachment,

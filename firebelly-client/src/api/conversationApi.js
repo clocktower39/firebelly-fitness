@@ -39,6 +39,9 @@ export const conversationApi = {
   markRead: (conversationId) =>
     apiFetch(`/conversations/${conversationId}/read`, { method: "POST", body: {} }),
 
+  muteConversation: (conversationId, muted) =>
+    apiFetch(`/conversations/${conversationId}/mute`, { method: "POST", body: { muted } }),
+
   deleteMessage: (messageId) =>
     apiFetch(`/messages/${messageId}/delete`, { method: "POST", body: {} }),
 };

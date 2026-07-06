@@ -26,6 +26,7 @@ const {
   requireMembership,
   resolveDayMap,
 } = require("./context");
+const { createNotification } = require("../../services/notificationService");
 
 const get_group_analytics = async (req, res, next) => {
   try {
@@ -192,6 +193,8 @@ const ensureGroupConversation = async (groupId) => {
       user: m.userId,
       role: m.role || "member",
       lastReadAt: existing?.get(String(m.userId))?.lastReadAt || null,
+      // Carry the per-member mute flag across membership rebuilds (else mute resets each send).
+      muted: existing?.get(String(m.userId))?.muted || false,
     }));
   // Reuse any existing conversation for this group (incl. legacy ones from the old schema) and
   // upgrade it in place — the groupId index is unique.
@@ -280,6 +283,30 @@ const send_group_message = async (req, res, next) => {
           })
         );
     }
+    // Notify each other member on their first unread, unless they've muted this group.
+    const senderName =
+      [res.locals.user.firstName, res.locals.user.lastName].filter(Boolean).join(" ") || "New message";
+    await Promise.all(
+      convo.participants
+        .filter((p) => String(p.user) !== String(userId) && !p.muted)
+        .map(async (p) => {
+          const unread = await Message.countDocuments({
+            conversation: convo._id,
+            deletedAt: null,
+            sender: { $ne: p.user },
+            createdAt: { $gt: p.lastReadAt || new Date(0) },
+          });
+          if (unread === 1) {
+            await createNotification({
+              userId: p.user,
+              type: "MESSAGE",
+              title: convo.title || "Group message",
+              body: `${senderName}: ${convo.lastMessagePreview}`,
+              link: `/messages?c=${convo._id}`,
+            });
+          }
+        })
+    );
     return res.json(await formatGroupChat(convo));
   } catch (err) {
     return next(err);

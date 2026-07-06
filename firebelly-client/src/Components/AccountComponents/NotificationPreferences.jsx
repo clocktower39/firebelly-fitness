@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUserSettings } from "../../Redux/actions/accountActions";
+import { getConversations, setConversationMuted } from "../../Redux/actions";
 import {
   Button,
   Container,
@@ -9,6 +10,9 @@ import {
   FormControlLabel,
   Grid,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -45,10 +49,31 @@ export default function NotificationPreferences() {
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const conversations = useSelector((state) => state.conversations) || [];
 
   useEffect(() => {
     if (pushSupported()) isPushSubscribed().then(setPushOn);
   }, []);
+
+  useEffect(() => {
+    dispatch(getConversations());
+  }, [dispatch]);
+
+  const meId = user._id;
+  const nameOf = (u) =>
+    u?.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u?.username || "User";
+  const titleOf = (c) =>
+    c.title ||
+    (c.participants || [])
+      .filter((p) => String(p.user?._id || p.user) !== String(meId))
+      .map((p) => nameOf(p.user))
+      .join(", ") ||
+    "Conversation";
+  const mutedConvos = conversations.filter((c) =>
+    (c.participants || []).some(
+      (p) => String(p.user?._id || p.user) === String(meId) && p.muted
+    )
+  );
 
   const set = (key, value) => {
     setPrefs((p) => ({ ...p, [key]: value }));
@@ -216,6 +241,36 @@ export default function NotificationPreferences() {
             <Button variant="contained" onClick={save}>
               {saved ? "Saved ✓" : "Save"}
             </Button>
+          </Grid>
+
+          <Grid container size={12}>
+            <Divider sx={{ width: "100%" }} />
+          </Grid>
+          <Grid container size={12}>
+            <Typography variant="subtitle1">Muted chats</Typography>
+          </Grid>
+          <Grid container size={12}>
+            {mutedConvos.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No muted chats. Mute a conversation from its chat window or the messages list.
+              </Typography>
+            ) : (
+              <List disablePadding sx={{ width: "100%" }}>
+                {mutedConvos.map((c) => (
+                  <ListItem
+                    key={c._id}
+                    disableGutters
+                    secondaryAction={
+                      <Button size="small" onClick={() => dispatch(setConversationMuted(c._id, false))}>
+                        Unmute
+                      </Button>
+                    }
+                  >
+                    <ListItemText primary={titleOf(c)} secondary="Notifications muted" />
+                  </ListItem>
+                ))}
+              </List>
+            )}
           </Grid>
         </Grid>
       </Paper>
