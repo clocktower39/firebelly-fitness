@@ -51,6 +51,8 @@ import {
   FitnessCenter as ExerciseLibraryIcon,
   Chat as MessagesIcon,
   NotificationsNone as NotificationsNavIcon,
+  Feedback as FeedbackIcon,
+  Inbox as InboxIcon,
 } from "@mui/icons-material";
 import { serverURL, loginJWT, logoutUser } from "../../Redux/actions";
 import Barcode from "react-barcode";
@@ -143,9 +145,22 @@ export default function NavDrawer() {
       icon: <GroupsIcon />,
     },
     {
+      title: "Feedback",
+      to: "/feedback",
+      icon: <FeedbackIcon />,
+    },
+    {
       title: "Account Settings",
       to: "/account",
       icon: <AccountIcon />,
+    },
+  ];
+
+  const adminPages = [
+    {
+      title: "App Feedback",
+      to: "/admin/feedback",
+      icon: <InboxIcon />,
     },
   ];
 
@@ -316,6 +331,22 @@ export default function NavDrawer() {
               <Divider />
               <List>
                 {trainerPages.map((page, index) => (
+                  <ListItem key={page.title} disablePadding>
+                    <ListItemButton component={Link} to={page.to}>
+                      <ListItemIcon>{page.icon}</ListItemIcon>
+                      <ListItemText primary={page.title} />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          )}
+
+          {user.isAdmin && (
+            <>
+              <Divider />
+              <List>
+                {adminPages.map((page) => (
                   <ListItem key={page.title} disablePadding>
                     <ListItemButton component={Link} to={page.to}>
                       <ListItemIcon>{page.icon}</ListItemIcon>

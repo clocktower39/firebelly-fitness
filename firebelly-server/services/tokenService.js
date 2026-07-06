@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { isAdmin } = require("../utils/admin");
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 
@@ -36,6 +37,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   isTrainer: hasOverride(overrides, "isTrainer")
     ? Boolean(overrides.isTrainer)
     : Boolean(user.isTrainer),
+  isAdmin: isAdmin(user),
   accountType: user.accountType || "adult",
   ageBand: user.ageBand || null,
   coppaStatus: user.coppaStatus || null,
@@ -52,8 +54,10 @@ const buildTokenPayload = (user, overrides = {}) => {
   viewedUserId: overrides.viewedUserId || null,
   scope: overrides.scope || null,
   };
-  // For a delegated "view-as" token, don't expose the viewed account's PII to the acting user.
+  // For a delegated "view-as" token, don't expose the viewed account's PII to the acting user,
+  // and never carry admin powers into a delegated session.
   if (overrides.delegationMode) {
+    payload.isAdmin = false;
     payload.email = null;
     payload.phoneNumber = null;
     payload.dateOfBirth = null;

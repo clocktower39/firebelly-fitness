@@ -30,6 +30,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const pushRoutes = require("./routes/pushRoutes");
 const { enforceDelegationScope } = require("./middleware/enforceDelegationScope");
 const readinessRoutes = require("./routes/readinessRoutes");
+const feedbackRoutes = require("./routes/feedbackRoutes");
 const GuardianLink = require("./models/guardianLink");
 const User = require("./models/user");
 const Training = require("./models/training");
@@ -143,6 +144,7 @@ app.use("/", productRoutes);
 app.use("/", notificationRoutes);
 app.use("/", pushRoutes);
 app.use("/", readinessRoutes);
+app.use("/", feedbackRoutes);
 
 const connectedClients = {};
 const pagePresenceBySocket = new Map();
