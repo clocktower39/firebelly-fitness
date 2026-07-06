@@ -26,6 +26,7 @@ const ALWAYS_ALLOWED = [
 const AREA_PATTERNS = {
   workouts: [
     /^\/training$/, /^\/workouts$/, /^\/nextWorkout$/, /^\/createTraining$/, /^\/updateTraining$/,
+    /^\/swapExerciseForward$/,
     /^\/trainingWeek$/, /^\/exerciseHistory$/, /^\/exerciseProgressSummary$/, /^\/myExerciseList$/,
     /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/, /^\/workoutsRange$/, /^\/trainingRangeEnd$/,
     /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/bulkDeleteWorkouts$/, /^\/undoBulkDelete$/,
@@ -50,7 +51,7 @@ const AREA_PATTERNS = {
 // many POST-but-read endpoints (e.g. POST /workouts, POST /metrics/list) stay readable under "view".
 const WRITE_PATTERNS = {
   workouts: [
-    /^\/createTraining$/, /^\/updateTraining$/, /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/,
+    /^\/createTraining$/, /^\/updateTraining$/, /^\/swapExerciseForward$/, /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/,
     /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/bulkDeleteWorkouts$/, /^\/undoBulkDelete$/,
     /^\/deleteWorkoutById$/,
     /^\/programs$/, /^\/programs\/[^/]+$/, /^\/programs\/[^/]+\/(days|publish|assign)/,
