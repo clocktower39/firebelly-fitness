@@ -71,10 +71,11 @@ export const workoutApi = {
     scheme,
     step,
     deload,
+    autoregulate,
   }) =>
     apiFetch("/copyWorkoutById", {
       method: "POST",
-      body: { _id, newDate, newTitle, option, newAccount, progression, scheme, step, deload },
+      body: { _id, newDate, newTitle, option, newAccount, progression, scheme, step, deload, autoregulate },
     }),
 
   getTrainingRangeEnd: ({ startDate, userId }) =>
