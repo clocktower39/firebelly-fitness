@@ -34,6 +34,13 @@ const buildTokenPayload = (user, overrides = {}) => {
   customThemes: user.customThemes || [],
   weeklyFrequency: user.weeklyFrequency || null,
   preferredWorkoutDays: user.preferredWorkoutDays || [],
+  trainingExperience: user.trainingExperience || "",
+  activityLevel: user.activityLevel || "",
+  injuries: Array.isArray(user.injuries) ? user.injuries : [],
+  mobilityRestrictions: Array.isArray(user.mobilityRestrictions) ? user.mobilityRestrictions : [],
+  equipmentAccess: Array.isArray(user.equipmentAccess) ? user.equipmentAccess : [],
+  dislikedExercises: Array.isArray(user.dislikedExercises) ? user.dislikedExercises : [],
+  trainingProfile: user.trainingProfile || {},
   isTrainer: hasOverride(overrides, "isTrainer")
     ? Boolean(overrides.isTrainer)
     : Boolean(user.isTrainer),

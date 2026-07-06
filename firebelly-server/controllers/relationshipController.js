@@ -135,7 +135,11 @@ const get_my_clients = async (req, res, next) => {
   }
 
   const clients = await Relationship.find({ trainer: res.locals.user._id })
-    .populate("client", "firstName lastName profilePicture weeklyFrequency preferredWorkoutDays")
+    .populate(
+      "client",
+      "firstName lastName profilePicture weeklyFrequency preferredWorkoutDays " +
+        "trainingExperience activityLevel injuries mobilityRestrictions equipmentAccess trainingProfile"
+    )
     .exec();
   res.send(clients);
 };

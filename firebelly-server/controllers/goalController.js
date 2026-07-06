@@ -9,6 +9,9 @@ const { createNotification } = require("../services/notificationService");
 const GOAL_FIELDS = [
   "title",
   "description",
+  "motivation",
+  "priority",
+  "status",
   "category",
   "exercise",
   "targetWeight",
@@ -65,22 +68,40 @@ const checkStrengthGoalAchievement = async (userId, exerciseId, targetReps, targ
   return { achieved, achievedDate };
 };
 
-const create_goal = (req, res, next) => {
-  let goal = new Goal({
-    ...pick(req.body, GOAL_FIELDS),
-    createdDate: new Date(),
-    user: res.locals.user._id,
-  });
+const create_goal = async (req, res, next) => {
+  try {
+    const fields = pick(req.body, GOAL_FIELDS);
+    // New goals append to the bottom of the client's ranking unless a priority was supplied.
+    if (fields.priority === undefined) {
+      fields.priority = await Goal.countDocuments({ user: res.locals.user._id });
+    }
+    const goal = new Goal({ ...fields, createdDate: new Date(), user: res.locals.user._id });
+    const savedGoal = await goal.save();
+    const populatedGoal = await Goal.findById(savedGoal._id).populate(
+      "comments.user",
+      "firstName lastName profilePicture"
+    );
+    return res.send(populatedGoal);
+  } catch (err) {
+    return next(err);
+  }
+};
 
-  goal
-    .save()
-    .then((savedGoal) =>
-      Goal.findById(savedGoal._id).populate("comments.user", "firstName lastName profilePicture")
-    )
-    .then((populatedGoal) => {
-      res.send(populatedGoal);
-    })
-    .catch((err) => next(err));
+// Persist a new priority ranking for the current user's goals (drag-to-rank).
+const reorder_goals = async (req, res, next) => {
+  try {
+    const orderedIds = Array.isArray(req.body.orderedIds) ? req.body.orderedIds : [];
+    const ops = orderedIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: id, user: res.locals.user._id },
+        update: { $set: { priority: index } },
+      },
+    }));
+    if (ops.length) await Goal.bulkWrite(ops);
+    return res.send({ status: "success", count: ops.length });
+  } catch (err) {
+    return next(err);
+  }
 };
 
 const remove_goal = (req, res, next) => {
@@ -169,6 +190,7 @@ const remove_comment = (req, res, next) => {
 const get_goals = async (req, res, next) => {
   try {
     const goals = await Goal.find({ user: res.locals.user._id })
+      .sort({ priority: 1, createdDate: -1 })
       .populate("comments.user", "firstName lastName profilePicture")
       .populate("exercise", "_id exerciseTitle");
 
@@ -234,6 +256,7 @@ const get_client_goals = (req, res, next) => {
         res.send({ error: "Relationship does not exist." });
       } else if (relationship.accepted) {
         Goal.find({ user: client })
+          .sort({ priority: 1, createdDate: -1 })
           .populate("comments.user", "firstName lastName profilePicture")
           .populate("exercise", "_id exerciseTitle")
           .then((data) => {
@@ -316,6 +339,7 @@ const mark_achievement_seen = async (req, res, next) => {
 
 module.exports = {
   create_goal,
+  reorder_goals,
   remove_goal,
   update_goal,
   get_goals,

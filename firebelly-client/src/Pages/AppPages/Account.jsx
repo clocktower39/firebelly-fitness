@@ -35,6 +35,9 @@ export default function Account() {
         <ListItem button component={Link} to="/account/workout-preferences">
           <ListItemText primary="Workout Preferences" sx={{ color: "primary.contrastText" }} />
         </ListItem>
+        <ListItem button component={Link} to="/account/training-profile">
+          <ListItemText primary="Training Profile" sx={{ color: "primary.contrastText" }} />
+        </ListItem>
         <ListItem button component={Link} to="/account/notifications">
           <ListItemText primary="Notifications" sx={{ color: "primary.contrastText" }} />
         </ListItem>

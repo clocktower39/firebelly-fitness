@@ -52,6 +52,14 @@ export function addNewGoal(newGoal) {
   };
 }
 
+// Optimistically apply a new goal ranking, then persist it.
+export function reorderGoals(orderedGoals) {
+  return async (dispatch) => {
+    dispatch({ type: GET_GOALS, goals: orderedGoals });
+    await goalApi.reorderGoals(orderedGoals.map((g) => g._id));
+  };
+}
+
 export function deleteGoal(goalId) {
   return async (dispatch, getState) => {
     let results = await goalApi.deleteGoal(goalId);

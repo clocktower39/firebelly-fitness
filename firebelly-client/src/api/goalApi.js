@@ -21,6 +21,12 @@ export const goalApi = {
       body: newGoal,
     }),
 
+  reorderGoals: (orderedIds) =>
+    apiFetch("/goals/reorder", {
+      method: "POST",
+      body: { orderedIds },
+    }),
+
   deleteGoal: (goalId) =>
     apiFetch("/removeGoal", {
       method: "POST",

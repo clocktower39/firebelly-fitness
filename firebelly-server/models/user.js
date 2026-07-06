@@ -102,6 +102,20 @@ const UserSchema = new mongoose.Schema({
     },
     weeklyFrequency: { type: Number, min: 1, max: 7 },
     preferredWorkoutDays: { type: [Number], default: [] },
+    // --- Coaching-OS client Training Profile (structured intake for program generation) ---
+    trainingExperience: { type: String, enum: ["", "beginner", "intermediate", "advanced"], default: "" },
+    activityLevel: { type: String, enum: ["", "sedentary", "light", "moderate", "very_active"], default: "" },
+    injuries: { type: [String], default: [] },
+    mobilityRestrictions: { type: [String], default: [] },
+    equipmentAccess: { type: [String], default: [] }, // vocab aligned to Exercise.equipment
+    dislikedExercises: { type: [mongoose.Schema.Types.ObjectId], ref: "Exercise", default: [] },
+    trainingProfile: {
+      sleepHours: { type: Number, default: null },
+      stressLevel: { type: String, enum: ["", "low", "moderate", "high"], default: "" },
+      preferredStyle: { type: String, default: "" },
+      aestheticFocus: { type: String, default: "" },
+      notes: { type: String, default: "" },
+    },
     verified: {
         isVerified: { type: Boolean, default: false },
         verificationToken: { type: String, default: null },

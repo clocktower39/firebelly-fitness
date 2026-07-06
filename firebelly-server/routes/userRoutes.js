@@ -79,6 +79,19 @@ const updateUserValidate = {
         customThemes: Joi.object().unknown(true),
         weeklyFrequency: Joi.number(),
         preferredWorkoutDays: Joi.array().items(Joi.number().integer().min(0).max(6)),
+        trainingExperience: Joi.string().valid("", "beginner", "intermediate", "advanced"),
+        activityLevel: Joi.string().valid("", "sedentary", "light", "moderate", "very_active"),
+        injuries: Joi.array().items(Joi.string().allow("")),
+        mobilityRestrictions: Joi.array().items(Joi.string().allow("")),
+        equipmentAccess: Joi.array().items(Joi.string().allow("")),
+        dislikedExercises: Joi.array().items(Joi.string().hex().length(24)),
+        trainingProfile: Joi.object({
+          sleepHours: Joi.number().allow(null),
+          stressLevel: Joi.string().valid("", "low", "moderate", "high"),
+          preferredStyle: Joi.string().allow(""),
+          aestheticFocus: Joi.string().allow(""),
+          notes: Joi.string().allow(""),
+        }).unknown(false),
     }).min(1),
 }
 

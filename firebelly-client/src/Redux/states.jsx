@@ -10,6 +10,13 @@ export let user = {
     workoutColors: {},
     workoutTypeOrder: [],
     dailyOverviewOrder: [],
+    trainingExperience: "",
+    activityLevel: "",
+    injuries: [],
+    mobilityRestrictions: [],
+    equipmentAccess: [],
+    dislikedExercises: [],
+    trainingProfile: {},
     autoPaymentReminders: false,
     timezone: "",
     notificationPrefs: {

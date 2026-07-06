@@ -58,6 +58,7 @@ const Trainers = lazy(() => import("./Components/AccountComponents/Trainers"));
 const ChangePassword = lazy(() => import("./Components/AccountComponents/ChangePassword"));
 const LogoutConfirmation = lazy(() => import("./Components/AccountComponents/LogoutConfirmation"));
 const WorkoutPreferences = lazy(() => import("./Components/AccountComponents/WorkoutPreferences"));
+const TrainingProfile = lazy(() => import("./Components/AccountComponents/TrainingProfile"));
 const NotificationPreferences = lazy(() => import("./Components/AccountComponents/NotificationPreferences"));
 const TrainerSchedulingPreferences = lazy(() => import("./Components/AccountComponents/TrainerSchedulingPreferences"));
 const TrainerBillingPreferences = lazy(() => import("./Components/AccountComponents/TrainerBillingPreferences"));
@@ -306,6 +307,7 @@ function App({ }) {
                       <Route index={true} exact path="" element={<MyAccount />} />
                       <Route index={true} exact path="theme" element={<ThemeSettings />} />
                       <Route index={true} exact path="workout-preferences" element={<WorkoutPreferences />} />
+                      <Route index={true} exact path="training-profile" element={<TrainingProfile />} />
                       <Route index={true} exact path="notifications" element={<NotificationPreferences />} />
                       <Route index={true} exact path="trainer-scheduling" element={<TrainerSchedulingPreferences />} />
                       <Route index={true} exact path="trainer-billing" element={<TrainerBillingPreferences />} />

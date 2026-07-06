@@ -37,6 +37,13 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "customThemes",
   "weeklyFrequency",
   "preferredWorkoutDays",
+  "trainingExperience",
+  "activityLevel",
+  "injuries",
+  "mobilityRestrictions",
+  "equipmentAccess",
+  "dislikedExercises",
+  "trainingProfile",
 ];
 
 const signup_user = async (req, res, next) => {

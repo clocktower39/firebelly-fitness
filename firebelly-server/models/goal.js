@@ -2,8 +2,14 @@ const mongoose = require("mongoose");
 
 const goalSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  title: { type: String, required: true, index: { unique: true } },
+  // NOTE: previously `title` had a GLOBAL unique index, which wrongly blocked two clients from
+  // sharing a goal title. Uniqueness dropped; the legacy `title_1` index must be dropped in the DB.
+  title: { type: String, required: true },
   description: { type: String },
+  // Coaching-OS fields: rank goals by priority, capture the "why", and a lifecycle status.
+  priority: { type: Number, default: 0 }, // ascending = higher priority; set by the reorder endpoint
+  motivation: { type: String, default: "" }, // why this goal matters to the client
+  status: { type: String, enum: ["active", "achieved", "paused", "dropped"], default: "active" },
   category: { type: String, enum: ["General", "Strength", "Cardio", "Skill", "Weight", ""], default: "General" },
   distanceUnit: { type: String, enum: ["Miles", "Kilometers", "Meters", "Yards", ""], default: "" },
   distanceValue: { type: Number },

@@ -31,6 +31,8 @@ import {
   AccountCircle,
   AddCircle,
   Delete,
+  KeyboardArrowUp,
+  KeyboardArrowDown,
 } from "@mui/icons-material";
 import {
   getGoals,
@@ -38,6 +40,7 @@ import {
   addGoalComment,
   removeGoalComment,
   addNewGoal,
+  reorderGoals,
   deleteGoal,
   requestExerciseLibrary,
   markAchievementSeen,
@@ -113,10 +116,10 @@ const getCategoryColor = (category) => {
   }
 };
 
-const GoalCard = ({ goal, onOpen, weightUnit = "lbs" }) => {
+const GoalCard = ({ goal, onOpen, weightUnit = "lbs", onMove, isFirst, isLast }) => {
   const isStrengthGoal = goal.category === "Strength" && goal.exercise;
   const hasUnseenAchievement = goal.achievedDate && !goal.achievementSeen;
-  
+
   return (
     <Grid
       container
@@ -124,6 +127,24 @@ const GoalCard = ({ goal, onOpen, weightUnit = "lbs" }) => {
       sx={{ justifyContent: "center" }}
     >
       <Box sx={{ width: "100%" }}>
+        {onMove && (
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 0.25 }}>
+            <Tooltip title="Higher priority">
+              <span>
+                <IconButton size="small" disabled={isFirst} onClick={() => onMove(-1)}>
+                  <KeyboardArrowUp fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Lower priority">
+              <span>
+                <IconButton size="small" disabled={isLast} onClick={() => onMove(1)}>
+                  <KeyboardArrowDown fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        )}
         <Badge
           badgeContent="Achieved!"
           color="success"
@@ -196,6 +217,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
   const [title, setTitle] = useState(goal.title || '');
   const [description, setDescription] = useState(goal.description || '');
+  const [motivation, setMotivation] = useState(goal.motivation || '');
+  const [status, setStatus] = useState(goal.status || 'active');
   const [category, setCategory] = useState(goal.category || '');
   const [selectedExercise, setSelectedExercise] = useState(goal.exercise || null);
   const [targetWeight, setTargetWeight] = useState(
@@ -254,6 +277,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       _id: goal._id,
       title: isStrengthGoal && selectedExercise ? selectedExercise.exerciseTitle : title,
       description,
+      motivation,
+      status,
       category,
       targetDate,
     };
@@ -291,6 +316,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   const resetEdit = () => {
     setTitle(goal.title || '');
     setDescription(goal.description || '');
+    setMotivation(goal.motivation || '');
+    setStatus(goal.status || 'active');
     setCategory(goal.category || '');
     setSelectedExercise(goal.exercise || null);
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
@@ -634,6 +661,32 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
               slotProps={shrinkLabelSlotProps}
             />
           </Grid>
+          <Grid container size={12}>
+            <TextField
+              type="text"
+              fullWidth
+              multiline
+              label="Why does this matter?"
+              value={motivation}
+              onChange={(e) => handleChange(e, setMotivation)}
+              slotProps={shrinkLabelSlotProps}
+            />
+          </Grid>
+          <Grid container size={12}>
+            <TextField
+              select
+              fullWidth
+              label="Status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              slotProps={shrinkLabelSlotProps}
+            >
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="paused">Paused</MenuItem>
+              <MenuItem value="achieved">Achieved</MenuItem>
+              <MenuItem value="dropped">Dropped</MenuItem>
+            </TextField>
+          </Grid>
           <Grid container size={12} spacing={2} sx={{ justifyContent: 'center' }}>
             <Grid>
               <Button color='secondaryButton' variant="contained" onClick={resetEdit}>
@@ -722,6 +775,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [motivation, setMotivation] = useState('');
   const [category, setCategory] = useState('General');
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [targetWeight, setTargetWeight] = useState('');
@@ -771,6 +825,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   const resetForm = () => {
     setTitle('');
     setDescription('');
+    setMotivation('');
     setCategory('General');
     setSelectedExercise(null);
     setTargetWeight('');
@@ -787,6 +842,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
     const goalData = {
       title: isStrengthGoal && selectedExercise ? selectedExercise.exerciseTitle : title,
       description,
+      motivation,
       category,
       targetDate,
     };
@@ -974,6 +1030,17 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
               slotProps={shrinkLabelSlotProps}
             />
           </Grid>
+          <Grid container size={12}>
+            <TextField
+              type="text"
+              fullWidth
+              multiline
+              label="Why does this matter?"
+              value={motivation}
+              onChange={(e) => handleChange(e, setMotivation)}
+              slotProps={shrinkLabelSlotProps}
+            />
+          </Grid>
           <Grid container size={12} spacing={2} sx={{ justifyContent: 'center' }}>
             <Grid>
               <Button color='secondaryButton' variant="contained" onClick={resetForm}>
@@ -1015,6 +1082,17 @@ export default function Goals({ view = "client", client, }) {
   const handleOpenAddNewGoal = () => setOpenAddNewGoal(true);
   const handleCloseAddNewGoal = () => setOpenAddNewGoal(false);
 
+  // Client re-ranks their own goals by priority (persisted via the reorder endpoint).
+  const canReorder = view === "client" && Array.isArray(goals);
+  const moveGoal = (index, dir) => {
+    const next = index + dir;
+    if (!goals || next < 0 || next >= goals.length) return;
+    const reordered = [...goals];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(next, 0, moved);
+    dispatch(reorderGoals(reordered));
+  };
+
   useEffect(() => {
     setSelectedGoal(prev => {
       return prev ? goals.filter(goal => goal._id === prev._id)[0] : prev;
@@ -1042,8 +1120,16 @@ export default function Goals({ view = "client", client, }) {
           </Grid>
 
           <Grid container size={12} spacing={1} sx={{ alignSelf: 'flex-start', alignContent: 'flex-start', overflowY: 'scroll', scrollbarWidth: 'none', flex: 'auto', }}>
-            {goals && goals.map((goal) => (
-              <GoalCard key={goal._id} goal={goal} onOpen={handleOpenGoalDetails} weightUnit={weightUnit} />
+            {goals && goals.map((goal, index) => (
+              <GoalCard
+                key={goal._id}
+                goal={goal}
+                onOpen={handleOpenGoalDetails}
+                weightUnit={weightUnit}
+                onMove={canReorder ? (dir) => moveGoal(index, dir) : undefined}
+                isFirst={index === 0}
+                isLast={index === goals.length - 1}
+              />
             ))}
           </Grid>
 
