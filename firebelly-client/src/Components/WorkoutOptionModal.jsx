@@ -202,6 +202,22 @@ export function ModalAction(props) {
       });
     };
   
+    // After a copy, land on the workout it created: the target client's day (not the client
+    // list) when copying for a client, otherwise the acting user's own day.
+    const goToCopiedWorkout = (dateInput) => {
+      const dateKey = dayjs.utc(dateInput).format("YYYYMMDD");
+      const targetAccountId = newAccount?.value || training?.user?._id;
+      if (targetAccountId && String(targetAccountId) !== String(user._id)) {
+        navigate(`/?client=${targetAccountId}&date=${dateKey}`);
+      } else if (setSelectedDate) {
+        setSelectedDate(dayjs.utc(dateInput).format("YYYY-MM-DD"));
+      } else if (dateKey === dayjs(new Date()).format("YYYYMMDD")) {
+        navigate("/");
+      } else {
+        navigate(`/?date=${dateKey}`);
+      }
+    };
+
     const handleCopy = () => {
       const isAuto = copyOption.value === "autoregulate";
       dispatch(
@@ -219,15 +235,9 @@ export function ModalAction(props) {
           return;
         }
         setActionError(false);
-        // Close and jump to the copied date, same as every other copy/move.
+        // Close and jump to the copied workout, same as every other copy/move.
         handleModalToggle();
-        !isPersonalWorkout()
-          ? navigate("/clients")
-          : setSelectedDate
-          ? setSelectedDate(dayjs.utc(newDate).format("YYYY-MM-DD"))
-          : dayjs.utc(newDate).format("YYYY-MM-DD") === dayjs(new Date()).format("YYYY-MM-DD")
-          ? navigate("/")
-          : navigate(`/?date=${dayjs.utc(newDate).format("YYYYMMDD")}`);
+        goToCopiedWorkout(newDate);
       });
     };
 
@@ -265,13 +275,7 @@ export function ModalAction(props) {
                 .format("YYYY-MM-DD")
             : dayjs.utc(rangeTargetDate).format("YYYY-MM-DD");
 
-          !isPersonalWorkout()
-            ? navigate("/clients")
-            : setSelectedDate
-            ? setSelectedDate(firstCopiedDate)
-            : firstCopiedDate === dayjs(new Date()).format("YYYY-MM-DD")
-            ? navigate("/")
-            : navigate(`/?date=${dayjs.utc(firstCopiedDate).format("YYYYMMDD")}`);
+          goToCopiedWorkout(firstCopiedDate);
         }
       });
     };
