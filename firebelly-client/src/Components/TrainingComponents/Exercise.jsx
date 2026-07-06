@@ -648,7 +648,7 @@ export default function Exercise(props) {
                 >
                   View Progress Chart
                 </MenuItem>
-                {user?.isTrainer && (
+                {(user?.isTrainer || user?.delegationMode === "trainer_client") && (
                   <MenuItem
                     onClick={() => {
                       setSwapOpen(true);
