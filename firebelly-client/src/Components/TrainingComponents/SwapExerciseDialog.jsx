@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -29,7 +29,17 @@ import { swapExerciseForward } from "../../Redux/actions";
 export default function SwapExerciseDialog({ open, onClose, currentExercise, onApplied }) {
   const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
-  const workout = useSelector((state) => state.training);
+  const params = useParams();
+  // Source the open workout the way the editor does — from the workout buckets by the route
+  // id. (state.training is a legacy slice that isn't reliably the currently-open workout, so
+  // reading it left the anchor undefined and kept "Apply swap" disabled.)
+  const workout = useSelector((state) => {
+    for (const bucket of Object.values(state.workouts || {})) {
+      const match = (bucket?.workouts || []).find((w) => w._id === params._id);
+      if (match) return match;
+    }
+    return state.training || null;
+  });
   const exerciseList = useSelector((state) => state.progress.exerciseList) || [];
 
   const isTemplate = Boolean(workout?.isTemplate);
