@@ -16,6 +16,7 @@ const {
 const { createNotification } = require("../../services/notificationService");
 const { bridgeWorkoutComment } = require("../../services/messagingBridge");
 const { sanitizeTrainingTechniques } = require("../../services/techniqueValidation");
+const { applyResultsToFutureProgram } = require("../../services/reactiveProgression");
 
 const create_training = async (req, res, next) => {
   try {
@@ -150,6 +151,18 @@ const update_training = async (req, res, next) => {
       }
     }
 
+    // When a client completes a workout in an assigned program, seed the recommended loads for
+    // its exercises in their later, not-yet-done workouts from what they actually achieved
+    // (best-effort; never blocks the save). Returned so the client can upsert the fresh docs.
+    let reactiveUpdates = [];
+    if (!wasComplete && isComplete) {
+      try {
+        reactiveUpdates = await applyResultsToFutureProgram(training);
+      } catch (err) {
+        console.error("reactive progression failed:", err.message);
+      }
+    }
+
     // Notify the client's active trainers when a workout is completed (best-effort; never
     // blocks the save). Skips whoever performed the action (e.g. a trainer completing it).
     if (!wasComplete && isComplete) {
@@ -257,7 +270,17 @@ const update_training = async (req, res, next) => {
       workout: training,
     });
 
-    return res.send({ training });
+    // Push the reactively-seeded future workouts to any other connected devices too.
+    reactiveUpdates.forEach((w) => {
+      const acct = String(w.user?._id || w.user);
+      global.io?.to(`workouts:${acct}`).emit("workoutUpdated", {
+        workoutId: String(w._id),
+        accountId: acct,
+        workout: w,
+      });
+    });
+
+    return res.send({ training, reactiveUpdates });
   } catch (err) {
     return next(err);
   }

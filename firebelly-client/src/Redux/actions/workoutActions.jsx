@@ -267,6 +267,9 @@ export function updateTraining(trainingId, updatedTraining) {
     } else {
       const savedTraining = data.training || updatedTraining;
       dispatch(upsertWorkout(savedTraining));
+      // Completing a program workout may seed later workouts' recommended loads from what was
+      // achieved — refresh those in the store so upcoming weeks show the new weights.
+      (data.reactiveUpdates || []).forEach((w) => dispatch(upsertWorkout(w)));
       return savedTraining;
     }
   };
