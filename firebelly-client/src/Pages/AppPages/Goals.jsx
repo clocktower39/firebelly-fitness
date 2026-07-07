@@ -80,6 +80,10 @@ const GOAL_TYPES = [
 ];
 const goalTypeLabel = (v) => GOAL_TYPES.find((t) => t.value === v)?.label || "";
 
+// Aesthetic goals: main body groups to focus on + the body measurements (circumferences) to track.
+const BODY_FOCUS_AREAS = ["Chest", "Back", "Shoulders", "Arms", "Forearms", "Core / Waist", "Glutes", "Thighs", "Calves", "Neck"];
+const BODY_MEASUREMENT_AREAS = ["Neck", "Shoulders", "Chest", "Arms", "Forearms", "Waist", "Glutes", "Thighs", "Calves"];
+
 // How a goal is measured. Chosen once (defaulted from the goal type) — drives which inputs show and
 // derives the legacy `category` the server/measurement logic keys off, so there's no second dropdown.
 const MEASURE_MODES = [
@@ -251,7 +255,7 @@ const GoalCard = ({ goal, onOpen, weightUnit = "lbs" }) => {
   );
 };
 
-const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, latestMetric, weightUnit = "lbs" }) => {
+export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, latestMetric, weightUnit = "lbs" }) => {
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
   const [title, setTitle] = useState(goal.title || '');
@@ -277,6 +281,12 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     goal.startingWeight ? String(fromStoredLbs(goal.startingWeight, normalizedWeightUnit)) : ''
   );
   const [startingEdited, setStartingEdited] = useState(Boolean(goal.startingWeight));
+  const [startingTime, setStartingTime] = useState(goal.startingTime || '');
+  const [focusAreas, setFocusAreas] = useState(goal.focusAreas || []);
+  const [focusNotes, setFocusNotes] = useState(goal.focusNotes || '');
+  const [measurementArea, setMeasurementArea] = useState(goal.measurementArea || '');
+  const [targetMeasurement, setTargetMeasurement] = useState(goal.targetMeasurement ?? '');
+  const [startingMeasurement, setStartingMeasurement] = useState(goal.startingMeasurement ?? '');
   const [targetDate, setTargetDate] = useState(goal.targetDate || '');
   const [achievedDate, setAchievedDate] = useState(goal.achievedDate || '');
   const [newComment, setNewComment] = useState('');
@@ -285,6 +295,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   const isStrengthGoal = measureBy === "lift";
   const isCardioGoal = measureBy === "cardio";
   const isWeightGoal = measureBy === "bodyweight";
+  const isAesthetic = goalType === "aesthetic";
 
   const handleChange = (e, setter) => setter(e.target.value);
   const handleDistanceUnitChange = (nextUnit) => {
@@ -343,6 +354,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       goalData.distanceUnit = distanceUnit;
       goalData.distanceValue = distanceValue === '' ? null : Number(distanceValue);
       goalData.goalTime = goalTime || null;
+      goalData.startingTime = startingTime || null;
       goalData.goalWeight = null;
       goalData.achievedDate = achievedDate;
     } else if (isWeightGoal) {
@@ -357,6 +369,13 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       goalData.goalTime = null;
       goalData.goalWeight = null;
       goalData.achievedDate = achievedDate;
+    }
+    if (isAesthetic) {
+      goalData.focusAreas = focusAreas;
+      goalData.focusNotes = focusNotes;
+      goalData.measurementArea = measurementArea;
+      goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
+      goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
     }
     dispatch(updateGoal(goalData));
   };
@@ -380,6 +399,12 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
     setStartingWeight(goal.startingWeight ? String(fromStoredLbs(goal.startingWeight, normalizedWeightUnit)) : '');
     setStartingEdited(Boolean(goal.startingWeight));
+    setStartingTime(goal.startingTime || '');
+    setFocusAreas(goal.focusAreas || []);
+    setFocusNotes(goal.focusNotes || '');
+    setMeasurementArea(goal.measurementArea || '');
+    setTargetMeasurement(goal.targetMeasurement ?? '');
+    setStartingMeasurement(goal.startingMeasurement ?? '');
     setTargetReps(goal.targetReps || '');
     setDistanceUnit(goal.distanceUnit || 'Miles');
     setDistanceValue(goal.distanceValue || '');
@@ -500,24 +525,26 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       <DialogContent>
         <Grid container spacing={1} sx={{ padding: "10px 0px" }}>
           <Grid container size={12}>
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                How it&apos;s measured
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={measureBy}
-                onChange={(e, v) => v && setMeasureBy(v)}
-                sx={{ flexWrap: "wrap" }}
-              >
-                {MEASURE_MODES.map((m) => (
-                  <ToggleButton key={m.value} value={m.value} sx={{ textTransform: "none" }}>
-                    {m.label}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-            </Box>
+            {!isAesthetic && (
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                  How it&apos;s measured
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={measureBy}
+                  onChange={(e, v) => v && setMeasureBy(v)}
+                  sx={{ flexWrap: "wrap" }}
+                >
+                  {MEASURE_MODES.map((m) => (
+                    <ToggleButton key={m.value} value={m.value} sx={{ textTransform: "none" }}>
+                      {m.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+            )}
           </Grid>
           {isStrengthGoal ? (
             <>
@@ -628,6 +655,18 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
                       slotProps={timeInputSlotProps}
                     />
                   </Grid>
+                  <Grid container size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      type="text"
+                      fullWidth
+                      label="Current best time (optional)"
+                      value={startingTime}
+                      onChange={(e) => setStartingTime(formatRaceTime(e.target.value))}
+                      placeholder="HH:MM:SS"
+                      helperText="What you can already do"
+                      slotProps={timeInputSlotProps}
+                    />
+                  </Grid>
                 </>
               )}
               {isWeightGoal && (
@@ -675,6 +714,57 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
                       onChange={(e) => setGoalWeight(e.target.value)}
                       slotProps={weightNumberSlotProps}
                     />
+                  </Grid>
+                </>
+              )}
+            </>
+          )}
+          {isAesthetic && (
+            <>
+              <Grid container size={12}>
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={BODY_FOCUS_AREAS}
+                  value={focusAreas}
+                  onChange={(e, v) => setFocusAreas(v)}
+                  renderInput={(params) => <TextField {...params} label="Focus areas" placeholder="Body areas to focus on" />}
+                  fullWidth
+                />
+              </Grid>
+              <Grid container size={12}>
+                <TextField
+                  fullWidth
+                  multiline
+                  label="What to focus on"
+                  placeholder="e.g. rounder glutes, trim the waist"
+                  value={focusNotes}
+                  onChange={(e) => setFocusNotes(e.target.value)}
+                  slotProps={shrinkLabelSlotProps}
+                />
+              </Grid>
+              <Grid container size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Track a measurement"
+                  value={measurementArea}
+                  onChange={(e) => setMeasurementArea(e.target.value)}
+                  slotProps={shrinkLabelSlotProps}
+                >
+                  <MenuItem value=""><em>None</em></MenuItem>
+                  {BODY_MEASUREMENT_AREAS.map((a) => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+                </TextField>
+              </Grid>
+              {measurementArea && (
+                <>
+                  <Grid container size={{ xs: 6, sm: 4 }}>
+                    <TextField type="number" fullWidth label="Current" value={startingMeasurement}
+                      onChange={(e) => setStartingMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                  </Grid>
+                  <Grid container size={{ xs: 6, sm: 4 }}>
+                    <TextField type="number" fullWidth label="Target" value={targetMeasurement}
+                      onChange={(e) => setTargetMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
                   </Grid>
                 </>
               )}
@@ -885,11 +975,18 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
   const [currentMax, setCurrentMax] = useState(null);
   const [startingWeight, setStartingWeight] = useState('');
   const [startingEdited, setStartingEdited] = useState(false);
+  const [startingTime, setStartingTime] = useState('');
+  const [focusAreas, setFocusAreas] = useState([]);
+  const [focusNotes, setFocusNotes] = useState('');
+  const [measurementArea, setMeasurementArea] = useState('');
+  const [targetMeasurement, setTargetMeasurement] = useState('');
+  const [startingMeasurement, setStartingMeasurement] = useState('');
   const [targetDate, setTargetDate] = useState('');
 
   const isStrengthGoal = measureBy === "lift";
   const isCardioGoal = measureBy === "cardio";
   const isWeightGoal = measureBy === "bodyweight";
+  const isAesthetic = goalType === "aesthetic";
 
   // Picking a goal type pre-selects how it's measured (the user can still change it in step 2).
   const handleGoalTypeChange = (value) => {
@@ -958,6 +1055,12 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
     setCurrentMax(null);
     setStartingWeight('');
     setStartingEdited(false);
+    setStartingTime('');
+    setFocusAreas([]);
+    setFocusNotes('');
+    setMeasurementArea('');
+    setTargetMeasurement('');
+    setStartingMeasurement('');
     setTargetDate('');
   };
 
@@ -981,8 +1084,16 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
       goalData.distanceUnit = distanceUnit;
       goalData.distanceValue = distanceValue === '' ? null : Number(distanceValue);
       goalData.goalTime = goalTime || null;
+      goalData.startingTime = startingTime || null;
     } else if (isWeightGoal) {
       goalData.goalWeight = goalWeight === '' ? null : toStoredLbs(goalWeight, normalizedWeightUnit);
+    }
+    if (isAesthetic) {
+      goalData.focusAreas = focusAreas;
+      goalData.focusNotes = focusNotes;
+      goalData.measurementArea = measurementArea;
+      goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
+      goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
     }
     dispatch(addNewGoal(goalData))
       .then(() => {
@@ -1014,9 +1125,16 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
       <DialogTitle id="alert-dialog-title">
         {["Your goal", "Why & how important"][step]}
       </DialogTitle>
-      <DialogContent>
-        <SwipeableViews index={step} onChangeIndex={handleGoalSwipe} enableMouseEvents animateHeight>
-          <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
+      <DialogContent sx={{ p: 0, flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
+        <SwipeableViews
+          index={step}
+          onChangeIndex={handleGoalSwipe}
+          enableMouseEvents
+          style={{ height: "100%", width: "100%" }}
+          containerStyle={{ height: "100%" }}
+          slideStyle={{ height: "100%", overflowY: "auto", WebkitOverflowScrolling: "touch" }}
+        >
+          <Box sx={{ maxWidth: 600, mx: "auto", p: 2 }}>
             <Stack spacing={2.5}>
               <Typography variant="h6">What do you want to achieve?</Typography>
               <TextField
@@ -1030,24 +1148,26 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
                 <MenuItem value=""><em>Choose a type…</em></MenuItem>
                 {GOAL_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
               </TextField>
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                  How will you measure it?
-                </Typography>
-                <ToggleButtonGroup
-                  exclusive
-                  size="small"
-                  value={measureBy}
-                  onChange={(e, v) => v && setMeasureBy(v)}
-                  sx={{ flexWrap: "wrap" }}
-                >
-                  {MEASURE_MODES.map((m) => (
-                    <ToggleButton key={m.value} value={m.value} sx={{ textTransform: "none" }}>
-                      {m.label}
-                    </ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              </Box>
+              {!isAesthetic && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                    How will you measure it?
+                  </Typography>
+                  <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={measureBy}
+                    onChange={(e, v) => v && setMeasureBy(v)}
+                    sx={{ flexWrap: "wrap" }}
+                  >
+                    {MEASURE_MODES.map((m) => (
+                      <ToggleButton key={m.value} value={m.value} sx={{ textTransform: "none" }}>
+                        {m.label}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                </Box>
+              )}
               <Grid container spacing={1}>
           {isStrengthGoal ? (
             <>
@@ -1158,6 +1278,18 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
                       slotProps={timeInputSlotProps}
                     />
                   </Grid>
+                  <Grid container size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      type="text"
+                      fullWidth
+                      label="Current best time (optional)"
+                      value={startingTime}
+                      onChange={(e) => setStartingTime(formatRaceTime(e.target.value))}
+                      placeholder="HH:MM:SS"
+                      helperText="What you can already do"
+                      slotProps={timeInputSlotProps}
+                    />
+                  </Grid>
                 </>
               )}
             </>
@@ -1173,6 +1305,57 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
                       slotProps={shrinkLabelSlotProps}
                     />
                   </Grid>
+                )}
+                {isAesthetic && (
+                  <>
+                    <Grid container size={12}>
+                      <Autocomplete
+                        multiple
+                        freeSolo
+                        options={BODY_FOCUS_AREAS}
+                        value={focusAreas}
+                        onChange={(e, v) => setFocusAreas(v)}
+                        renderInput={(params) => <TextField {...params} label="Focus areas" placeholder="Body areas to focus on" />}
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid container size={12}>
+                      <TextField
+                        fullWidth
+                        multiline
+                        label="What to focus on"
+                        placeholder="e.g. rounder glutes, trim the waist"
+                        value={focusNotes}
+                        onChange={(e) => setFocusNotes(e.target.value)}
+                        slotProps={shrinkLabelSlotProps}
+                      />
+                    </Grid>
+                    <Grid container size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Track a measurement"
+                        value={measurementArea}
+                        onChange={(e) => setMeasurementArea(e.target.value)}
+                        slotProps={shrinkLabelSlotProps}
+                      >
+                        <MenuItem value=""><em>None</em></MenuItem>
+                        {BODY_MEASUREMENT_AREAS.map((a) => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+                      </TextField>
+                    </Grid>
+                    {measurementArea && (
+                      <>
+                        <Grid container size={{ xs: 6, sm: 4 }}>
+                          <TextField type="number" fullWidth label="Current" value={startingMeasurement}
+                            onChange={(e) => setStartingMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                        </Grid>
+                        <Grid container size={{ xs: 6, sm: 4 }}>
+                          <TextField type="number" fullWidth label="Target" value={targetMeasurement}
+                            onChange={(e) => setTargetMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                        </Grid>
+                      </>
+                    )}
+                  </>
                 )}
                 <Grid container size={12}>
                   <TextField
@@ -1198,7 +1381,7 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
               </Grid>
             </Stack>
           </Box>
-          <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
+          <Box sx={{ maxWidth: 600, mx: "auto", p: 2 }}>
             <Stack spacing={2}>
               <Typography variant="h6">Why &amp; how important?</Typography>
               <TextField

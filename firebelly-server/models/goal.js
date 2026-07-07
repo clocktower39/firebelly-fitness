@@ -28,6 +28,13 @@ const goalSchema = new mongoose.Schema({
   targetWeight: { type: Number },
   targetReps: { type: Number },
   startingWeight: { type: Number }, // the client's current max at targetReps (auto-pulled or entered manually)
+  startingTime: { type: String }, // cardio: current best time at the distance (HH:MM:SS)
+  // Aesthetic goals: focus body areas + details, optionally tracked by a body measurement.
+  focusAreas: { type: [String], default: [] },
+  focusNotes: { type: String, default: "" },
+  measurementArea: { type: String, default: "" },
+  targetMeasurement: { type: Number },
+  startingMeasurement: { type: Number },
   targetDate: { type: Date },
   achievedDate: { type: Date },
   achievementSeen: { type: Boolean, default: false },

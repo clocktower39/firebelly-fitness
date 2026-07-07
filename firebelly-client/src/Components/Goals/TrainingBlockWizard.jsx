@@ -33,7 +33,7 @@ import {
 import { updateUserSettings } from "../../Redux/actions/accountActions";
 import { EXPERIENCE, ACTIVITY, EQUIPMENT_OPTIONS } from "../../utils/trainingProfileOptions";
 import ProgramReadinessCard from "../AccountComponents/ProgramReadinessCard";
-import { AddNewGoal } from "../../Pages/AppPages/Goals";
+import { AddNewGoal, GoalDetails } from "../../Pages/AppPages/Goals";
 
 const SwipeableViews = SwipeableViewsModule.default ?? SwipeableViewsModule;
 const STEP_TITLES = ["Your time period", "Your training context", "Your goals", "Review"];
@@ -54,6 +54,7 @@ export default function TrainingBlockWizard({ open, onClose }) {
   const [block, setBlock] = useState(null);
   const [busy, setBusy] = useState(false);
   const [addGoalOpen, setAddGoalOpen] = useState(false);
+  const [editGoal, setEditGoal] = useState(null);
 
   // Step 0 — time period
   const [title, setTitle] = useState("");
@@ -174,8 +175,15 @@ export default function TrainingBlockWizard({ open, onClose }) {
           {STEP_TITLES[step]}
           <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
         </DialogTitle>
-        <DialogContent dividers sx={{ p: 0 }}>
-          <SwipeableViews index={step} onChangeIndex={handleSwipe} enableMouseEvents animateHeight>
+        <DialogContent dividers sx={{ p: 0, flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
+          <SwipeableViews
+            index={step}
+            onChangeIndex={handleSwipe}
+            enableMouseEvents
+            style={{ height: "100%", width: "100%" }}
+            containerStyle={{ height: "100%" }}
+            slideStyle={{ height: "100%", overflowY: "auto", WebkitOverflowScrolling: "touch" }}
+          >
             {/* Step 0 — time period */}
             <Box sx={{ p: 2 }}>
               <Stack spacing={2}>
@@ -261,11 +269,14 @@ export default function TrainingBlockWizard({ open, onClose }) {
                   <Stack spacing={1}>
                     {blockGoals.map((g) => (
                       <Paper key={g._id} variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <Box>
+                        <Box sx={{ cursor: "pointer", flex: 1 }} onClick={() => setEditGoal(g)}>
                           <Typography variant="body1">{g.title}</Typography>
-                          {g.importanceScore ? (
-                            <Chip size="small" variant="outlined" color="primary" label={`Importance ${g.importanceScore}/10`} />
-                          ) : null}
+                          <Stack direction="row" spacing={0.5} sx={{ mt: 0.25 }}>
+                            {g.importanceScore ? (
+                              <Chip size="small" variant="outlined" color="primary" label={`Importance ${g.importanceScore}/10`} />
+                            ) : null}
+                            <Chip size="small" variant="outlined" label="Tap to edit" />
+                          </Stack>
                         </Box>
                         <IconButton size="small" onClick={() => dispatch(deleteGoal(g._id))}>
                           <Delete fontSize="small" />
@@ -337,6 +348,19 @@ export default function TrainingBlockWizard({ open, onClose }) {
         trainingBlockId={block?._id}
         defaultTargetDate={blockEndISO}
       />
+
+      {editGoal && (
+        <GoalDetails
+          goal={editGoal}
+          open={Boolean(editGoal)}
+          onClose={() => setEditGoal(null)}
+          dispatch={dispatch}
+          user={user}
+          exerciseLibrary={exerciseLibrary}
+          latestMetric={latestMetric}
+          weightUnit={user.workoutWeightUnit}
+        />
+      )}
     </>
   );
 }
