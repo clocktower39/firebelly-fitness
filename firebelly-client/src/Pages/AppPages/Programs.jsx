@@ -102,6 +102,16 @@ export default function Programs() {
     dispatch(requestClients());
   }, [dispatch, user?.isTrainer]);
 
+  const handleDeleteProgram = async (program) => {
+    if (!window.confirm(`Delete "${program.title || "this program"}"? This can't be undone.`)) return;
+    try {
+      await programApi.deleteProgram(program._id);
+      setPrograms((prev) => prev.filter((p) => p._id !== program._id));
+    } catch (e) {
+      window.alert("Couldn't delete the program. Please try again.");
+    }
+  };
+
   const hasSharedPrograms = useMemo(() => 
     programs.some((p) => p.isShared), [programs]);
 
@@ -262,6 +272,16 @@ export default function Programs() {
                       onClick={() => handleOpenAssign(program)}
                     >
                       Assign to client
+                    </Button>
+                  )}
+                  {program.isOwn && (
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => handleDeleteProgram(program)}
+                      sx={{ ml: "auto" }}
+                    >
+                      Delete
                     </Button>
                   )}
                 </CardActions>

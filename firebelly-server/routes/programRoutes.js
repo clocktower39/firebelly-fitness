@@ -18,5 +18,6 @@ router.put(
 );
 router.post("/programs/:id/publish", verifyAccessToken, ensureWriteAccess, programController.publish_program);
 router.post("/programs/:id/assign", verifyAccessToken, ensureWriteAccess, programController.assign_program);
+router.delete("/programs/:id", verifyAccessToken, ensureWriteAccess, programController.delete_program);
 
 module.exports = router;

@@ -5,6 +5,7 @@ const Training = require("../models/training");
 const Exercise = require("../models/exercise");
 const Product = require("../models/product");
 const Relationship = require("../models/relationship");
+const TrainingBlock = require("../models/trainingBlock");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 const { createNotification } = require("../services/notificationService");
 const { generateProgramFromBlock } = require("../services/programGenerator");
@@ -434,8 +435,26 @@ const generate_program_from_block = async (req, res, next) => {
   }
 };
 
+// Owner deletes a program: removes its template workouts, unlinks any Training Block + marketplace product.
+const delete_program = async (req, res, next) => {
+  try {
+    const program = await Program.findOne({ _id: req.params.id, ownerId: res.locals.user._id });
+    if (!program) return res.status(404).send({ error: "Program not found" });
+    const ids = [];
+    (program.weeks || []).forEach((wk) => wk.forEach((d) => d.workoutId && ids.push(d.workoutId)));
+    if (ids.length) await Training.deleteMany({ _id: { $in: ids }, isTemplate: true }); // templates only, never assigned client workouts
+    await TrainingBlock.updateMany({ program: program._id }, { $set: { program: null } });
+    await Product.deleteMany({ programId: program._id });
+    await Program.deleteOne({ _id: program._id });
+    return res.send({ status: "deleted", _id: program._id });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_program,
+  delete_program,
   generate_program_from_block,
   list_programs,
   get_program,

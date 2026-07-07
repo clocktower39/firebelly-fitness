@@ -24,6 +24,11 @@ export const programApi = {
       body: { trainingBlockId },
     }),
 
+  deleteProgram: (programId) =>
+    apiFetch(`/programs/${encodeURIComponent(programId)}`, {
+      method: "DELETE",
+    }),
+
   updateProgram: (programId, payload) =>
     apiFetch(`/programs/${encodeURIComponent(programId)}`, {
       method: "PUT",
