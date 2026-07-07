@@ -20,10 +20,14 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
+  MobileStepper,
   Paper,
   Select,
+  Slider,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -31,8 +35,6 @@ import {
   AccountCircle,
   AddCircle,
   Delete,
-  KeyboardArrowUp,
-  KeyboardArrowDown,
 } from "@mui/icons-material";
 import {
   getGoals,
@@ -40,7 +42,6 @@ import {
   addGoalComment,
   removeGoalComment,
   addNewGoal,
-  reorderGoals,
   deleteGoal,
   requestExerciseLibrary,
   markAchievementSeen,
@@ -72,6 +73,32 @@ const GOAL_TYPES = [
   { value: "other", label: "Other" },
 ];
 const goalTypeLabel = (v) => GOAL_TYPES.find((t) => t.value === v)?.label || "";
+
+// How a goal is measured. Chosen once (defaulted from the goal type) — drives which inputs show and
+// derives the legacy `category` the server/measurement logic keys off, so there's no second dropdown.
+const MEASURE_MODES = [
+  { value: "lift", label: "A lift", hint: "weight × reps", category: "Strength" },
+  { value: "cardio", label: "Distance / time", hint: "e.g. run a 5k", category: "Cardio" },
+  { value: "bodyweight", label: "Body weight", hint: "scale target", category: "Weight" },
+  { value: "general", label: "General", hint: "describe it", category: "General" },
+];
+const defaultMeasureForType = (goalType) => {
+  switch (goalType) {
+    case "strength": return "lift";
+    case "endurance": return "cardio";
+    case "fat_loss":
+    case "health": return "bodyweight";
+    default: return "general"; // hypertrophy, performance, mobility, aesthetic, sport, skill, other, ""
+  }
+};
+const categoryForMeasure = (measureBy) =>
+  MEASURE_MODES.find((m) => m.value === measureBy)?.category || "General";
+const measureForCategory = (category) => {
+  if (category === "Strength") return "lift";
+  if (category === "Cardio") return "cardio";
+  if (category === "Weight") return "bodyweight";
+  return "general";
+};
 const shrinkLabelSlotProps = { inputLabel: { shrink: true } };
 const readOnlyShrinkSlotProps = {
   inputLabel: { shrink: true },
@@ -131,7 +158,7 @@ const getCategoryColor = (category) => {
   }
 };
 
-const GoalCard = ({ goal, onOpen, weightUnit = "lbs", onMove, isFirst, isLast }) => {
+const GoalCard = ({ goal, onOpen, weightUnit = "lbs" }) => {
   const isStrengthGoal = goal.category === "Strength" && goal.exercise;
   const hasUnseenAchievement = goal.achievedDate && !goal.achievementSeen;
 
@@ -142,24 +169,6 @@ const GoalCard = ({ goal, onOpen, weightUnit = "lbs", onMove, isFirst, isLast })
       sx={{ justifyContent: "center" }}
     >
       <Box sx={{ width: "100%" }}>
-        {onMove && (
-          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 0.25 }}>
-            <Tooltip title="Higher priority">
-              <span>
-                <IconButton size="small" disabled={isFirst} onClick={() => onMove(-1)}>
-                  <KeyboardArrowUp fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Lower priority">
-              <span>
-                <IconButton size="small" disabled={isLast} onClick={() => onMove(1)}>
-                  <KeyboardArrowDown fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Stack>
-        )}
         <Badge
           badgeContent="Achieved!"
           color="success"
@@ -242,7 +251,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   const [status, setStatus] = useState(goal.status || 'active');
   const [goalType, setGoalType] = useState(goal.goalType || '');
   const [importanceScore, setImportanceScore] = useState(goal.importanceScore || '');
-  const [category, setCategory] = useState(goal.category || '');
+  const [measureBy, setMeasureBy] = useState(measureForCategory(goal.category));
   const [selectedExercise, setSelectedExercise] = useState(goal.exercise || null);
   const [targetWeight, setTargetWeight] = useState(
     goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : ''
@@ -260,9 +269,9 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   const [newComment, setNewComment] = useState('');
   const [openDeleteConfirmation, setOpenDeleteConfirmation] = useState(false);
 
-  const isStrengthGoal = category === "Strength";
-  const isCardioGoal = category === "Cardio";
-  const isWeightGoal = category === "Weight";
+  const isStrengthGoal = measureBy === "lift";
+  const isCardioGoal = measureBy === "cardio";
+  const isWeightGoal = measureBy === "bodyweight";
 
   const handleChange = (e, setter) => setter(e.target.value);
   const handleDistanceUnitChange = (nextUnit) => {
@@ -304,7 +313,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       status,
       goalType,
       importanceScore: importanceScore === '' ? null : Number(importanceScore),
-      category,
+      category: categoryForMeasure(measureBy),
       targetDate,
     };
     if (isStrengthGoal) {
@@ -345,7 +354,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     setStatus(goal.status || 'active');
     setGoalType(goal.goalType || '');
     setImportanceScore(goal.importanceScore || '');
-    setCategory(goal.category || '');
+    setMeasureBy(measureForCategory(goal.category));
     setSelectedExercise(goal.exercise || null);
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
     setTargetReps(goal.targetReps || '');
@@ -467,21 +476,25 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       </DialogTitle>
       <DialogContent>
         <Grid container spacing={1} sx={{ padding: "10px 0px" }}>
-          <Grid container size={{ xs: 12, sm: 4 }}>
-            <FormControl fullWidth>
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={category}
-                label="Category"
-                onChange={(e) => setCategory(e.target.value)}
+          <Grid container size={12}>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                How it&apos;s measured
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={measureBy}
+                onChange={(e, v) => v && setMeasureBy(v)}
+                sx={{ flexWrap: "wrap" }}
               >
-                {GOAL_CATEGORIES.map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat}
-                  </MenuItem>
+                {MEASURE_MODES.map((m) => (
+                  <ToggleButton key={m.value} value={m.value} sx={{ textTransform: "none" }}>
+                    {m.label}
+                  </ToggleButton>
                 ))}
-              </Select>
-            </FormControl>
+              </ToggleButtonGroup>
+            </Box>
           </Grid>
           {isStrengthGoal ? (
             <>
@@ -834,8 +847,9 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   const [description, setDescription] = useState('');
   const [motivation, setMotivation] = useState('');
   const [goalType, setGoalType] = useState('');
-  const [importanceScore, setImportanceScore] = useState('');
-  const [category, setCategory] = useState('General');
+  const [importanceScore, setImportanceScore] = useState(5);
+  const [measureBy, setMeasureBy] = useState('general');
+  const [step, setStep] = useState(0);
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [targetWeight, setTargetWeight] = useState('');
   const [targetReps, setTargetReps] = useState('');
@@ -846,9 +860,15 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   const [currentMax, setCurrentMax] = useState(null);
   const [targetDate, setTargetDate] = useState('');
 
-  const isStrengthGoal = category === "Strength";
-  const isCardioGoal = category === "Cardio";
-  const isWeightGoal = category === "Weight";
+  const isStrengthGoal = measureBy === "lift";
+  const isCardioGoal = measureBy === "cardio";
+  const isWeightGoal = measureBy === "bodyweight";
+
+  // Picking a goal type pre-selects how it's measured (the user can still change it in step 2).
+  const handleGoalTypeChange = (value) => {
+    setGoalType(value);
+    setMeasureBy(defaultMeasureForType(value));
+  };
 
   const handleChange = (e, setter) => setter(e.target.value);
   const handleDistanceUnitChange = (nextUnit) => {
@@ -886,8 +906,9 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
     setDescription('');
     setMotivation('');
     setGoalType('');
-    setImportanceScore('');
-    setCategory('General');
+    setImportanceScore(5);
+    setMeasureBy('general');
+    setStep(0);
     setSelectedExercise(null);
     setTargetWeight('');
     setTargetReps('');
@@ -906,7 +927,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       motivation,
       goalType,
       importanceScore: importanceScore === '' ? null : Number(importanceScore),
-      category,
+      category: categoryForMeasure(measureBy),
       targetDate,
     };
     if (isStrengthGoal) {
@@ -927,6 +948,9 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       });
   };
 
+  const hasName = isStrengthGoal ? Boolean(selectedExercise) : Boolean(title.trim());
+  const canAdvance = step === 0 ? Boolean(goalType) : step === 1 ? hasName : true;
+
   return (
     <Dialog
       open={open}
@@ -941,26 +965,58 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       }}
     >
       <DialogTitle id="alert-dialog-title">
-        New Goal
+        {["The goal", "Make it measurable", "Priority"][step]}
       </DialogTitle>
       <DialogContent>
-        <Grid container spacing={1} sx={{ padding: "10px 0px" }}>
-          <Grid container size={{ xs: 12, sm: 4 }}>
-            <FormControl fullWidth>
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={category}
-                label="Category"
-                onChange={(e) => setCategory(e.target.value)}
+        <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
+          {step === 0 && (
+            <Stack spacing={2.5}>
+              <Typography variant="h6">What do you want to achieve?</Typography>
+              <TextField
+                select
+                fullWidth
+                label="Goal type"
+                value={goalType}
+                onChange={(e) => handleGoalTypeChange(e.target.value)}
+                slotProps={shrinkLabelSlotProps}
               >
-                {GOAL_CATEGORIES.map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+                <MenuItem value=""><em>Choose a type…</em></MenuItem>
+                {GOAL_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+              </TextField>
+              <TextField
+                fullWidth
+                multiline
+                minRows={2}
+                label="Why does this matter to you?"
+                placeholder="The real reason behind it"
+                value={motivation}
+                onChange={(e) => handleChange(e, setMotivation)}
+                slotProps={shrinkLabelSlotProps}
+              />
+            </Stack>
+          )}
+          {step === 1 && (
+            <Stack spacing={2}>
+              <Typography variant="h6">Make it measurable</Typography>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                  How will you measure it?
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={measureBy}
+                  onChange={(e, v) => v && setMeasureBy(v)}
+                  sx={{ flexWrap: "wrap" }}
+                >
+                  {MEASURE_MODES.map((m) => (
+                    <ToggleButton key={m.value} value={m.value} sx={{ textTransform: "none" }}>
+                      {m.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+              <Grid container spacing={1}>
           {isStrengthGoal ? (
             <>
               <Grid container size={{ xs: 12, sm: 8 }}>
@@ -1072,82 +1128,101 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
               )}
             </>
           )}
-          <Grid container size={12}>
-            <TextField
-              type="date"
-              fullWidth
-              label="Target Date"
-              value={targetDate.substr(0, 10)}
-              onChange={(e) => handleChange(e, setTargetDate)}
-              slotProps={shrinkLabelSlotProps}
-            />
-          </Grid>
-          <Grid container size={12}>
-            <TextField
-              type="text"
-              fullWidth
-              multiline
-              label="Description"
-              value={description}
-              onChange={(e) => handleChange(e, setDescription)}
-              slotProps={shrinkLabelSlotProps}
-            />
-          </Grid>
-          <Grid container size={12}>
-            <TextField
-              type="text"
-              fullWidth
-              multiline
-              label="Why does this matter?"
-              value={motivation}
-              onChange={(e) => handleChange(e, setMotivation)}
-              slotProps={shrinkLabelSlotProps}
-            />
-          </Grid>
-          <Grid container size={12} spacing={2}>
-            <Grid size={{ xs: 12, sm: 8 }}>
-              <TextField
-                select
-                fullWidth
-                label="Goal type"
-                value={goalType}
-                onChange={(e) => setGoalType(e.target.value)}
-                slotProps={shrinkLabelSlotProps}
-              >
-                <MenuItem value=""><em>Not set</em></MenuItem>
-                {GOAL_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                select
-                fullWidth
-                label="Importance (1–10)"
-                value={importanceScore}
-                onChange={(e) => setImportanceScore(e.target.value)}
-                slotProps={shrinkLabelSlotProps}
-              >
-                <MenuItem value=""><em>—</em></MenuItem>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <MenuItem key={n} value={n}>{n}</MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-          </Grid>
-          <Grid container size={12} spacing={2} sx={{ justifyContent: 'center' }}>
-            <Grid>
-              <Button color='secondaryButton' variant="contained" onClick={resetForm}>
-                Reset
-              </Button>
-            </Grid>
-            <Grid>
-              <Button variant="contained" onClick={submitNewGoal}>
-                Save
-              </Button>
-            </Grid>
-          </Grid>
-        </Grid>
+                {isWeightGoal && (
+                  <Grid container size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      type="number"
+                      fullWidth
+                      label={`Target Body Weight (${weightUnitLabel})`}
+                      value={goalWeight}
+                      onChange={(e) => setGoalWeight(e.target.value)}
+                      slotProps={shrinkLabelSlotProps}
+                    />
+                  </Grid>
+                )}
+                <Grid container size={12}>
+                  <TextField
+                    type="date"
+                    fullWidth
+                    label="Target date — by when?"
+                    value={targetDate.substr(0, 10)}
+                    onChange={(e) => handleChange(e, setTargetDate)}
+                    slotProps={shrinkLabelSlotProps}
+                  />
+                </Grid>
+                <Grid container size={12}>
+                  <TextField
+                    type="text"
+                    fullWidth
+                    multiline
+                    label="Notes (optional)"
+                    value={description}
+                    onChange={(e) => handleChange(e, setDescription)}
+                    slotProps={shrinkLabelSlotProps}
+                  />
+                </Grid>
+              </Grid>
+            </Stack>
+          )}
+          {step === 2 && (
+            <Stack spacing={2}>
+              <Typography variant="h6">How important is this goal?</Typography>
+              <Box sx={{ px: 2, pt: 3 }}>
+                <Slider
+                  value={Number(importanceScore) || 5}
+                  onChange={(e, v) => setImportanceScore(v)}
+                  min={1}
+                  max={10}
+                  step={1}
+                  marks
+                  valueLabelDisplay="on"
+                />
+                <Typography variant="caption" color="text.secondary">
+                  1 = nice to have · 10 = top priority
+                </Typography>
+              </Box>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>Summary</Typography>
+                <Typography variant="body2">
+                  {goalTypeLabel(goalType) || "Goal"} — {(isStrengthGoal && selectedExercise) ? selectedExercise.exerciseTitle : (title || "—")}
+                </Typography>
+                {targetDate && (
+                  <Typography variant="body2" color="text.secondary">By {targetDate.substr(0, 10)}</Typography>
+                )}
+                {motivation && (
+                  <Typography variant="body2" color="text.secondary">Why: {motivation}</Typography>
+                )}
+              </Paper>
+            </Stack>
+          )}
+        </Box>
       </DialogContent>
+      <MobileStepper
+        variant="dots"
+        steps={3}
+        position="static"
+        activeStep={step}
+        sx={{ backgroundColor: "transparent", px: 2, pb: 1 }}
+        backButton={
+          <Button
+            size="small"
+            onClick={() => { if (step === 0) { resetForm(); onClose(); } else { setStep(step - 1); } }}
+          >
+            {step === 0 ? "Cancel" : "Back"}
+          </Button>
+        }
+        nextButton={
+          step < 2 ? (
+            <Button size="small" onClick={() => setStep(step + 1)} disabled={!canAdvance}>
+              Next
+            </Button>
+          ) : (
+            <Button size="small" variant="contained" onClick={submitNewGoal} disabled={!hasName}>
+              Save goal
+            </Button>
+          )
+        }
+      />
     </Dialog>
   );
 };
@@ -1175,16 +1250,16 @@ export default function Goals({ view = "client", client, }) {
   const handleOpenAddNewGoal = () => setOpenAddNewGoal(true);
   const handleCloseAddNewGoal = () => setOpenAddNewGoal(false);
 
-  // Client re-ranks their own goals by priority (persisted via the reorder endpoint).
-  const canReorder = view === "client" && Array.isArray(goals);
-  const moveGoal = (index, dir) => {
-    const next = index + dir;
-    if (!goals || next < 0 || next >= goals.length) return;
-    const reordered = [...goals];
-    const [moved] = reordered.splice(index, 1);
-    reordered.splice(next, 0, moved);
-    dispatch(reorderGoals(reordered));
-  };
+  // Order goals by how important they are (then by achieved-last), so the list self-ranks
+  // without the client fiddling with manual up/down controls.
+  const sortedGoals = Array.isArray(goals)
+    ? [...goals].sort(
+        (a, b) =>
+          Number(Boolean(a.achievedDate)) - Number(Boolean(b.achievedDate)) ||
+          (b.importanceScore || 0) - (a.importanceScore || 0) ||
+          (a.priority ?? 0) - (b.priority ?? 0)
+      )
+    : [];
 
   useEffect(() => {
     setSelectedGoal(prev => {
@@ -1213,15 +1288,12 @@ export default function Goals({ view = "client", client, }) {
           </Grid>
 
           <Grid container size={12} spacing={1} sx={{ alignSelf: 'flex-start', alignContent: 'flex-start', overflowY: 'scroll', scrollbarWidth: 'none', flex: 'auto', }}>
-            {goals && goals.map((goal, index) => (
+            {sortedGoals.map((goal) => (
               <GoalCard
                 key={goal._id}
                 goal={goal}
                 onOpen={handleOpenGoalDetails}
                 weightUnit={weightUnit}
-                onMove={canReorder ? (dir) => moveGoal(index, dir) : undefined}
-                isFirst={index === 0}
-                isLast={index === goals.length - 1}
               />
             ))}
           </Grid>
