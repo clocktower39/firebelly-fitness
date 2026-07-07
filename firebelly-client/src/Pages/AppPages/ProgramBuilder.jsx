@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { programApi } from "../../api/programApi";
 import { workoutApi } from "../../api/workoutApi";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { upsertWorkout } from "../../Redux/actions";
 import {
   Box,
   Button,
@@ -146,6 +147,7 @@ const MacrocycleBar = ({ weekPlan, activeWeekIndex, onSelectWeek }) => (
 
 export default function ProgramBuilder() {
   const user = useSelector((state) => state.user);
+  const dispatch = useDispatch();
   const { programId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -639,12 +641,16 @@ export default function ProgramBuilder() {
         const data = await workoutApi.getTraining({ _id: id });
         if (data?._id) {
           setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
+          // Also put it in Redux state.workouts so the Workout editor can open it (the editor only
+          // reads from there). Without this, server-created templates (e.g. auto-generated programs)
+          // show "Workout does not exist" when a day is opened.
+          dispatch(upsertWorkout(data));
         }
       } catch (err) {
         setErrorMessage("Unable to load workout details.");
       }
     });
-  }, [program, setErrorMessage, workoutCache]);
+  }, [program, setErrorMessage, workoutCache, dispatch]);
 
   if (isLoading || !program) {
     return (
