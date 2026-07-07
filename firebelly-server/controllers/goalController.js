@@ -12,6 +12,8 @@ const GOAL_FIELDS = [
   "motivation",
   "priority",
   "status",
+  "goalType",
+  "importanceScore",
   "category",
   "exercise",
   "targetWeight",

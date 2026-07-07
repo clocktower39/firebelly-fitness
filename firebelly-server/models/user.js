@@ -115,6 +115,13 @@ const UserSchema = new mongoose.Schema({
       preferredStyle: { type: String, default: "" },
       aestheticFocus: { type: String, default: "" },
       notes: { type: String, default: "" },
+      // Commitment / readiness (how ready + willing the client is to change).
+      confidenceScore: { type: Number, min: 1, max: 10, default: null },
+      willingnessToTrainDaysPerWeek: { type: Number, min: 0, max: 7, default: null },
+      willingnessToChangeNutrition: { type: Number, min: 1, max: 10, default: null },
+      willingnessToDoDislikedExercises: { type: Number, min: 1, max: 10, default: null },
+      biggestObstacle: { type: String, default: "" },
+      whatTheyAreNotWillingToChange: { type: String, default: "" },
     },
     verified: {
         isVerified: { type: Boolean, default: false },

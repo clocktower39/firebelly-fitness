@@ -91,6 +91,12 @@ const updateUserValidate = {
           preferredStyle: Joi.string().allow(""),
           aestheticFocus: Joi.string().allow(""),
           notes: Joi.string().allow(""),
+          confidenceScore: Joi.number().integer().min(1).max(10).allow(null),
+          willingnessToTrainDaysPerWeek: Joi.number().integer().min(0).max(7).allow(null),
+          willingnessToChangeNutrition: Joi.number().integer().min(1).max(10).allow(null),
+          willingnessToDoDislikedExercises: Joi.number().integer().min(1).max(10).allow(null),
+          biggestObstacle: Joi.string().allow(""),
+          whatTheyAreNotWillingToChange: Joi.string().allow(""),
         }).unknown(false),
     }).min(1),
 }

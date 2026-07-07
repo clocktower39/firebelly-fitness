@@ -1,5 +1,7 @@
 import React from "react";
+import { useSelector } from "react-redux";
 import { Box, Chip, Divider, Paper, Stack, Typography } from "@mui/material";
+import ProgramReadinessCard from "./ProgramReadinessCard";
 
 const EXP = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" };
 const ACT = { sedentary: "Sedentary", light: "Lightly active", moderate: "Moderately active", very_active: "Very active" };
@@ -25,6 +27,8 @@ const line = (label, value) =>
 
 // Read-only client Training Profile for the trainer's client view.
 export default function TrainingProfileView({ client }) {
+  const goals = useSelector((state) => state.goals);
+  const latestMetric = useSelector((state) => state.metrics.latestByUser[client?._id]);
   const tp = client?.trainingProfile || {};
   const hasAny =
     client?.trainingExperience ||
@@ -36,9 +40,17 @@ export default function TrainingProfileView({ client }) {
     tp.stressLevel ||
     tp.preferredStyle ||
     tp.aestheticFocus ||
-    tp.notes;
+    tp.notes ||
+    tp.confidenceScore != null ||
+    tp.willingnessToTrainDaysPerWeek != null ||
+    tp.willingnessToChangeNutrition != null ||
+    tp.willingnessToDoDislikedExercises != null ||
+    tp.biggestObstacle ||
+    tp.whatTheyAreNotWillingToChange;
 
   return (
+    <>
+    <ProgramReadinessCard user={client} goals={goals} latestWeight={latestMetric?.weight} />
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Typography variant="subtitle1" gutterBottom>Training Profile</Typography>
       {!hasAny ? (
@@ -64,8 +76,22 @@ export default function TrainingProfileView({ client }) {
               {line("Notes", tp.notes)}
             </>
           )}
+          {(tp.confidenceScore != null || tp.willingnessToTrainDaysPerWeek != null ||
+            tp.willingnessToChangeNutrition != null || tp.willingnessToDoDislikedExercises != null ||
+            tp.biggestObstacle || tp.whatTheyAreNotWillingToChange) && (
+            <>
+              <Divider />
+              {line("Confidence", tp.confidenceScore != null ? `${tp.confidenceScore}/10` : "")}
+              {line("Willing to train", tp.willingnessToTrainDaysPerWeek != null ? `${tp.willingnessToTrainDaysPerWeek} days/wk` : "")}
+              {line("Nutrition-change willingness", tp.willingnessToChangeNutrition != null ? `${tp.willingnessToChangeNutrition}/10` : "")}
+              {line("Disliked-exercise willingness", tp.willingnessToDoDislikedExercises != null ? `${tp.willingnessToDoDislikedExercises}/10` : "")}
+              {line("Biggest obstacle", tp.biggestObstacle)}
+              {line("Won't change", tp.whatTheyAreNotWillingToChange)}
+            </>
+          )}
         </Stack>
       )}
     </Paper>
+    </>
   );
 }

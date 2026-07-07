@@ -57,6 +57,21 @@ import {
 
 const GOAL_CATEGORIES = ["General", "Strength", "Cardio", "Skill", "Weight"];
 const DISTANCE_UNITS = ["Miles", "Kilometers", "Meters", "Yards"];
+// Coaching classification (distinct from category, which drives the measurable-target inputs).
+const GOAL_TYPES = [
+  { value: "strength", label: "Strength" },
+  { value: "hypertrophy", label: "Muscle / Hypertrophy" },
+  { value: "fat_loss", label: "Fat loss" },
+  { value: "performance", label: "Performance" },
+  { value: "endurance", label: "Endurance" },
+  { value: "mobility", label: "Mobility" },
+  { value: "aesthetic", label: "Aesthetic" },
+  { value: "sport", label: "Sport" },
+  { value: "skill", label: "Skill" },
+  { value: "health", label: "Health" },
+  { value: "other", label: "Other" },
+];
+const goalTypeLabel = (v) => GOAL_TYPES.find((t) => t.value === v)?.label || "";
 const shrinkLabelSlotProps = { inputLabel: { shrink: true } };
 const readOnlyShrinkSlotProps = {
   inputLabel: { shrink: true },
@@ -181,6 +196,12 @@ const GoalCard = ({ goal, onOpen, weightUnit = "lbs", onMove, isFirst, isLast })
                         color={getCategoryColor(goal.category)}
                       />
                     )}
+                    {goal.goalType && (
+                      <Chip label={goalTypeLabel(goal.goalType)} size="small" variant="outlined" />
+                    )}
+                    {goal.importanceScore ? (
+                      <Chip label={`Importance ${goal.importanceScore}/10`} size="small" variant="outlined" color="primary" />
+                    ) : null}
                     {goal.achievedDate && (
                       <Chip
                         label="Achieved"
@@ -219,6 +240,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   const [description, setDescription] = useState(goal.description || '');
   const [motivation, setMotivation] = useState(goal.motivation || '');
   const [status, setStatus] = useState(goal.status || 'active');
+  const [goalType, setGoalType] = useState(goal.goalType || '');
+  const [importanceScore, setImportanceScore] = useState(goal.importanceScore || '');
   const [category, setCategory] = useState(goal.category || '');
   const [selectedExercise, setSelectedExercise] = useState(goal.exercise || null);
   const [targetWeight, setTargetWeight] = useState(
@@ -279,6 +302,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       description,
       motivation,
       status,
+      goalType,
+      importanceScore: importanceScore === '' ? null : Number(importanceScore),
       category,
       targetDate,
     };
@@ -318,6 +343,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     setDescription(goal.description || '');
     setMotivation(goal.motivation || '');
     setStatus(goal.status || 'active');
+    setGoalType(goal.goalType || '');
+    setImportanceScore(goal.importanceScore || '');
     setCategory(goal.category || '');
     setSelectedExercise(goal.exercise || null);
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
@@ -687,6 +714,36 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
               <MenuItem value="dropped">Dropped</MenuItem>
             </TextField>
           </Grid>
+          <Grid container size={12} spacing={2}>
+            <Grid size={{ xs: 12, sm: 8 }}>
+              <TextField
+                select
+                fullWidth
+                label="Goal type"
+                value={goalType}
+                onChange={(e) => setGoalType(e.target.value)}
+                slotProps={shrinkLabelSlotProps}
+              >
+                <MenuItem value=""><em>Not set</em></MenuItem>
+                {GOAL_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                select
+                fullWidth
+                label="Importance (1–10)"
+                value={importanceScore}
+                onChange={(e) => setImportanceScore(e.target.value)}
+                slotProps={shrinkLabelSlotProps}
+              >
+                <MenuItem value=""><em>—</em></MenuItem>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <MenuItem key={n} value={n}>{n}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+          </Grid>
           <Grid container size={12} spacing={2} sx={{ justifyContent: 'center' }}>
             <Grid>
               <Button color='secondaryButton' variant="contained" onClick={resetEdit}>
@@ -776,6 +833,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [motivation, setMotivation] = useState('');
+  const [goalType, setGoalType] = useState('');
+  const [importanceScore, setImportanceScore] = useState('');
   const [category, setCategory] = useState('General');
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [targetWeight, setTargetWeight] = useState('');
@@ -826,6 +885,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
     setTitle('');
     setDescription('');
     setMotivation('');
+    setGoalType('');
+    setImportanceScore('');
     setCategory('General');
     setSelectedExercise(null);
     setTargetWeight('');
@@ -843,6 +904,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       title: isStrengthGoal && selectedExercise ? selectedExercise.exerciseTitle : title,
       description,
       motivation,
+      goalType,
+      importanceScore: importanceScore === '' ? null : Number(importanceScore),
       category,
       targetDate,
     };
@@ -1040,6 +1103,36 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
               onChange={(e) => handleChange(e, setMotivation)}
               slotProps={shrinkLabelSlotProps}
             />
+          </Grid>
+          <Grid container size={12} spacing={2}>
+            <Grid size={{ xs: 12, sm: 8 }}>
+              <TextField
+                select
+                fullWidth
+                label="Goal type"
+                value={goalType}
+                onChange={(e) => setGoalType(e.target.value)}
+                slotProps={shrinkLabelSlotProps}
+              >
+                <MenuItem value=""><em>Not set</em></MenuItem>
+                {GOAL_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                select
+                fullWidth
+                label="Importance (1–10)"
+                value={importanceScore}
+                onChange={(e) => setImportanceScore(e.target.value)}
+                slotProps={shrinkLabelSlotProps}
+              >
+                <MenuItem value=""><em>—</em></MenuItem>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <MenuItem key={n} value={n}>{n}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
           </Grid>
           <Grid container size={12} spacing={2} sx={{ justifyContent: 'center' }}>
             <Grid>

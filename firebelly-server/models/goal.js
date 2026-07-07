@@ -10,6 +10,13 @@ const goalSchema = new mongoose.Schema({
   priority: { type: Number, default: 0 }, // ascending = higher priority; set by the reorder endpoint
   motivation: { type: String, default: "" }, // why this goal matters to the client
   status: { type: String, enum: ["active", "achieved", "paused", "dropped"], default: "active" },
+  // Coaching classification (distinct from `category`, which drives the measurable-target inputs).
+  goalType: {
+    type: String,
+    enum: ["", "strength", "hypertrophy", "fat_loss", "performance", "endurance", "mobility", "aesthetic", "sport", "skill", "health", "other"],
+    default: "",
+  },
+  importanceScore: { type: Number, min: 1, max: 10, default: null }, // how important, 1–10 (separate from ranked priority)
   category: { type: String, enum: ["General", "Strength", "Cardio", "Skill", "Weight", ""], default: "General" },
   distanceUnit: { type: String, enum: ["Miles", "Kilometers", "Meters", "Yards", ""], default: "" },
   distanceValue: { type: Number },

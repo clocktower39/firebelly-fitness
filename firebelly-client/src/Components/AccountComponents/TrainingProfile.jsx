@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUserSettings } from "../../Redux/actions/accountActions";
+import { getGoals, requestLatestMetric } from "../../Redux/actions";
+import ProgramReadinessCard from "./ProgramReadinessCard";
 import {
   Autocomplete,
   Button,
@@ -42,7 +44,14 @@ const EQUIPMENT_OPTIONS = [
 export default function TrainingProfile() {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.user);
+  const goals = useSelector((state) => state.goals);
+  const latestMetric = useSelector((state) => state.metrics.latestByUser[user._id]);
   const tp = user.trainingProfile || {};
+
+  useEffect(() => {
+    dispatch(getGoals({ requestedBy: "client" }));
+    dispatch(requestLatestMetric({}));
+  }, [dispatch]);
 
   const [experience, setExperience] = useState(user.trainingExperience || "");
   const [activity, setActivity] = useState(user.activityLevel || "");
@@ -54,7 +63,15 @@ export default function TrainingProfile() {
   const [preferredStyle, setPreferredStyle] = useState(tp.preferredStyle || "");
   const [aestheticFocus, setAestheticFocus] = useState(tp.aestheticFocus || "");
   const [notes, setNotes] = useState(tp.notes || "");
+  const [confidenceScore, setConfidenceScore] = useState(tp.confidenceScore ?? "");
+  const [willTrainDays, setWillTrainDays] = useState(tp.willingnessToTrainDaysPerWeek ?? "");
+  const [willNutrition, setWillNutrition] = useState(tp.willingnessToChangeNutrition ?? "");
+  const [willDisliked, setWillDisliked] = useState(tp.willingnessToDoDislikedExercises ?? "");
+  const [biggestObstacle, setBiggestObstacle] = useState(tp.biggestObstacle || "");
+  const [notWilling, setNotWilling] = useState(tp.whatTheyAreNotWillingToChange || "");
   const [saved, setSaved] = useState(false);
+
+  const numOrNull = (v) => (v === "" || v === null ? null : Number(v));
 
   const save = () => {
     dispatch(
@@ -70,6 +87,12 @@ export default function TrainingProfile() {
           preferredStyle,
           aestheticFocus,
           notes,
+          confidenceScore: numOrNull(confidenceScore),
+          willingnessToTrainDaysPerWeek: numOrNull(willTrainDays),
+          willingnessToChangeNutrition: numOrNull(willNutrition),
+          willingnessToDoDislikedExercises: numOrNull(willDisliked),
+          biggestObstacle,
+          whatTheyAreNotWillingToChange: notWilling,
         },
       })
     );
@@ -92,6 +115,25 @@ export default function TrainingProfile() {
     </Grid>
   );
 
+  const numSelect = (label, value, setValue, lo, hi) => (
+    <Grid size={{ xs: 12, sm: 6 }}>
+      <FormControl fullWidth>
+        <InputLabel id={`ns-${label}`}>{label}</InputLabel>
+        <Select
+          labelId={`ns-${label}`}
+          label={label}
+          value={value}
+          onChange={(e) => { setValue(e.target.value); dirty(); }}
+        >
+          <MenuItem value=""><em>—</em></MenuItem>
+          {Array.from({ length: hi - lo + 1 }, (_, i) => i + lo).map((n) => (
+            <MenuItem key={n} value={n}>{n}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Grid>
+  );
+
   return (
     <Container maxWidth="md" sx={{ height: "100%" }}>
       <Grid container size={12} sx={{ padding: "15px" }}>
@@ -99,6 +141,7 @@ export default function TrainingProfile() {
           Training Profile
         </Typography>
       </Grid>
+      <ProgramReadinessCard user={user} goals={goals} latestWeight={latestMetric?.weight} />
       <Paper>
         <Grid container spacing={2} sx={{ padding: "15px" }}>
           <Grid size={12}>
@@ -171,6 +214,21 @@ export default function TrainingProfile() {
           <Grid size={12}>
             <TextField fullWidth multiline minRows={2} label="Anything else your coach should know?"
               value={notes} onChange={(e) => { setNotes(e.target.value); dirty(); }} />
+          </Grid>
+
+          <Grid size={12}><Divider sx={{ width: "100%" }} /></Grid>
+          <Grid size={12}><Typography variant="subtitle1">Commitment &amp; readiness</Typography></Grid>
+          {numSelect("Confidence you'll succeed (1–10)", confidenceScore, setConfidenceScore, 1, 10)}
+          {numSelect("Days/week willing to train", willTrainDays, setWillTrainDays, 0, 7)}
+          {numSelect("Willingness to change nutrition (1–10)", willNutrition, setWillNutrition, 1, 10)}
+          {numSelect("Willingness to do disliked exercises (1–10)", willDisliked, setWillDisliked, 1, 10)}
+          <Grid size={12}>
+            <TextField fullWidth label="Biggest obstacle" placeholder="e.g. travel schedule, low energy"
+              value={biggestObstacle} onChange={(e) => { setBiggestObstacle(e.target.value); dirty(); }} />
+          </Grid>
+          <Grid size={12}>
+            <TextField fullWidth label="What are you NOT willing to change?" placeholder="e.g. rest days, morning coffee"
+              value={notWilling} onChange={(e) => { setNotWilling(e.target.value); dirty(); }} />
           </Grid>
 
           <Grid container size={12} sx={{ justifyContent: "center", mt: 1 }}>
