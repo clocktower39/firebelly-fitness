@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import queryString from "query-string";
@@ -15,7 +15,9 @@ import { sortWorkoutsByTypeOrder } from "../../features/workout/utils/workoutOrd
 import { DAILY_OVERVIEW_ORDER, resolveDailyOverviewOrder } from "../../utils/dailyOverviewSections";
 import WeeklyTrainingStatus from "../../Components/TrainingComponents/WeeklyTrainingStatus";
 import { requestWorkoutsByDatesIfNeeded, requestLatestMetric, serverURL, getMyReadiness } from "../../Redux/actions";
-import { Avatar, Button, Grid, Paper, Stack, Typography } from '@mui/material';
+import { Avatar, Box, Button, Grid, Paper, Stack, Typography } from '@mui/material';
+
+const TrainingBlockWizard = lazy(() => import("../../Components/Goals/TrainingBlockWizard"));
 import { formatWeightWithUnit, normalizeWeightUnit } from "../../utils/weightUnits";
 import { dayKey } from "../../utils/readiness";
 
@@ -63,6 +65,16 @@ function Home() {
     (state) => state.metrics.latestByUser[(client || user._id)] || null
   );
   const readiness = useSelector((state) => state.readiness) || { entries: [], loaded: false };
+  const goals = useSelector((state) => state.goals);
+  const [openBlockWizard, setOpenBlockWizard] = useState(false);
+  // Wait a beat before deciding "no goals" so existing users don't flash the get-started card on load.
+  const [goalsSettled, setGoalsSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGoalsSettled(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
+  const showGetStarted =
+    goalsSettled && !user?.isTrainer && Array.isArray(goals) && goals.length === 0;
   // The daily check-in is always for today; once it's done, the card moves below the workout.
   const todayCheckinDone =
     readiness.loaded &&
@@ -332,7 +344,29 @@ function Home() {
         setVisibleDateLocked={setWeeklyStatusDateLocked}
         workouts={workouts}
       />
+      {showGetStarted && (
+        <Grid container size={12} sx={{ p: 1 }}>
+          <Paper sx={{ p: 2, width: "100%", borderRadius: "12px" }}>
+            <Stack spacing={1}>
+              <Typography variant="h6">Let&apos;s set up your goals</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Answer a few quick questions to plan a training block and the goals you want to hit.
+              </Typography>
+              <Box>
+                <Button variant="contained" onClick={() => setOpenBlockWizard(true)}>
+                  Get started →
+                </Button>
+              </Box>
+            </Stack>
+          </Paper>
+        </Grid>
+      )}
       {orderedSections}
+      {openBlockWizard && (
+        <Suspense fallback={null}>
+          <TrainingBlockWizard open={openBlockWizard} onClose={() => setOpenBlockWizard(false)} />
+        </Suspense>
+      )}
     </>
   );
 }

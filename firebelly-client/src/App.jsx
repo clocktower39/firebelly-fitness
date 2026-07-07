@@ -6,6 +6,7 @@ import { ThemeProvider, GlobalStyles } from "@mui/material";
 import { theme } from "./theme";
 import {
   getConversations,
+  getGoals,
   receiveSocketMessage,
   receiveSocketDeletedMessage,
   removeWorkouts,
@@ -129,6 +130,11 @@ function App({ }) {
   // Load conversations on boot so the unread badge is accurate app-wide.
   useEffect(() => {
     if (userId) dispatch(getConversations());
+  }, [dispatch, userId]);
+
+  // Load goals once on login so the Home "get started" card knows whether the user has any.
+  useEffect(() => {
+    if (userId) dispatch(getGoals({ requestedBy: "client" }));
   }, [dispatch, userId]);
 
   // Capture the user's timezone once (so local-time reminders fire correctly), if not set.

@@ -14,6 +14,7 @@ const GOAL_FIELDS = [
   "status",
   "goalType",
   "importanceScore",
+  "trainingBlock",
   "category",
   "exercise",
   "targetWeight",
@@ -195,7 +196,8 @@ const get_goals = async (req, res, next) => {
     const goals = await Goal.find({ user: res.locals.user._id })
       .sort({ priority: 1, createdDate: -1 })
       .populate("comments.user", "firstName lastName profilePicture")
-      .populate("exercise", "_id exerciseTitle");
+      .populate("exercise", "_id exerciseTitle")
+      .populate("trainingBlock", "title status targetDate");
 
     // Check strength goals for achievement
     for (const goal of goals) {
@@ -262,6 +264,7 @@ const get_client_goals = (req, res, next) => {
           .sort({ priority: 1, createdDate: -1 })
           .populate("comments.user", "firstName lastName profilePicture")
           .populate("exercise", "_id exerciseTitle")
+          .populate("trainingBlock", "title status targetDate")
           .then((data) => {
             res.send(data);
           })

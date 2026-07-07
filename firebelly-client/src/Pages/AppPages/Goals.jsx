@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { goalApi } from "../../api/goalApi";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -35,6 +35,7 @@ import {
   AccountCircle,
   AddCircle,
   Delete,
+  EventNote,
 } from "@mui/icons-material";
 import {
   getGoals,
@@ -55,6 +56,11 @@ import {
   normalizeWeightUnit,
   toStoredLbs,
 } from "../../utils/weightUnits";
+import SwipeableViewsModule from "react-swipeable-views";
+
+const SwipeableViews = SwipeableViewsModule.default ?? SwipeableViewsModule;
+// Lazy-loaded to break the Goals <-> wizard import cycle (the wizard reuses AddNewGoal from here).
+const TrainingBlockWizard = lazy(() => import("../../Components/Goals/TrainingBlockWizard"));
 
 const GOAL_CATEGORIES = ["General", "Strength", "Cardio", "Skill", "Weight"];
 const DISTANCE_UNITS = ["Miles", "Kilometers", "Meters", "Yards"];
@@ -211,6 +217,9 @@ const GoalCard = ({ goal, onOpen, weightUnit = "lbs" }) => {
                     {goal.importanceScore ? (
                       <Chip label={`Importance ${goal.importanceScore}/10`} size="small" variant="outlined" color="primary" />
                     ) : null}
+                    {goal.trainingBlock?.title && (
+                      <Chip label={goal.trainingBlock.title} size="small" variant="outlined" color="secondary" />
+                    )}
                     {goal.achievedDate && (
                       <Chip
                         label="Achieved"
@@ -856,7 +865,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
   );
 };
 
-const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, weightUnit = "lbs" }) => {
+export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, weightUnit = "lbs", trainingBlockId, defaultTargetDate }) => {
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
   const [title, setTitle] = useState('');
@@ -926,6 +935,11 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
     }
   }, [isStrengthGoal, currentMax, startingEdited, normalizedWeightUnit]);
 
+  // When opened inside a Training Block, seed the goal's timeline to the block's end date.
+  useEffect(() => {
+    if (open && defaultTargetDate) setTargetDate((prev) => prev || defaultTargetDate);
+  }, [open, defaultTargetDate]);
+
   const resetForm = () => {
     setTitle('');
     setDescription('');
@@ -957,6 +971,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       category: categoryForMeasure(measureBy),
       targetDate,
     };
+    if (trainingBlockId) goalData.trainingBlock = trainingBlockId;
     if (isStrengthGoal) {
       goalData.exercise = selectedExercise?._id;
       goalData.targetWeight = toStoredLbs(targetWeight, normalizedWeightUnit);
@@ -978,6 +993,10 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
 
   const hasName = isStrengthGoal ? Boolean(selectedExercise) : Boolean(title.trim());
   const canAdvance = step === 0 ? (Boolean(goalType) && hasName) : true;
+  const handleGoalSwipe = (index) => {
+    if (index > step && !canAdvance) return; // don't swipe past an incomplete step
+    setStep(index);
+  };
 
   return (
     <Dialog
@@ -996,8 +1015,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
         {["Your goal", "Why & how important"][step]}
       </DialogTitle>
       <DialogContent>
-        <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
-          {step === 0 && (
+        <SwipeableViews index={step} onChangeIndex={handleGoalSwipe} enableMouseEvents animateHeight>
+          <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
             <Stack spacing={2.5}>
               <Typography variant="h6">What do you want to achieve?</Typography>
               <TextField
@@ -1178,8 +1197,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
                 </Grid>
               </Grid>
             </Stack>
-          )}
-          {step === 1 && (
+          </Box>
+          <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
             <Stack spacing={2}>
               <Typography variant="h6">Why &amp; how important?</Typography>
               <TextField
@@ -1222,8 +1241,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
                 )}
               </Paper>
             </Stack>
-          )}
-        </Box>
+          </Box>
+        </SwipeableViews>
       </DialogContent>
       <MobileStepper
         variant="dots"
@@ -1268,6 +1287,7 @@ export default function Goals({ view = "client", client, }) {
   const [selectedGoal, setSelectedGoal] = useState({});
   const [openGoalDetails, setOpenGoalDetails] = useState(false);
   const [openAddNewGoal, setOpenAddNewGoal] = useState(false);
+  const [openBlockWizard, setOpenBlockWizard] = useState(false);
 
   const handleOpenGoalDetails = (goal) => {
     setSelectedGoal(goal);
@@ -1310,6 +1330,11 @@ export default function Goals({ view = "client", client, }) {
             <Typography variant="h4">
               Goals
             </Typography>
+            {view === "client" && (
+              <Tooltip title="Plan a Training Block">
+                <IconButton onClick={() => setOpenBlockWizard(true)}><EventNote /></IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="New Goal">
               <IconButton onClick={handleOpenAddNewGoal}><AddCircle /></IconButton>
             </ Tooltip>
@@ -1349,6 +1374,11 @@ export default function Goals({ view = "client", client, }) {
         latestMetric={latestMetric}
         weightUnit={weightUnit}
       />
+      {view === "client" && openBlockWizard && (
+        <Suspense fallback={null}>
+          <TrainingBlockWizard open={openBlockWizard} onClose={() => setOpenBlockWizard(false)} />
+        </Suspense>
+      )}
     </>
   );
 }

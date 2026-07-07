@@ -17,6 +17,7 @@ const goalSchema = new mongoose.Schema({
     default: "",
   },
   importanceScore: { type: Number, min: 1, max: 10, default: null }, // how important, 1–10 (separate from ranked priority)
+  trainingBlock: { type: mongoose.Schema.Types.ObjectId, ref: "TrainingBlock", default: null }, // groups goals into one time-boxed focus
   category: { type: String, enum: ["General", "Strength", "Cardio", "Skill", "Weight", ""], default: "General" },
   distanceUnit: { type: String, enum: ["Miles", "Kilometers", "Meters", "Yards", ""], default: "" },
   distanceValue: { type: Number },
