@@ -36,7 +36,7 @@ import ProgramReadinessCard from "../AccountComponents/ProgramReadinessCard";
 import { AddNewGoal, GoalDetails } from "../../Pages/AppPages/Goals";
 
 const SwipeableViews = SwipeableViewsModule.default ?? SwipeableViewsModule;
-const STEP_TITLES = ["Your time period", "Your training context", "Your goals", "Review"];
+const STEP_TITLES = ["Your time period", "Your training context", "Training Block goals", "Review"];
 
 const blockGoalId = (g) => String(g?.trainingBlock?._id || g?.trainingBlock || "");
 
@@ -187,9 +187,11 @@ export default function TrainingBlockWizard({ open, onClose }) {
             {/* Step 0 — time period */}
             <Box sx={{ p: 2 }}>
               <Stack spacing={2}>
-                <Typography variant="h6">Let&apos;s plan your next block</Typography>
+                <Typography variant="h6">Let&apos;s plan your Training Block</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Pick a focus period, then we&apos;ll set the goals you want to hit inside it.
+                  A Training Block is a plan for a program cycle — its timeframe, your training context,
+                  and the goals to focus on. We&apos;ll use it later to generate a draft program (it isn&apos;t a
+                  workout program yet).
                 </Typography>
                 <TextField
                   fullWidth
@@ -259,9 +261,9 @@ export default function TrainingBlockWizard({ open, onClose }) {
             {/* Step 2 — goals */}
             <Box sx={{ p: 2 }}>
               <Stack spacing={2}>
-                <Typography variant="h6">Goals for this block</Typography>
+                <Typography variant="h6">Training Block goals</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Add the goals you want to focus on{block?.targetDate ? " by " + blockEndISO : ""}. You can add as many as you like.
+                  Add the goals to focus on this cycle{block?.targetDate ? ", by " + blockEndISO : ""}. These will be used later to generate a draft program.
                 </Typography>
                 {blockGoals.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">No goals yet — add your first one.</Typography>
@@ -295,6 +297,10 @@ export default function TrainingBlockWizard({ open, onClose }) {
             <Box sx={{ p: 2 }}>
               <Stack spacing={2}>
                 <Typography variant="h6">Review &amp; readiness</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Readiness below reflects only this Training Block&apos;s goals. This block is a plan —
+                  it will be used later to generate a draft program.
+                </Typography>
                 <ProgramReadinessCard user={user} goals={blockGoals} latestWeight={latestMetric?.weight} />
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>

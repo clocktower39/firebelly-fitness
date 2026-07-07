@@ -348,13 +348,14 @@ function Home() {
         <Grid container size={12} sx={{ p: 1 }}>
           <Paper sx={{ p: 2, width: "100%", borderRadius: "12px" }}>
             <Stack spacing={1}>
-              <Typography variant="h6">Let&apos;s set up your goals</Typography>
+              <Typography variant="h6">Plan your first Training Block</Typography>
               <Typography variant="body2" color="text.secondary">
-                Answer a few quick questions to plan a training block and the goals you want to hit.
+                Set a timeframe, your training context, and the goals to focus on — we&apos;ll use it later
+                to generate a draft program.
               </Typography>
               <Box>
                 <Button variant="contained" onClick={() => setOpenBlockWizard(true)}>
-                  Get started →
+                  Plan a Training Block →
                 </Button>
               </Box>
             </Stack>
