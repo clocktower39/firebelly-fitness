@@ -26,6 +26,7 @@ const goalSchema = new mongoose.Schema({
   exercise: { type: mongoose.Schema.Types.ObjectId, ref: "Exercise" },
   targetWeight: { type: Number },
   targetReps: { type: Number },
+  startingWeight: { type: Number }, // the client's current max at targetReps (auto-pulled or entered manually)
   targetDate: { type: Date },
   achievedDate: { type: Date },
   achievementSeen: { type: Boolean, default: false },

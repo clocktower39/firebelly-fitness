@@ -18,6 +18,7 @@ const GOAL_FIELDS = [
   "exercise",
   "targetWeight",
   "targetReps",
+  "startingWeight",
   "achievedDate",
   "targetDate",
   "distanceUnit",

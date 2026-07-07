@@ -264,6 +264,10 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     goal.goalWeight ? String(fromStoredLbs(goal.goalWeight, normalizedWeightUnit)) : ''
   );
   const [currentMax, setCurrentMax] = useState(null);
+  const [startingWeight, setStartingWeight] = useState(
+    goal.startingWeight ? String(fromStoredLbs(goal.startingWeight, normalizedWeightUnit)) : ''
+  );
+  const [startingEdited, setStartingEdited] = useState(Boolean(goal.startingWeight));
   const [targetDate, setTargetDate] = useState(goal.targetDate || '');
   const [achievedDate, setAchievedDate] = useState(goal.achievedDate || '');
   const [newComment, setNewComment] = useState('');
@@ -320,6 +324,7 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
       goalData.exercise = selectedExercise?._id;
       goalData.targetWeight = toStoredLbs(targetWeight, normalizedWeightUnit);
       goalData.targetReps = Number(targetReps);
+      goalData.startingWeight = startingWeight === '' ? null : toStoredLbs(startingWeight, normalizedWeightUnit);
       // achievedDate is auto-calculated for strength goals
       goalData.distanceUnit = null;
       goalData.distanceValue = null;
@@ -347,6 +352,13 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     dispatch(updateGoal(goalData));
   };
 
+  // Auto-fill the (editable) current-max field from logged history, unless a value is already set.
+  useEffect(() => {
+    if (isStrengthGoal && currentMax > 0 && !startingEdited) {
+      setStartingWeight(String(fromStoredLbs(currentMax, normalizedWeightUnit)));
+    }
+  }, [isStrengthGoal, currentMax, startingEdited, normalizedWeightUnit]);
+
   const resetEdit = () => {
     setTitle(goal.title || '');
     setDescription(goal.description || '');
@@ -357,6 +369,8 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
     setMeasureBy(measureForCategory(goal.category));
     setSelectedExercise(goal.exercise || null);
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
+    setStartingWeight(goal.startingWeight ? String(fromStoredLbs(goal.startingWeight, normalizedWeightUnit)) : '');
+    setStartingEdited(Boolean(goal.startingWeight));
     setTargetReps(goal.targetReps || '');
     setDistanceUnit(goal.distanceUnit || 'Miles');
     setDistanceValue(goal.distanceValue || '');
@@ -543,11 +557,13 @@ const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibrary, lat
               </Grid>
               <Grid container size={{ xs: 12, sm: 6 }}>
                 <TextField
+                  type="number"
                   fullWidth
-                  label="Current Max"
-                  value={currentMax !== null ? formatWeightWithUnit(currentMax, normalizedWeightUnit) : 'Select exercise and reps'}
-                  slotProps={readOnlyShrinkSlotProps}
-                  disabled
+                  label={`Current Max (${weightUnitLabel})`}
+                  value={startingWeight}
+                  onChange={(e) => { setStartingWeight(e.target.value); setStartingEdited(true); }}
+                  helperText={currentMax > 0 ? "Pulled from your history — edit if needed" : "Enter your current best (optional)"}
+                  slotProps={shrinkLabelSlotProps}
                 />
               </Grid>
             </>
@@ -858,6 +874,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   const [goalTime, setGoalTime] = useState('');
   const [goalWeight, setGoalWeight] = useState('');
   const [currentMax, setCurrentMax] = useState(null);
+  const [startingWeight, setStartingWeight] = useState('');
+  const [startingEdited, setStartingEdited] = useState(false);
   const [targetDate, setTargetDate] = useState('');
 
   const isStrengthGoal = measureBy === "lift";
@@ -901,6 +919,13 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
     }
   }, [isStrengthGoal, fetchCurrentMax]);
 
+  // Auto-fill the (editable) current-max field from logged history, unless the client typed their own.
+  useEffect(() => {
+    if (isStrengthGoal && currentMax > 0 && !startingEdited) {
+      setStartingWeight(String(fromStoredLbs(currentMax, normalizedWeightUnit)));
+    }
+  }, [isStrengthGoal, currentMax, startingEdited, normalizedWeightUnit]);
+
   const resetForm = () => {
     setTitle('');
     setDescription('');
@@ -917,6 +942,8 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
     setGoalTime('');
     setGoalWeight('');
     setCurrentMax(null);
+    setStartingWeight('');
+    setStartingEdited(false);
     setTargetDate('');
   };
 
@@ -934,6 +961,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       goalData.exercise = selectedExercise?._id;
       goalData.targetWeight = toStoredLbs(targetWeight, normalizedWeightUnit);
       goalData.targetReps = Number(targetReps);
+      goalData.startingWeight = startingWeight === '' ? null : toStoredLbs(startingWeight, normalizedWeightUnit);
     } else if (isCardioGoal) {
       goalData.distanceUnit = distanceUnit;
       goalData.distanceValue = distanceValue === '' ? null : Number(distanceValue);
@@ -949,7 +977,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
   };
 
   const hasName = isStrengthGoal ? Boolean(selectedExercise) : Boolean(title.trim());
-  const canAdvance = step === 0 ? Boolean(goalType) : step === 1 ? hasName : true;
+  const canAdvance = step === 0 ? (Boolean(goalType) && hasName) : true;
 
   return (
     <Dialog
@@ -965,7 +993,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       }}
     >
       <DialogTitle id="alert-dialog-title">
-        {["The goal", "Make it measurable", "Priority"][step]}
+        {["Your goal", "Why & how important"][step]}
       </DialogTitle>
       <DialogContent>
         <Box sx={{ maxWidth: 600, mx: "auto", py: 1 }}>
@@ -983,21 +1011,6 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
                 <MenuItem value=""><em>Choose a type…</em></MenuItem>
                 {GOAL_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
               </TextField>
-              <TextField
-                fullWidth
-                multiline
-                minRows={2}
-                label="Why does this matter to you?"
-                placeholder="The real reason behind it"
-                value={motivation}
-                onChange={(e) => handleChange(e, setMotivation)}
-                slotProps={shrinkLabelSlotProps}
-              />
-            </Stack>
-          )}
-          {step === 1 && (
-            <Stack spacing={2}>
-              <Typography variant="h6">Make it measurable</Typography>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
                   How will you measure it?
@@ -1064,11 +1077,13 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
               </Grid>
               <Grid container size={{ xs: 12, sm: 6 }}>
                 <TextField
+                  type="number"
                   fullWidth
-                  label="Current Max"
-                  value={currentMax !== null ? formatWeightWithUnit(currentMax, normalizedWeightUnit) : 'Select exercise and reps'}
-                  slotProps={readOnlyShrinkSlotProps}
-                  disabled
+                  label={`Current Max (${weightUnitLabel})`}
+                  value={startingWeight}
+                  onChange={(e) => { setStartingWeight(e.target.value); setStartingEdited(true); }}
+                  helperText={currentMax > 0 ? "Pulled from your history — edit if needed" : "Enter your current best (optional)"}
+                  slotProps={shrinkLabelSlotProps}
                 />
               </Grid>
             </>
@@ -1164,10 +1179,23 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
               </Grid>
             </Stack>
           )}
-          {step === 2 && (
+          {step === 1 && (
             <Stack spacing={2}>
-              <Typography variant="h6">How important is this goal?</Typography>
-              <Box sx={{ px: 2, pt: 3 }}>
+              <Typography variant="h6">Why &amp; how important?</Typography>
+              <TextField
+                fullWidth
+                multiline
+                minRows={2}
+                label="Why does this matter to you?"
+                placeholder="The real reason behind it"
+                value={motivation}
+                onChange={(e) => handleChange(e, setMotivation)}
+                slotProps={shrinkLabelSlotProps}
+              />
+              <Box sx={{ px: 2, pt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  How important is this goal?
+                </Typography>
                 <Slider
                   value={Number(importanceScore) || 5}
                   onChange={(e, v) => setImportanceScore(v)}
@@ -1199,7 +1227,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
       </DialogContent>
       <MobileStepper
         variant="dots"
-        steps={3}
+        steps={2}
         position="static"
         activeStep={step}
         sx={{ backgroundColor: "transparent", px: 2, pb: 1 }}
@@ -1212,7 +1240,7 @@ const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMetric, we
           </Button>
         }
         nextButton={
-          step < 2 ? (
+          step < 1 ? (
             <Button size="small" onClick={() => setStep(step + 1)} disabled={!canAdvance}>
               Next
             </Button>
