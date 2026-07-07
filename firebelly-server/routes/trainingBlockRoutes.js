@@ -6,6 +6,7 @@ const { ensureWriteAccess } = require("../middleware/ensureWriteAccess");
 const router = express.Router();
 
 router.get("/trainingBlocks", verifyAccessToken, trainingBlockController.list_my_training_blocks);
+router.post("/clientTrainingBlocks", verifyAccessToken, trainingBlockController.list_client_training_blocks);
 router.post("/trainingBlocks", verifyAccessToken, ensureWriteAccess, trainingBlockController.create_training_block);
 router.post("/trainingBlocks/update", verifyAccessToken, ensureWriteAccess, trainingBlockController.update_training_block);
 

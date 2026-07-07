@@ -18,6 +18,12 @@ export const programApi = {
       body: payload,
     }),
 
+  generateFromBlock: (trainingBlockId) =>
+    apiFetch("/programs/generateFromBlock", {
+      method: "POST",
+      body: { trainingBlockId },
+    }),
+
   updateProgram: (programId, payload) =>
     apiFetch(`/programs/${encodeURIComponent(programId)}`, {
       method: "PUT",

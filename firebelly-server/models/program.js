@@ -45,6 +45,9 @@ const programSchema = new mongoose.Schema(
     category: { type: String, default: null },
     weeks: { type: [[programDaySchema]], default: [] },
     mesocycles: { type: [mesocycleSchema], default: [] },
+    // Phase 2: draft generated from a Training Block + the assumptions the generator made (coach must review).
+    generatedFromBlock: { type: mongoose.Schema.Types.ObjectId, ref: "TrainingBlock", default: null },
+    generationAssumptions: { type: [String], default: [] },
     // Equipment needed to run the program, snapshotted at publish (shown to clients).
     equipmentNeeded: { type: [String], default: [] },
   },

@@ -5,6 +5,7 @@ const { ensureWriteAccess } = require("../middleware/ensureWriteAccess");
 const router = express.Router();
 
 router.post("/programs", verifyAccessToken, ensureWriteAccess, programController.create_program);
+router.post("/programs/generateFromBlock", verifyAccessToken, ensureWriteAccess, programController.generate_program_from_block);
 router.get("/programs", verifyAccessToken, programController.list_programs);
 router.get("/programs/:id", verifyAccessToken, programController.get_program);
 router.get("/programs/:id/equipment", verifyAccessToken, programController.get_program_equipment);

@@ -7,6 +7,7 @@ const Product = require("../models/product");
 const Relationship = require("../models/relationship");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 const { createNotification } = require("../services/notificationService");
+const { generateProgramFromBlock } = require("../services/programGenerator");
 
 dayjs.extend(utc);
 
@@ -420,8 +421,22 @@ const get_program_equipment = async (req, res, next) => {
   }
 };
 
+// Trainer generates a coach-reviewable DRAFT program from a client's Training Block.
+const generate_program_from_block = async (req, res, next) => {
+  try {
+    const result = await generateProgramFromBlock({
+      trainingBlockId: req.body.trainingBlockId,
+      trainerId: res.locals.user._id,
+    });
+    return res.send(result);
+  } catch (err) {
+    return res.status(400).send({ error: err.message || "Program generation failed." });
+  }
+};
+
 module.exports = {
   create_program,
+  generate_program_from_block,
   list_programs,
   get_program,
   get_program_equipment,

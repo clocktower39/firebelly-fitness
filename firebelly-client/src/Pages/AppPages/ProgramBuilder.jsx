@@ -746,6 +746,26 @@ export default function ProgramBuilder() {
           </Stack>
         </Stack>
 
+        {program.generatedFromBlock && (
+          <Alert severity="warning" variant="outlined" sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              ⚠️ Auto-generated draft — review every day before publishing or assigning. Nothing here is final.
+            </Typography>
+            {program.generationAssumptions?.length > 0 && (
+              <>
+                <Typography variant="caption" color="text.secondary">
+                  Assumptions the generator made (confirm each):
+                </Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                  {program.generationAssumptions.map((a, i) => (
+                    <Typography component="li" key={i} variant="body2">{a}</Typography>
+                  ))}
+                </Box>
+              </>
+            )}
+          </Alert>
+        )}
+
         <Card>
           <CardContent>
             <Stack spacing={2}>

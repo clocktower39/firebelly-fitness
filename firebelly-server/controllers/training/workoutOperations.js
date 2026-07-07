@@ -1037,6 +1037,7 @@ const undo_bulk_delete = async (req, res, next) => {
 };
 
 module.exports = {
+  applyEngineProgression,
   update_workout_date_by_id,
   copy_workout_by_id,
   get_training_range_end,

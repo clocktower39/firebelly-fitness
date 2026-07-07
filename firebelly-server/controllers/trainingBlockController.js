@@ -1,4 +1,5 @@
 const TrainingBlock = require("../models/trainingBlock");
+const Relationship = require("../models/relationship");
 const { pick } = require("../utils/object");
 
 const BLOCK_FIELDS = ["title", "weeks", "startDate", "targetDate", "status", "workoutSplit"];
@@ -40,4 +41,22 @@ const update_training_block = async (req, res, next) => {
   }
 };
 
-module.exports = { create_training_block, list_my_training_blocks, update_training_block };
+// Trainer reads a specific client's training blocks (relationship-gated). Non-delegated trainer call.
+const list_client_training_blocks = async (req, res, next) => {
+  try {
+    const client = req.body.client;
+    const rel = await Relationship.findOne({ trainer: res.locals.user._id, client, accepted: true });
+    if (!rel) return res.status(403).send({ error: "No accepted relationship with this client." });
+    const blocks = await TrainingBlock.find({ user: client }).sort({ createdDate: -1 });
+    return res.send(blocks);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+module.exports = {
+  create_training_block,
+  list_my_training_blocks,
+  list_client_training_blocks,
+  update_training_block,
+};

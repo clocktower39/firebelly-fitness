@@ -44,6 +44,7 @@ import { Delete, Done } from "@mui/icons-material";
 import Calendar from "./Calendar";
 import Goals from "./Goals";
 import TrainingProfileView from "../../Components/AccountComponents/TrainingProfileView";
+import ClientTrainingBlocks from "../../Components/Goals/ClientTrainingBlocks";
 import { styled } from "@mui/material/styles";
 import {
   ENGAGEMENT_STATUS_OPTIONS,
@@ -818,6 +819,7 @@ export default function Clients({ socket }) {
       >
         <Box sx={{ px: 2, pt: 2 }}>
           <TrainingProfileView client={selectedClient} />
+          {selectedClient?._id && <ClientTrainingBlocks client={selectedClient} />}
         </Box>
         <Goals view="trainer" client={selectedClient} />
       </Dialog>

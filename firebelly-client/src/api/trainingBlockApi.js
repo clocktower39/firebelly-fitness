@@ -3,6 +3,12 @@ import { apiFetch } from "./client";
 export const trainingBlockApi = {
   listTrainingBlocks: () => apiFetch("/trainingBlocks"),
 
+  listClientBlocks: (client) =>
+    apiFetch("/clientTrainingBlocks", {
+      method: "POST",
+      body: { client },
+    }),
+
   createTrainingBlock: (block) =>
     apiFetch("/trainingBlocks", {
       method: "POST",
