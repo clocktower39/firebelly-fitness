@@ -60,14 +60,40 @@ const DEFAULT_STRATEGY = STRATEGY.hypertrophy;
 
 // Movement-pattern slots for a strength day (muscle strings match the library's freeform vocab; the
 // selector falls back if they don't hit).
+// Muscle strings match the library's actual vocab (Quadriceps/Abdominals/Back/...); selector falls back if empty.
 const STRENGTH_SLOTS = [
-  { label: "Squat", muscles: ["Quads", "Quadriceps", "Glutes"] },
-  { label: "Hinge", muscles: ["Hamstrings", "Glutes", "Lower Back", "Back"] },
+  { label: "Squat / legs", muscles: ["Quadriceps", "Glutes"] },
+  { label: "Hinge / posterior", muscles: ["Hamstrings", "Glutes", "Back"] },
   { label: "Upper push", muscles: ["Chest", "Shoulders", "Triceps"] },
-  { label: "Upper pull", muscles: ["Back", "Lats", "Biceps"] },
-  { label: "Accessory", muscles: ["Core", "Abs", "Shoulders", "Arms"] },
+  { label: "Upper pull", muscles: ["Back", "Biceps"] },
+  { label: "Core / accessory", muscles: ["Core", "Abdominals", "Calves", "Forearms"] },
 ];
 const MAX_STRENGTH_EXERCISES = 5;
+
+// Convert HH:MM:SS (goal time) into total minutes (string) for a cardio plan.
+function goalMinutes(hms) {
+  if (!hms) return "";
+  const p = String(hms).split(":").map((n) => Number(n) || 0);
+  const [h, m, s] = p.length === 3 ? p : [0, p[0] || 0, p[1] || 0];
+  const total = h * 60 + m + Math.round(s / 60);
+  return total > 0 ? String(total) : "";
+}
+const distUnitShort = (u) => (u === "Kilometers" ? "km" : u === "Meters" ? "m" : u === "Yards" ? "yd" : "mi");
+
+// Seed a real cardio workout (workoutType Cardio uses the freeform `cardio.plan` object, not `training`).
+function cardioTemplateData(cardioGoal) {
+  const plan = {
+    activity: "Run", style: "Easy", distance: "", distanceUnit: "mi", duration: "30",
+    avgPace: "", rpe: "", notes: "Auto-generated draft — set the activity, distance/duration for the client.",
+  };
+  if (cardioGoal) {
+    if (cardioGoal.distanceValue) { plan.distance = String(cardioGoal.distanceValue); plan.distanceUnit = distUnitShort(cardioGoal.distanceUnit); }
+    const mins = goalMinutes(cardioGoal.goalTime);
+    if (mins) plan.duration = mins;
+    plan.notes = `Built from the goal "${cardioGoal.title}". Adjust as needed.`;
+  }
+  return { plan, actual: {} };
+}
 
 // Build a well-formed { exerciseType, goals } for a seed.
 function seedGoals(kind, p) {
@@ -150,17 +176,26 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   if (!equipmentAccess.length) assumptions.push("No equipment access on file — selected from the full library; confirm availability.");
   const dislikedIds = (client?.dislikedExercises || []).map((id) => String(id));
 
-  // --- days from the block's workout split ---
+  // --- plan the week: honor the block's split, else derive from days/week + the goal mix ---
+  const cardioGoals = activeGoals.filter((g) => g.goalType === "endurance" || g.category === "Cardio");
   const split = block.workoutSplit || {};
+  const splitSum = Object.keys(split).reduce((s, k) => s + Number(split[k] || 0), 0);
   let days = [];
-  Object.keys(split).forEach((type) => { for (let i = 0; i < Number(split[type] || 0); i += 1) days.push(type); });
-  if (!days.length) {
-    const dpw = Number(client?.weeklyFrequency) || 3;
-    days = fill(dpw, "Strength");
-    assumptions.push(`No workout-type split set — assumed ${dpw} full-body Strength days/week.`);
+  if (splitSum > 0) {
+    Object.keys(split).forEach((type) => { for (let i = 0; i < Number(split[type] || 0); i += 1) days.push(type); });
+    days = days.slice(0, 7);
+    if (cardioGoals.length && !days.includes("Cardio")) {
+      if (days.length < 7) days.push("Cardio"); else days[days.length - 1] = "Cardio";
+      assumptions.push("Added a Cardio day for the client's endurance goal (the split had none).");
+    }
+  } else {
+    const total = Math.min(7, Math.max(1, Number(client?.weeklyFrequency) || 3));
+    const nCardio = cardioGoals.length ? Math.min(2, Math.max(1, Math.floor(total / 3))) : 0;
+    const nStrength = Math.max(1, total - nCardio);
+    days = [...fill(nStrength, "Strength"), ...fill(nCardio, "Cardio")];
+    assumptions.push(`No workout split set — planned ${nStrength} strength + ${nCardio} cardio day(s) from ${total} days/week and the goal mix.`);
   }
   const daysPerWeek = Math.min(7, Math.max(1, days.length));
-  days = days.slice(0, daysPerWeek);
 
   // --- mesocycles summing to the block length ---
   const totalWeeks = Math.min(52, Math.max(1, Number(block.weeks) || 12));
@@ -178,13 +213,26 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   const anchorGoals = activeGoals.filter((g) => g.exercise && (g.goalType === "strength" || g.category === "Strength"));
 
   // --- build BASE-WEEK templates, one per day ---
-  const excludeIds = [...dislikedIds];
   const baseTemplates = [];
   let strengthDayIdx = 0;
+  let cardioDayIdx = 0;
   for (let d = 0; d < days.length; d += 1) {
     const type = days[d];
+
+    if (type === "Cardio") {
+      const g = cardioGoals[cardioDayIdx] || cardioGoals[0] || null;
+      cardioDayIdx += 1;
+      assumptions.push(g ? `Cardio day ${d + 1} seeded from "${g.title}".` : `Cardio day ${d + 1}: generic easy session — set the activity/target.`);
+      const t = await new Training({
+        title: `Cardio — Day ${d + 1} (draft)`, user: trainerId, category: ["Cardio"], workoutType: "Cardio",
+        cardio: cardioTemplateData(g), training: [[]], isTemplate: true,
+      }).save();
+      baseTemplates.push(t);
+      continue;
+    }
+
     if (type !== "Strength") {
-      // Non-strength day → labeled placeholder, never fabricated content.
+      // Yoga/Pilates/Sports → labeled placeholder for the coach (not fabricated).
       assumptions.push(`${type} day (day ${d + 1}) left as a placeholder for you to specify.`);
       const t = await new Training({
         title: `${type} — placeholder (coach to specify)`,
@@ -209,7 +257,6 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
         assumptions.push(`Anchored "${anchor.title}" as a rep-range lift${anchor.startingWeight ? ` starting ~${anchor.startingWeight}` : " — no starting load, coach to set"}.`);
         circuits.push([makeEntry(anchor.exercise, "rep-range", { sets: strategy.sets, minReps: strategy.minReps, maxReps: strategy.maxReps, weight: anchor.startingWeight || 0 })]);
       }
-      excludeIds.push(String(anchor.exercise));
       usedThisDay.add(String(anchor.exercise));
     }
 
@@ -217,7 +264,7 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
     for (let s = 0; circuits.length < MAX_STRENGTH_EXERCISES && s < STRENGTH_SLOTS.length; s += 1) {
       const slot = STRENGTH_SLOTS[(s + strengthDayIdx) % STRENGTH_SLOTS.length];
       const { exercise } = await selectExercise({
-        muscles: slot.muscles, equipmentAccess, excludeIds: [...excludeIds, ...usedThisDay], slotLabel: `${slot.label} (day ${d + 1})`, assumptions,
+        muscles: slot.muscles, equipmentAccess, excludeIds: [...dislikedIds, ...usedThisDay], slotLabel: `${slot.label} (day ${d + 1})`, assumptions,
       });
       if (!exercise) {
         assumptions.push(`Couldn't confidently pick a ${slot.label} for day ${d + 1} — left an open slot for you.`);
@@ -232,7 +279,6 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
         ? { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }
         : p;
       circuits.push([makeEntry(exercise._id, kind, params)]);
-      excludeIds.push(String(exercise._id));
       usedThisDay.add(String(exercise._id));
     }
 
@@ -269,10 +315,13 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       const base = baseTemplates[d];
       const clonedTraining = JSON.parse(JSON.stringify(base.training));
       await progressWorkout(clonedTraining, { step, deload: isDeload });
+      const clone = (o) => (o ? JSON.parse(JSON.stringify(o)) : undefined);
       const t = await new Training({
         title: base.title.replace(/Day (\d+)/, `Week ${w + 1} Day $1`),
         user: trainerId, category: base.category, workoutType: base.workoutType,
-        training: clonedTraining, isTemplate: true,
+        training: clonedTraining,
+        cardio: clone(base.cardio), sports: clone(base.sports), yoga: clone(base.yoga), pilates: clone(base.pilates),
+        isTemplate: true,
       }).save();
       program.weeks[w][d].workoutId = t._id;
     }
