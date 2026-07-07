@@ -29,8 +29,10 @@ import {
   deleteGoal,
   requestExerciseLibrary,
   requestLatestMetric,
+  createMetricEntry,
 } from "../../Redux/actions";
 import { updateUserSettings } from "../../Redux/actions/accountActions";
+import { WORKOUT_TYPE_ORDER } from "../../features/workout/utils/workoutColors";
 import { EXPERIENCE, ACTIVITY, EQUIPMENT_OPTIONS } from "../../utils/trainingProfileOptions";
 import ProgramReadinessCard from "../AccountComponents/ProgramReadinessCard";
 import { AddNewGoal, GoalDetails } from "../../Pages/AppPages/Goals";
@@ -39,6 +41,18 @@ const SwipeableViews = SwipeableViewsModule.default ?? SwipeableViewsModule;
 const STEP_TITLES = ["Your time period", "Your training context", "Training Block goals", "Review"];
 
 const blockGoalId = (g) => String(g?.trainingBlock?._id || g?.trainingBlock || "");
+
+const isoAddWeeks = (w) => {
+  const d = new Date();
+  d.setDate(d.getDate() + Number(w || 0) * 7);
+  return d.toISOString().slice(0, 10);
+};
+const isoToWeeks = (iso) => {
+  if (!iso) return 12;
+  const start = new Date(new Date().toDateString());
+  const target = new Date(iso + "T00:00:00");
+  return Math.max(1, Math.round((target - start) / (7 * 86400000)));
+};
 
 // Guided, swipeable "Training Block" setup — groups several goals into one time period,
 // with the program-relevant context and a readiness check. Runs for new users + on demand.
@@ -59,14 +73,23 @@ export default function TrainingBlockWizard({ open, onClose }) {
   // Step 0 — time period
   const [title, setTitle] = useState("");
   const [weeks, setWeeks] = useState(12);
+  const [targetDate, setTargetDate] = useState(isoAddWeeks(12));
 
   // Step 1 — training context (pre-filled from profile)
   const [experience, setExperience] = useState("");
   const [activity, setActivity] = useState("");
   const [daysPerWeek, setDaysPerWeek] = useState("");
+  const [workoutSplit, setWorkoutSplit] = useState({});
   const [equipment, setEquipment] = useState([]);
   const [injuries, setInjuries] = useState([]);
   const [mobility, setMobility] = useState([]);
+
+  // Review — fill in any missing profile basics before finishing
+  const [dob, setDob] = useState("");
+  const [height, setHeight] = useState("");
+  const [sex, setSex] = useState("");
+  const [bodyWeight, setBodyWeight] = useState("");
+  const [savingBasics, setSavingBasics] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -77,19 +100,24 @@ export default function TrainingBlockWizard({ open, onClose }) {
     setBlock(null);
     setTitle("");
     setWeeks(12);
+    setTargetDate(isoAddWeeks(12));
+    setWorkoutSplit({});
     setExperience(user.trainingExperience || "");
     setActivity(user.activityLevel || "");
     setDaysPerWeek(user.weeklyFrequency || "");
     setEquipment(user.equipmentAccess || []);
     setInjuries(user.injuries || []);
     setMobility(user.mobilityRestrictions || []);
+    setDob(user.dateOfBirth ? String(user.dateOfBirth).slice(0, 10) : "");
+    setHeight(user.height || "");
+    setSex(user.sex || "");
+    setBodyWeight("");
   }, [open]);
 
-  const blockEndISO = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + Number(weeks || 0) * 7);
-    return d.toISOString().slice(0, 10);
-  }, [weeks]);
+  const blockEndISO = targetDate;
+  // Weeks and target date stay in sync — set either one and the other follows.
+  const handleWeeksChange = (w) => { setWeeks(w); if (w !== "" && Number(w) > 0) setTargetDate(isoAddWeeks(w)); };
+  const handleTargetDateChange = (iso) => { setTargetDate(iso); if (iso) setWeeks(isoToWeeks(iso)); };
 
   const blockGoals = useMemo(
     () => (block ? (goals || []).filter((g) => blockGoalId(g) === String(block._id)) : []),
@@ -102,6 +130,7 @@ export default function TrainingBlockWizard({ open, onClose }) {
       weeks: Number(weeks) || 12,
       startDate: new Date().toISOString().slice(0, 10),
       targetDate: blockEndISO,
+      workoutSplit,
     };
     if (block?._id) {
       const updated = await trainingBlockApi.updateTrainingBlock({ _id: block._id, ...payload });
@@ -124,6 +153,33 @@ export default function TrainingBlockWizard({ open, onClose }) {
         mobilityRestrictions: mobility,
       })
     );
+
+  // Which required basics (not captured elsewhere in the wizard) are still missing.
+  const missingBasics = {
+    dob: !user.dateOfBirth,
+    height: !user.height,
+    sex: !user.sex,
+    weight: latestMetric?.weight == null,
+  };
+  const anyBasicMissing = Object.values(missingBasics).some(Boolean);
+
+  const saveBasics = async () => {
+    setSavingBasics(true);
+    try {
+      const profile = {};
+      if (dob) profile.dateOfBirth = dob;
+      if (height) profile.height = height;
+      if (sex) profile.sex = sex;
+      if (Object.keys(profile).length) await dispatch(updateUserSettings(profile));
+      if (bodyWeight !== "") {
+        await dispatch(createMetricEntry({ weight: Number(bodyWeight), recordedAt: new Date().toISOString() }));
+        await dispatch(requestLatestMetric({}));
+        setBodyWeight("");
+      }
+    } finally {
+      setSavingBasics(false);
+    }
+  };
 
   const canLeave = (s) => {
     if (s === 2) return blockGoals.length >= 1;
@@ -201,19 +257,23 @@ export default function TrainingBlockWizard({ open, onClose }) {
                   onChange={(e) => setTitle(e.target.value)}
                 />
                 <TextField
-                  select
+                  type="date"
                   fullWidth
-                  label="How long?"
+                  label="Target date (optional)"
+                  value={targetDate}
+                  onChange={(e) => handleTargetDateChange(e.target.value)}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  helperText="Have a date in mind? Set it and the length fills in."
+                />
+                <TextField
+                  type="number"
+                  fullWidth
+                  label="Length (weeks)"
                   value={weeks}
-                  onChange={(e) => setWeeks(e.target.value)}
-                >
-                  {[4, 6, 8, 10, 12, 16, 20, 24].map((w) => (
-                    <MenuItem key={w} value={w}>{w} weeks</MenuItem>
-                  ))}
-                </TextField>
-                <Typography variant="caption" color="text.secondary">
-                  Target date: {blockEndISO}
-                </Typography>
+                  onChange={(e) => handleWeeksChange(e.target.value)}
+                  slotProps={{ htmlInput: { min: 1, max: 52 } }}
+                  helperText={targetDate ? `Ends ${blockEndISO}` : ""}
+                />
               </Stack>
             </Box>
 
@@ -248,6 +308,30 @@ export default function TrainingBlockWizard({ open, onClose }) {
                   <MenuItem value=""><em>—</em></MenuItem>
                   {[1, 2, 3, 4, 5, 6, 7].map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
                 </TextField>
+                {daysPerWeek !== "" && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                      Days by workout type (optional)
+                    </Typography>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+                      {WORKOUT_TYPE_ORDER.map((t) => (
+                        <TextField
+                          key={t}
+                          select
+                          size="small"
+                          label={t}
+                          value={workoutSplit[t] ?? 0}
+                          onChange={(e) => setWorkoutSplit((prev) => ({ ...prev, [t]: Number(e.target.value) }))}
+                        >
+                          {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                        </TextField>
+                      ))}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {WORKOUT_TYPE_ORDER.reduce((s, t) => s + (Number(workoutSplit[t]) || 0), 0)} of {daysPerWeek} days allocated
+                    </Typography>
+                  </Box>
+                )}
                 <Autocomplete
                   multiple freeSolo options={EQUIPMENT_OPTIONS} value={equipment}
                   onChange={(e, v) => setEquipment(v)}
@@ -302,6 +386,40 @@ export default function TrainingBlockWizard({ open, onClose }) {
                   it will be used later to generate a draft program.
                 </Typography>
                 <ProgramReadinessCard user={user} goals={blockGoals} latestWeight={latestMetric?.weight} />
+                {anyBasicMissing && (
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>Finish your profile</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                      A few basics are still needed — add them here so your plan is complete.
+                    </Typography>
+                    <Stack spacing={1.5}>
+                      {missingBasics.dob && (
+                        <TextField type="date" fullWidth label="Date of birth" value={dob}
+                          onChange={(e) => setDob(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+                      )}
+                      {missingBasics.height && (
+                        <TextField fullWidth label="Height" placeholder={"e.g. 5' 10\""} value={height}
+                          onChange={(e) => setHeight(e.target.value)} />
+                      )}
+                      {missingBasics.sex && (
+                        <TextField select fullWidth label="Sex" value={sex} onChange={(e) => setSex(e.target.value)}>
+                          <MenuItem value="male">Male</MenuItem>
+                          <MenuItem value="female">Female</MenuItem>
+                          <MenuItem value="Prefer not to answer">Prefer not to answer</MenuItem>
+                        </TextField>
+                      )}
+                      {missingBasics.weight && (
+                        <TextField type="number" fullWidth label={`Body weight (${user.workoutWeightUnit || "lbs"})`}
+                          value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} />
+                      )}
+                      <Box>
+                        <Button variant="outlined" onClick={saveBasics} disabled={savingBasics}>
+                          {savingBasics ? "Saving…" : "Save details"}
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                )}
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     {title.trim() || `${weeks}-week block`} · {weeks} weeks · by {blockEndISO}

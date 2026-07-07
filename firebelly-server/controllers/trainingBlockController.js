@@ -1,7 +1,7 @@
 const TrainingBlock = require("../models/trainingBlock");
 const { pick } = require("../utils/object");
 
-const BLOCK_FIELDS = ["title", "weeks", "startDate", "targetDate", "status"];
+const BLOCK_FIELDS = ["title", "weeks", "startDate", "targetDate", "status", "workoutSplit"];
 
 const create_training_block = async (req, res, next) => {
   try {

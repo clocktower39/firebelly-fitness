@@ -1398,15 +1398,22 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
                   How important is this goal?
                 </Typography>
-                <Slider
-                  value={Number(importanceScore) || 5}
-                  onChange={(e, v) => setImportanceScore(v)}
-                  min={1}
-                  max={10}
-                  step={1}
-                  marks
-                  valueLabelDisplay="on"
-                />
+                <Box
+                  sx={{ px: 1 }}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchMove={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <Slider
+                    value={Number(importanceScore) || 5}
+                    onChange={(e, v) => setImportanceScore(v)}
+                    min={1}
+                    max={10}
+                    step={1}
+                    marks
+                    valueLabelDisplay="on"
+                  />
+                </Box>
                 <Typography variant="caption" color="text.secondary">
                   1 = nice to have · 10 = top priority
                 </Typography>

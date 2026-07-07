@@ -7,6 +7,8 @@ const trainingBlockSchema = new mongoose.Schema({
   weeks: { type: Number, default: 12 },
   startDate: { type: Date },
   targetDate: { type: Date },
+  // Days-per-week split by workout type, e.g. { Strength: 3, Cardio: 1 } — planning input for Phase 2.
+  workoutSplit: { type: mongoose.Schema.Types.Mixed, default: {} },
   status: { type: String, enum: ["active", "completed", "archived"], default: "active" },
   // Optional link once a program is generated for this block (Phase 2).
   program: { type: mongoose.Schema.Types.ObjectId, ref: "Program", default: null },
