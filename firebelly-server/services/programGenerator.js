@@ -15,6 +15,7 @@ const { buildProgramWeeks, mesocycleWeeks, expandMesocycles } = require("./progr
 const { progressExerciseGoals } = require("./progressionEngine");
 const { sanitizeTrainingTechniques } = require("./techniqueValidation");
 const { snapshotWeekOne } = require("./programmingSignal");
+const { getTrainerExercisePreferences, MIN_SIGNALS } = require("./trainerPreferences");
 
 // Each exercise progresses under the scheme implied by its own exerciseType (a workout mixes types).
 const schemeForType = (t) =>
@@ -169,7 +170,7 @@ function makeEntry(exerciseId, kind, p) {
 
 // Pick one exercise for a slot, rotating through the matched pool for variety. `usedIds` accumulates
 // across the whole program so days don't repeat lifts; when a pool is exhausted it falls back to reuse.
-async function pickExercise({ muscles, equipment, usedIds, slotLabel, dayNum, assumptions }) {
+async function pickExercise({ muscles, equipment, usedIds, prefScore, slotLabel, dayNum, assumptions }) {
   const eq = equipment && equipment.length ? { equipment: { $in: equipment } } : {};
   const muscle = { "muscleGroups.primary": { $in: muscles } };
   const tiers = [
@@ -182,6 +183,13 @@ async function pickExercise({ muscles, equipment, usedIds, slotLabel, dayNum, as
     const pool = await Exercise.find(t.q).limit(60).lean();
     if (!pool.length) continue;
     pool.sort((a, b) => (b.movementComplexity === "compound" ? 1 : 0) - (a.movementComplexity === "compound" ? 1 : 0));
+    // Trainer preference (when personalized): float favored lifts up, demote avoided ones. Stable sort →
+    // among equal preference the compound-first order holds. Never excludes — an avoided lift is still
+    // selectable if it's all that's left, so the fallback chain and variety rotation are unaffected.
+    if (prefScore) {
+      const pref = (e) => prefScore.get(String(e._id)) || 0;
+      pool.sort((a, b) => pref(b) - pref(a));
+    }
     const chosen = pool.find((e) => !usedIds.has(String(e._id))) || pool[0];
     if (t.relax) assumptions.push(`${slotLabel} (day ${dayNum}): no equipment/verified match — used ${t.relax} pick "${chosen.exerciseTitle}".`);
     return chosen;
@@ -258,6 +266,12 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   const usedIds = new Set(dislikedIds);
   if (nStrength) assumptions.push(`Strength split (${nStrength} day${nStrength > 1 ? "s" : ""}/week): ${strengthDayTypes.map(titleCase).join(" · ")}.`);
 
+  // Personalization (v1: exercise choices only). Below MIN_SIGNALS this is a strict no-op — selection
+  // is byte-for-byte the rules-based default. getTrainerExercisePreferences is internally guarded.
+  const prefs = await getTrainerExercisePreferences(trainerId);
+  const prefScore = prefs.sampleSize >= MIN_SIGNALS ? prefs.score : null;
+  if (prefScore) assumptions.push(`Personalized from ${prefs.sampleSize} of your past programs — biased exercise picks toward your usual choices.`);
+
   // Place each anchor lift on the first strength day whose focus covers its muscle (else the next open day).
   const anchorLibs = await Exercise.find({ _id: { $in: anchorGoals.map((g) => g.exercise) } }).select("muscleGroups").lean();
   const anchorMuscle = new Map(anchorLibs.map((l) => [String(l._id), (l.muscleGroups?.primary || [])[0]]));
@@ -322,7 +336,7 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
     // fill this day's slots, rotating through each muscle's pool (usedIds) so no two days repeat lifts
     for (const slot of slots) {
       if (circuits.length >= MAX_STRENGTH_EXERCISES) break;
-      const ex = await pickExercise({ muscles: slot.muscles, equipment, usedIds, slotLabel: slot.label, dayNum: d + 1, assumptions });
+      const ex = await pickExercise({ muscles: slot.muscles, equipment, usedIds, prefScore, slotLabel: slot.label, dayNum: d + 1, assumptions });
       if (!ex) {
         assumptions.push(`Couldn't confidently pick a ${slot.label} for day ${d + 1} — left an open slot for you.`);
         continue;
