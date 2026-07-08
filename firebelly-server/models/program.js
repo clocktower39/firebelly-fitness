@@ -48,6 +48,9 @@ const programSchema = new mongoose.Schema(
     // Phase 2: draft generated from a Training Block + the assumptions the generator made (coach must review).
     generatedFromBlock: { type: mongoose.Schema.Types.ObjectId, ref: "TrainingBlock", default: null },
     generationAssumptions: { type: [String], default: [] },
+    // Immutable week-1 snapshot of what the generator PRODUCED (baseline for the programming-signal
+    // diff captured at publish/assign). v1 = week 1 only (base design signal; later weeks are progressed).
+    generationSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
     // Equipment needed to run the program, snapshotted at publish (shown to clients).
     equipmentNeeded: { type: [String], default: [] },
   },

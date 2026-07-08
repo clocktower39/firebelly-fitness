@@ -9,6 +9,7 @@ const TrainingBlock = require("../models/trainingBlock");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 const { createNotification } = require("../services/notificationService");
 const { generateProgramFromBlock } = require("../services/programGenerator");
+const { recordProgrammingSignal } = require("../services/programmingSignal");
 
 dayjs.extend(utc);
 
@@ -209,6 +210,7 @@ const publish_program = async (req, res, next) => {
 
     const saved = await program.save();
     await syncProgramProduct(saved); // list it on the trainer's products page for clients
+    await recordProgrammingSignal(saved, { finalizedVia: "publish" }); // background signal; internally guarded, never throws
     return res.json(saved);
   } catch (err) {
     return next(err);
@@ -366,6 +368,7 @@ const assign_program = async (req, res, next) => {
       body: `Your trainer assigned you "${program.title || "a program"}".`,
       link: "/calendar",
     }).catch(() => {});
+    await recordProgrammingSignal(program, { finalizedVia: "assign" }); // background signal; internally guarded, never throws
     return res.json({ status: "assigned", count: inserted.length });
   } catch (err) {
     return next(err);

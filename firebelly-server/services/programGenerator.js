@@ -14,6 +14,7 @@ const Relationship = require("../models/relationship");
 const { buildProgramWeeks, mesocycleWeeks, expandMesocycles } = require("./programs");
 const { progressExerciseGoals } = require("./progressionEngine");
 const { sanitizeTrainingTechniques } = require("./techniqueValidation");
+const { snapshotWeekOne } = require("./programmingSignal");
 
 // Each exercise progresses under the scheme implied by its own exerciseType (a workout mixes types).
 const schemeForType = (t) =>
@@ -379,6 +380,14 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       }).save();
       program.weeks[w][d].workoutId = t._id;
     }
+  }
+
+  // Snapshot week 1 as the immutable baseline for the programming-signal diff (captured later at
+  // publish/assign). Guarded — a telemetry snapshot failure must never break generation.
+  try {
+    program.generationSnapshot = await snapshotWeekOne(program);
+  } catch (err) {
+    console.error("generationSnapshot capture failed (non-blocking):", err.message);
   }
 
   await program.save();
