@@ -34,6 +34,21 @@ const GOAL_FIELDS = [
   "goalWeight",
 ];
 
+// The client sends "" for ObjectId fields a goal doesn't use (a non-strength goal has no `exercise`;
+// a goal may have no `trainingBlock`) and can send an out-of-range `importanceScore`. Either would throw
+// a Mongoose CastError / min-validator error on save and fail the request. Coerce so a well-formed goal
+// always persists (e.g. entering non-strength goals for a Training Block was failing on this).
+const sanitizeGoalFields = (fields) => {
+  ["exercise", "trainingBlock"].forEach((f) => {
+    if (f in fields && (fields[f] === "" || fields[f] == null)) fields[f] = null;
+  });
+  if ("importanceScore" in fields) {
+    const n = Number(fields.importanceScore);
+    fields.importanceScore = Number.isFinite(n) && n >= 1 ? Math.min(10, Math.round(n)) : null;
+  }
+  return fields;
+};
+
 const canAccessGoal = async (user, goalUserId) => {
   if (sameId(user?._id, goalUserId)) return true;
   if (!user?.isTrainer) return false;
@@ -80,7 +95,7 @@ const checkStrengthGoalAchievement = async (userId, exerciseId, targetReps, targ
 
 const create_goal = async (req, res, next) => {
   try {
-    const fields = pick(req.body, GOAL_FIELDS);
+    const fields = sanitizeGoalFields(pick(req.body, GOAL_FIELDS));
     // New goals append to the bottom of the client's ranking unless a priority was supplied.
     if (fields.priority === undefined) {
       fields.priority = await Goal.countDocuments({ user: res.locals.user._id });
@@ -128,7 +143,7 @@ const remove_goal = (req, res, next) => {
 const update_goal = (req, res, next) => {
   Goal.findOneAndUpdate(
     { _id: req.body._id, user: res.locals.user._id },
-    { $set: pick(req.body, GOAL_FIELDS) },
+    { $set: sanitizeGoalFields(pick(req.body, GOAL_FIELDS)) },
     { returnDocument: "after" }
   )
     .populate("exercise", "_id exerciseTitle")
