@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { goalApi } from "../../api/goalApi";
+import { trainingBlockApi } from "../../api/trainingBlockApi";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Autocomplete,
@@ -1478,6 +1479,23 @@ export default function Goals({ view = "client", client, }) {
   const [openGoalDetails, setOpenGoalDetails] = useState(false);
   const [openAddNewGoal, setOpenAddNewGoal] = useState(false);
   const [openBlockWizard, setOpenBlockWizard] = useState(false);
+  const [blocks, setBlocks] = useState([]);
+  const [resumeBlock, setResumeBlock] = useState(null);
+
+  // The client's Training Blocks (planning containers) shown as their own clickable cards above the
+  // goals list, so a block can be re-opened/edited rather than only its loose goals appearing.
+  const loadBlocks = useCallback(async () => {
+    if (view !== "client") return;
+    try {
+      const data = await trainingBlockApi.listTrainingBlocks();
+      setBlocks(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setBlocks([]);
+    }
+  }, [view]);
+  useEffect(() => {
+    loadBlocks();
+  }, [loadBlocks]);
 
   const handleOpenGoalDetails = (goal) => {
     setSelectedGoal(goal);
@@ -1522,13 +1540,52 @@ export default function Goals({ view = "client", client, }) {
             </Typography>
             {view === "client" && (
               <Tooltip title="Plan a Training Block">
-                <IconButton onClick={() => setOpenBlockWizard(true)}><EventNote /></IconButton>
+                <IconButton onClick={() => { setResumeBlock(null); setOpenBlockWizard(true); }}><EventNote /></IconButton>
               </Tooltip>
             )}
             <Tooltip title="New Goal">
               <IconButton onClick={handleOpenAddNewGoal}><AddCircle /></IconButton>
             </ Tooltip>
           </Grid>
+
+          {view === "client" && blocks.length > 0 && (
+            <Grid container size={12} spacing={1} sx={{ pb: 1.5, flex: 'initial' }}>
+              <Grid size={12}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ px: 0.5 }}>Training Blocks</Typography>
+              </Grid>
+              {blocks.map((b) => {
+                const count = (goals || []).filter(
+                  (g) => String(g.trainingBlock?._id || g.trainingBlock || "") === String(b._id)
+                ).length;
+                const inProgress = b.status === "active" && !b.program;
+                return (
+                  <Grid size={12} key={b._id}>
+                    <Card variant="outlined">
+                      <CardActionArea onClick={() => { setResumeBlock(b); setOpenBlockWizard(true); }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              {b.title || "Training Block"}
+                            </Typography>
+                            <Chip
+                              label={b.program ? "program made" : b.status}
+                              size="small"
+                              variant="outlined"
+                              color={inProgress ? "primary" : "default"}
+                            />
+                          </Stack>
+                          <Typography variant="body2" color="text.secondary">
+                            {(b.weeks || 0)} weeks · {count} goal{count === 1 ? "" : "s"}
+                            {b.targetDate ? ` · target ${new Date(b.targetDate).toLocaleDateString()}` : ""}
+                          </Typography>
+                        </CardContent>
+                      </CardActionArea>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          )}
 
           <Grid container size={12} spacing={1} sx={{ alignSelf: 'flex-start', alignContent: 'flex-start', overflowY: 'scroll', scrollbarWidth: 'none', flex: 'auto', }}>
             {sortedGoals.map((goal) => (
@@ -1566,7 +1623,11 @@ export default function Goals({ view = "client", client, }) {
       />
       {view === "client" && openBlockWizard && (
         <Suspense fallback={null}>
-          <TrainingBlockWizard open={openBlockWizard} onClose={() => setOpenBlockWizard(false)} />
+          <TrainingBlockWizard
+            open={openBlockWizard}
+            resumeBlock={resumeBlock}
+            onClose={() => { setOpenBlockWizard(false); setResumeBlock(null); loadBlocks(); }}
+          />
         </Suspense>
       )}
     </>

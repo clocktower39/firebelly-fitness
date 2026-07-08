@@ -56,7 +56,7 @@ const isoToWeeks = (iso) => {
 
 // Guided, swipeable "Training Block" setup — groups several goals into one time period,
 // with the program-relevant context and a readiness check. Runs for new users + on demand.
-export default function TrainingBlockWizard({ open, onClose }) {
+export default function TrainingBlockWizard({ open, onClose, resumeBlock = null }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.user);
@@ -112,31 +112,17 @@ export default function TrainingBlockWizard({ open, onClose }) {
     setHeight(user.height || "");
     setSex(user.sex || "");
     setBodyWeight("");
-    // Resume the most recent in-progress block (active + no program generated yet) so re-opening the
-    // wizard drops you back into the plan you started to keep editing it — instead of starting blank
-    // (which also created a duplicate block via ensureBlock). Finished/archived blocks are ignored.
-    let cancelled = false;
-    (async () => {
-      try {
-        const blocks = await trainingBlockApi.listTrainingBlocks();
-        const resumable = (Array.isArray(blocks) ? blocks : [])
-          .filter((b) => b && b.status === "active" && !b.program)
-          .sort((a, b) => new Date(b.createdDate || b.startDate || 0) - new Date(a.createdDate || a.startDate || 0))[0];
-        if (!cancelled && resumable) {
-          setBlock(resumable);
-          setTitle(resumable.title || "");
-          const wk = Number(resumable.weeks) || 12;
-          setWeeks(wk);
-          setTargetDate(resumable.targetDate ? String(resumable.targetDate).slice(0, 10) : isoAddWeeks(wk));
-          setWorkoutSplit(resumable.workoutSplit || {});
-        }
-      } catch (e) {
-        /* no resumable block / fetch failed → start fresh (create-new behavior) */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    // Resume the specific block passed in (clicked from the Goals list) so you drop back into that plan
+    // to keep editing it; with no block passed (the "Plan a Training Block" +) it starts fresh / creates
+    // a new one on save. Setting `block` also makes its existing goals show on the goals step.
+    if (resumeBlock && resumeBlock._id) {
+      setBlock(resumeBlock);
+      setTitle(resumeBlock.title || "");
+      const wk = Number(resumeBlock.weeks) || 12;
+      setWeeks(wk);
+      setTargetDate(resumeBlock.targetDate ? String(resumeBlock.targetDate).slice(0, 10) : isoAddWeeks(wk));
+      setWorkoutSplit(resumeBlock.workoutSplit || {});
+    }
   }, [open]);
 
   const blockEndISO = targetDate;
