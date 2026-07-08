@@ -625,6 +625,7 @@ export default function ProgramBuilder() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [dirty]);
 
+  const fetchingWorkoutIds = useRef(new Set());
   useEffect(() => {
     if (!program?.weeks) return;
     const assignedIds = new Set();
@@ -633,10 +634,15 @@ export default function ProgramBuilder() {
         if (day.workoutId) assignedIds.add(day.workoutId);
       })
     );
-    const missingIds = Array.from(assignedIds).filter((id) => !workoutCache[id]);
+    // Only fetch ids we don't already have and aren't already fetching — prevents the re-run cascade
+    // from firing duplicate requests (a filled generated program has one per day across every week).
+    const missingIds = Array.from(assignedIds).filter(
+      (id) => !workoutCache[id] && !fetchingWorkoutIds.current.has(id)
+    );
     if (missingIds.length === 0) return;
 
     missingIds.forEach(async (id) => {
+      fetchingWorkoutIds.current.add(id);
       try {
         const data = await workoutApi.getTraining({ _id: id });
         if (data?._id) {
@@ -648,6 +654,8 @@ export default function ProgramBuilder() {
         }
       } catch (err) {
         setErrorMessage("Unable to load workout details.");
+      } finally {
+        fetchingWorkoutIds.current.delete(id);
       }
     });
   }, [program, setErrorMessage, workoutCache, dispatch]);
