@@ -58,16 +58,39 @@ const STRATEGY = {
 };
 const DEFAULT_STRATEGY = STRATEGY.hypertrophy;
 
-// Movement-pattern slots for a strength day (muscle strings match the library's freeform vocab; the
-// selector falls back if they don't hit).
-// Muscle strings match the library's actual vocab (Quadriceps/Abdominals/Back/...); selector falls back if empty.
-const STRENGTH_SLOTS = [
-  { label: "Squat / legs", muscles: ["Quadriceps", "Glutes"] },
-  { label: "Hinge / posterior", muscles: ["Hamstrings", "Glutes", "Back"] },
-  { label: "Upper push", muscles: ["Chest", "Shoulders", "Triceps"] },
-  { label: "Upper pull", muscles: ["Back", "Biceps"] },
-  { label: "Core / accessory", muscles: ["Core", "Abdominals", "Calves", "Forearms"] },
-];
+// Per-day muscle slots keyed by day type. Vocab matches the library (Quadriceps/Abdominals/Back/...).
+// Core has ~1 exercise in the library, so core work targets Abdominals. Per-muscle pools are large
+// (40–197), so the selector rotates through them (usedIds) to keep days from repeating exercises.
+const DAY_TYPES = {
+  full:  [{ label: "Squat / legs", muscles: ["Quadriceps"] }, { label: "Chest", muscles: ["Chest"] }, { label: "Back", muscles: ["Back"] }, { label: "Hinge / posterior", muscles: ["Hamstrings", "Glutes"] }, { label: "Shoulders", muscles: ["Shoulders"] }, { label: "Core", muscles: ["Abdominals"] }],
+  upper: [{ label: "Chest", muscles: ["Chest"] }, { label: "Back", muscles: ["Back"] }, { label: "Shoulders", muscles: ["Shoulders"] }, { label: "Triceps", muscles: ["Triceps"] }, { label: "Biceps", muscles: ["Biceps"] }, { label: "Core", muscles: ["Abdominals"] }],
+  lower: [{ label: "Squat / quads", muscles: ["Quadriceps"] }, { label: "Hinge / hamstrings", muscles: ["Hamstrings"] }, { label: "Glutes", muscles: ["Glutes"] }, { label: "Calves", muscles: ["Calves"] }, { label: "Core", muscles: ["Abdominals"] }],
+  push:  [{ label: "Chest (flat)", muscles: ["Chest"] }, { label: "Shoulders", muscles: ["Shoulders"] }, { label: "Triceps", muscles: ["Triceps"] }, { label: "Chest (incline)", muscles: ["Chest"] }, { label: "Core", muscles: ["Abdominals"] }],
+  pull:  [{ label: "Back (vertical)", muscles: ["Back"] }, { label: "Back (horizontal)", muscles: ["Back"] }, { label: "Biceps", muscles: ["Biceps"] }, { label: "Posterior chain", muscles: ["Hamstrings", "Glutes"] }, { label: "Forearms / core", muscles: ["Forearms", "Abdominals"] }],
+  legs:  [{ label: "Squat / quads", muscles: ["Quadriceps"] }, { label: "Hinge / hamstrings", muscles: ["Hamstrings"] }, { label: "Glutes", muscles: ["Glutes"] }, { label: "Calves", muscles: ["Calves"] }, { label: "Core", muscles: ["Abdominals"] }],
+};
+// Split by number of strength days/week. Repeats (e.g. upper/lower/upper/lower) still differ because
+// exercise rotation gives each day different lifts for the same pattern.
+const SPLIT_BY_DAYS = {
+  1: ["full"],
+  2: ["upper", "lower"],
+  3: ["push", "pull", "legs"],
+  4: ["upper", "lower", "upper", "lower"],
+  5: ["upper", "lower", "push", "pull", "legs"],
+  6: ["push", "pull", "legs", "push", "pull", "legs"],
+  7: ["push", "pull", "legs", "upper", "lower", "push", "pull"],
+};
+const strengthSplit = (n) => SPLIT_BY_DAYS[Math.max(1, Math.min(7, n))] || fill(Math.max(1, n), "full");
+const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// The wizard's equipment vocab differs from the library (plurals / gym terms) — map it so the
+// equipment filter actually matches; unmappable "gym"/"cardio machine" fall through to no filter.
+const EQUIP_MAP = { Dumbbells: "Dumbbell", Kettlebells: "Kettlebell", Bands: "Band", "Loop bands": "Loop-Band", "Pull-up bar": "Pull-up Bar", "Squat rack": "Barbell", "Cable machine": "Cable" };
+const mapEquipment = (list) => {
+  const out = new Set();
+  (list || []).forEach((e) => { if (e === "Full gym" || e === "Cardio machine") return; out.add(EQUIP_MAP[e] || e); });
+  return [...out];
+};
 const MAX_STRENGTH_EXERCISES = 5;
 
 // Convert HH:MM:SS (goal time) into total minutes (string) for a cardio plan.
@@ -80,17 +103,33 @@ function goalMinutes(hms) {
 }
 const distUnitShort = (u) => (u === "Kilometers" ? "km" : u === "Meters" ? "m" : u === "Yards" ? "yd" : "mi");
 
-// Seed a real cardio workout (workoutType Cardio uses the freeform `cardio.plan` object, not `training`).
-function cardioTemplateData(cardioGoal) {
+// Seed a real cardio workout. workoutType Cardio uses the freeform `cardio.plan` object (not `training`);
+// we write the FULL field shape (matches the client's DEFAULT_CARDIO_FIELDS, incl. segments/clientPrompts)
+// so the editor hydrates cleanly, and always leave at least a duration target so the day isn't blank.
+function cardioTemplateData(cardioGoal, assumptions) {
   const plan = {
     activity: "Run", style: "Easy", distance: "", distanceUnit: "mi", duration: "30",
-    avgPace: "", rpe: "", notes: "Auto-generated draft — set the activity, distance/duration for the client.",
+    avgPace: "", avgSpeed: "", rpe: "5", avgHeartRate: "", elevationGain: "", elevationUnit: "ft",
+    routeType: "", surface: "", shoes: "", cadence: "", strideLength: "", strideUnit: "in",
+    routeLink: "", weather: "", temperature: "", temperatureUnit: "F", hrZone: "Z2 Endurance",
+    notes: "Auto-generated draft — adjust the activity, distance and duration for the client.",
+    clientPrompts: [], segments: [],
   };
   if (cardioGoal) {
+    const t = (cardioGoal.title || "").toLowerCase();
+    if (/(bike|cycl|spin)/.test(t)) plan.activity = "Bike";
+    else if (/swim/.test(t)) plan.activity = "Swim";
+    else if (/row/.test(t)) plan.activity = "Row";
+    else if (/walk|hike|ruck/.test(t)) plan.activity = "Walk";
     if (cardioGoal.distanceValue) { plan.distance = String(cardioGoal.distanceValue); plan.distanceUnit = distUnitShort(cardioGoal.distanceUnit); }
-    const mins = goalMinutes(cardioGoal.goalTime);
+    const mins = goalMinutes(cardioGoal.goalTime) || goalMinutes(cardioGoal.startingTime);
     if (mins) plan.duration = mins;
-    plan.notes = `Built from the goal "${cardioGoal.title}". Adjust as needed.`;
+    plan.notes = `Target from the goal "${cardioGoal.title}" — a starting point; adjust for the client.`;
+    if (!cardioGoal.distanceValue && !mins && assumptions) {
+      assumptions.push(`Cardio goal "${cardioGoal.title}" had no distance/time on file — seeded a 30-minute easy session; set a real target.`);
+    }
+  } else if (assumptions) {
+    assumptions.push("Cardio day has no matching goal — seeded a 30-minute easy session; set the activity and target.");
   }
   return { plan, actual: {} };
 }
@@ -127,27 +166,26 @@ function makeEntry(exerciseId, kind, p) {
   return { exercise: exerciseId, exerciseType, goals, achieved, feedback: { difficulty: null, comments: [] }, techniques: [] };
 }
 
-// Pick one exercise for a slot with a safe fallback chain. Returns { exercise } or { exercise: null }.
-async function selectExercise({ muscles, equipmentAccess, excludeIds, slotLabel, assumptions }) {
-  const eq = equipmentAccess && equipmentAccess.length ? { equipment: { $in: equipmentAccess } } : {};
-  const notUsed = { _id: { $nin: excludeIds } };
+// Pick one exercise for a slot, rotating through the matched pool for variety. `usedIds` accumulates
+// across the whole program so days don't repeat lifts; when a pool is exhausted it falls back to reuse.
+async function pickExercise({ muscles, equipment, usedIds, slotLabel, dayNum, assumptions }) {
+  const eq = equipment && equipment.length ? { equipment: { $in: equipment } } : {};
   const muscle = { "muscleGroups.primary": { $in: muscles } };
-  const tries = [
-    { q: { verified: true, ...muscle, ...eq, ...notUsed }, relax: null },
-    { q: { ...muscle, ...eq, ...notUsed }, relax: "unverified" },
-    { q: { ...muscle, ...notUsed }, relax: "any-equipment" }, // ignore equipment
-    { q: { verified: true, ...eq, ...notUsed }, relax: "any-muscle" }, // ignore muscle match
+  const tiers = [
+    { q: { verified: true, ...muscle, ...eq }, relax: null },
+    { q: { ...muscle, ...eq }, relax: null },
+    { q: { ...muscle }, relax: "any-equipment" },
+    { q: { verified: true, ...eq }, relax: "any-muscle" },
   ];
-  for (const t of tries) {
-    const found = await Exercise.find(t.q).limit(12).lean();
-    if (found.length) {
-      found.sort((a, b) => (b.movementComplexity === "compound" ? 1 : 0) - (a.movementComplexity === "compound" ? 1 : 0));
-      const chosen = found[0];
-      if (t.relax) assumptions.push(`${slotLabel}: no verified/matching exercise — fell back to ${t.relax} pick "${chosen.exerciseTitle}" (please confirm).`);
-      return { exercise: chosen };
-    }
+  for (const t of tiers) {
+    const pool = await Exercise.find(t.q).limit(60).lean();
+    if (!pool.length) continue;
+    pool.sort((a, b) => (b.movementComplexity === "compound" ? 1 : 0) - (a.movementComplexity === "compound" ? 1 : 0));
+    const chosen = pool.find((e) => !usedIds.has(String(e._id))) || pool[0];
+    if (t.relax) assumptions.push(`${slotLabel} (day ${dayNum}): no equipment/verified match — used ${t.relax} pick "${chosen.exerciseTitle}".`);
+    return chosen;
   }
-  return { exercise: null };
+  return null;
 }
 
 async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
@@ -209,8 +247,27 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   const weeksCount = mesocycleWeeks(mesocycles);
   assumptions.push(`Structured ${weeksCount} weeks as ${mesocycles.length} ${strategy.meso} block(s); last week of each ≥4-week block is a deload.`);
 
-  // Goal-referenced strength lifts to anchor (one per strength day, in priority order).
+  // Goal-referenced strength lifts to anchor as the primary mover on a relevant day.
   const anchorGoals = activeGoals.filter((g) => g.exercise && (g.goalType === "strength" || g.category === "Strength"));
+
+  // Choose a split from the number of strength days; selection rotates a shared usedIds set for variety.
+  const nStrength = days.filter((t) => t === "Strength").length;
+  const strengthDayTypes = strengthSplit(nStrength);
+  const equipment = mapEquipment(equipmentAccess);
+  const usedIds = new Set(dislikedIds);
+  if (nStrength) assumptions.push(`Strength split (${nStrength} day${nStrength > 1 ? "s" : ""}/week): ${strengthDayTypes.map(titleCase).join(" · ")}.`);
+
+  // Place each anchor lift on the first strength day whose focus covers its muscle (else the next open day).
+  const anchorLibs = await Exercise.find({ _id: { $in: anchorGoals.map((g) => g.exercise) } }).select("muscleGroups").lean();
+  const anchorMuscle = new Map(anchorLibs.map((l) => [String(l._id), (l.muscleGroups?.primary || [])[0]]));
+  const anchorByDay = {};
+  const takenDays = new Set();
+  anchorGoals.forEach((g) => {
+    const mus = anchorMuscle.get(String(g.exercise));
+    let idx = strengthDayTypes.findIndex((dt, i) => !takenDays.has(i) && (DAY_TYPES[dt] || []).some((s) => s.muscles.includes(mus)));
+    if (idx < 0) idx = strengthDayTypes.findIndex((_, i) => !takenDays.has(i));
+    if (idx >= 0) { anchorByDay[idx] = g; takenDays.add(idx); }
+  });
 
   // --- build BASE-WEEK templates, one per day ---
   const baseTemplates = [];
@@ -222,10 +279,9 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
     if (type === "Cardio") {
       const g = cardioGoals[cardioDayIdx] || cardioGoals[0] || null;
       cardioDayIdx += 1;
-      assumptions.push(g ? `Cardio day ${d + 1} seeded from "${g.title}".` : `Cardio day ${d + 1}: generic easy session — set the activity/target.`);
       const t = await new Training({
         title: `Cardio — Day ${d + 1} (draft)`, user: trainerId, category: ["Cardio"], workoutType: "Cardio",
-        cardio: cardioTemplateData(g), training: [[]], isTemplate: true,
+        cardio: cardioTemplateData(g, assumptions), training: [[]], isTemplate: true,
       }).save();
       baseTemplates.push(t);
       continue;
@@ -242,11 +298,13 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       continue;
     }
 
+    // Strength day: this day's split focus (upper/lower/push/pull/legs/full), filled with rotated picks.
+    const dayType = strengthDayTypes[strengthDayIdx] || "full";
+    const slots = DAY_TYPES[dayType] || DAY_TYPES.full;
     const circuits = [];
-    const usedThisDay = new Set();
 
-    // anchor a goal lift on this strength day if available
-    const anchor = anchorGoals[strengthDayIdx];
+    // anchor a goal lift as the primary mover on this day if one was assigned here
+    const anchor = anchorByDay[strengthDayIdx];
     if (anchor) {
       if (strategy.scheme === "percent" && anchor.startingWeight) {
         const reps = anchor.targetReps || strategy.reps || 5;
@@ -255,37 +313,33 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
         circuits.push([makeEntry(anchor.exercise, "percent", { sets: strategy.sets, reps: strategy.reps, percent: strategy.percent, oneRepMax: est1RM })]);
       } else {
         assumptions.push(`Anchored "${anchor.title}" as a rep-range lift${anchor.startingWeight ? ` starting ~${anchor.startingWeight}` : " — no starting load, coach to set"}.`);
-        circuits.push([makeEntry(anchor.exercise, "rep-range", { sets: strategy.sets, minReps: strategy.minReps, maxReps: strategy.maxReps, weight: anchor.startingWeight || 0 })]);
+        circuits.push([makeEntry(anchor.exercise, "rep-range", { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12, weight: anchor.startingWeight || 0 })]);
       }
-      usedThisDay.add(String(anchor.exercise));
+      usedIds.add(String(anchor.exercise));
     }
 
-    // fill remaining slots by movement pattern (rotate start per day for variety)
-    for (let s = 0; circuits.length < MAX_STRENGTH_EXERCISES && s < STRENGTH_SLOTS.length; s += 1) {
-      const slot = STRENGTH_SLOTS[(s + strengthDayIdx) % STRENGTH_SLOTS.length];
-      const { exercise } = await selectExercise({
-        muscles: slot.muscles, equipmentAccess, excludeIds: [...dislikedIds, ...usedThisDay], slotLabel: `${slot.label} (day ${d + 1})`, assumptions,
-      });
-      if (!exercise) {
+    // fill this day's slots, rotating through each muscle's pool (usedIds) so no two days repeat lifts
+    for (const slot of slots) {
+      if (circuits.length >= MAX_STRENGTH_EXERCISES) break;
+      const ex = await pickExercise({ muscles: slot.muscles, equipment, usedIds, slotLabel: slot.label, dayNum: d + 1, assumptions });
+      if (!ex) {
         assumptions.push(`Couldn't confidently pick a ${slot.label} for day ${d + 1} — left an open slot for you.`);
         continue;
       }
-      const p = strategy.kind === "percent"
-        ? { sets: strategy.sets, reps: strategy.reps, percent: strategy.percent } // no 1RM for accessories → % of nothing
-        : { sets: strategy.sets, minReps: strategy.minReps, maxReps: strategy.maxReps };
-      // accessories without a 1RM shouldn't be percent-locked; use rep-range so they're usable
+      usedIds.add(String(ex._id));
+      // accessories aren't %-locked (no 1RM) → rep-range; keep time/reps schemes for mobility/skill blocks
       const kind = strategy.kind === "percent" ? "rep-range" : strategy.kind;
-      const params = kind === "rep-range"
-        ? { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }
-        : p;
-      circuits.push([makeEntry(exercise._id, kind, params)]);
-      usedThisDay.add(String(exercise._id));
+      const params =
+        kind === "rep-range" ? { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }
+        : kind === "time" ? { sets: strategy.sets, seconds: strategy.seconds || 30 }
+        : { sets: strategy.sets, reps: strategy.reps || 8 };
+      circuits.push([makeEntry(ex._id, kind, params)]);
     }
 
     const hasContent = circuits.length > 0;
     if (!hasContent) assumptions.push(`Strength day ${d + 1} has no exercises yet — add some in the builder.`);
     const t = await new Training({
-      title: hasContent ? `Strength — Day ${d + 1} (draft)` : `Strength — Day ${d + 1} (add exercises)`,
+      title: hasContent ? `${titleCase(dayType)} — Day ${d + 1} (draft)` : `Strength — Day ${d + 1} (add exercises)`,
       user: trainerId, category: ["Strength"], workoutType: "Strength",
       training: sanitizeTrainingTechniques(hasContent ? circuits : [[]]),
       isTemplate: true,
