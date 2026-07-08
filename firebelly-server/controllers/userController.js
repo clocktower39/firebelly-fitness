@@ -356,6 +356,28 @@ const update_user = async (req, res, next) => {
     }
 
     const updates = pick(req.body, USER_PROFILE_UPDATE_FIELDS);
+    // A trainer in a view-as (delegated) session may set only TRAINING-planning fields on the client —
+    // never personal/account data (DOB/height/sex/name/...). Drop anything else, so the block wizard
+    // can save training context in view-as without opening account writes.
+    const isDelegated = Boolean(
+      res.locals.user.delegationMode ||
+        res.locals.user.viewedUserId ||
+        res.locals.user.viewOnly ||
+        res.locals.user.actingUserId
+    );
+    if (isDelegated) {
+      const TRAINER_DELEGATED_FIELDS = [
+        "trainingExperience",
+        "activityLevel",
+        "weeklyFrequency",
+        "equipmentAccess",
+        "injuries",
+        "mobilityRestrictions",
+      ];
+      Object.keys(updates).forEach((k) => {
+        if (!TRAINER_DELEGATED_FIELDS.includes(k)) delete updates[k];
+      });
+    }
     if (updates.dateOfBirth) {
       const ageBand = getAgeBand(updates.dateOfBirth);
       if (ageBand === "u13") {
@@ -384,15 +406,8 @@ const update_user = async (req, res, next) => {
       });
     }
 
-    // In a delegated (view-as) session the token carries delegation context (viewedUserId,
-    // delegationMode, ...). Re-issuing a plain token for the viewed user would strip that and
-    // corrupt the session, so only mint a fresh token for a normal first-person session.
-    const isDelegated = Boolean(
-      res.locals.user.delegationMode ||
-        res.locals.user.viewedUserId ||
-        res.locals.user.viewOnly ||
-        res.locals.user.actingUserId
-    );
+    // Re-issue a token only for a normal first-person session — delegated (view-as) tokens carry
+    // view-as context that a plain re-issue would strip. `isDelegated` was computed above.
     const responseBody = { status: "success", user };
     if (!isDelegated) responseBody.accessToken = createAccessToken(user);
     return res.send(responseBody);

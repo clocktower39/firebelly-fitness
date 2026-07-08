@@ -3,6 +3,7 @@ import { goalApi } from "../../api/goalApi";
 import { trainingBlockApi } from "../../api/trainingBlockApi";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import ErrorBoundary from "../../Components/ErrorBoundary";
 import {
   Autocomplete,
   Avatar,
@@ -1644,25 +1645,29 @@ export default function Goals({ view = "client", client, }) {
       </Container>
 
       {selectedGoal && (
-        <GoalDetails
-          goal={selectedGoal}
-          open={openGoalDetails}
-          onClose={handleCloseGoalDetails}
+        <ErrorBoundary onReset={handleCloseGoalDetails}>
+          <GoalDetails
+            goal={selectedGoal}
+            open={openGoalDetails}
+            onClose={handleCloseGoalDetails}
+            dispatch={dispatch}
+            user={user}
+            exerciseLibrary={exerciseLibrary}
+            latestMetric={latestMetric}
+            weightUnit={weightUnit}
+          />
+        </ErrorBoundary>
+      )}
+      <ErrorBoundary onReset={handleCloseAddNewGoal}>
+        <AddNewGoal
+          open={openAddNewGoal}
+          onClose={handleCloseAddNewGoal}
           dispatch={dispatch}
-          user={user}
           exerciseLibrary={exerciseLibrary}
           latestMetric={latestMetric}
           weightUnit={weightUnit}
         />
-      )}
-      <AddNewGoal
-        open={openAddNewGoal}
-        onClose={handleCloseAddNewGoal}
-        dispatch={dispatch}
-        exerciseLibrary={exerciseLibrary}
-        latestMetric={latestMetric}
-        weightUnit={weightUnit}
-      />
+      </ErrorBoundary>
       {view === "client" && openBlockWizard && (
         <Suspense fallback={null}>
           <TrainingBlockWizard

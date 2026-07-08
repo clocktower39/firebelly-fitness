@@ -39,6 +39,9 @@ const AREA_PATTERNS = {
     /^\/commentGoal$/, /^\/removeGoalComment$/,
     // Training Blocks are goal-planning containers — same scope grant as goals.
     /^\/trainingBlocks(\/|$)/, /^\/clientTrainingBlocks$/,
+    // The block wizard's training-context save. The controller restricts a delegated session to
+    // training fields only (experience/days/equipment/injuries/mobility) — never account/personal data.
+    /^\/updateUser$/,
   ],
   measurements: [/^\/metrics\//],
   readiness: [/^\/readiness(\/|$)/],
@@ -63,6 +66,7 @@ const WRITE_PATTERNS = {
     /^\/goals\/markAchievementSeen$/,
     // Block create/update are the mutating training-block routes (list_my/GET + clientTrainingBlocks POST are reads).
     /^\/trainingBlocks$/, /^\/trainingBlocks\/update$/,
+    /^\/updateUser$/, // field-restricted for delegated sessions in the controller
   ],
   measurements: [/^\/metrics\/(create|update|delete|review)$/],
   readiness: [/^\/readiness$/],

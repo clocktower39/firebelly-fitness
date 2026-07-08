@@ -422,7 +422,7 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
                   it will be used later to generate a draft program.
                 </Typography>
                 <ProgramReadinessCard user={user} goals={blockGoals} latestWeight={latestMetric?.weight} />
-                {anyBasicMissing && (
+                {anyBasicMissing && !user.delegationMode && (
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>Finish your profile</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
