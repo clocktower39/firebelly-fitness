@@ -36,6 +36,7 @@ import { WORKOUT_TYPE_ORDER } from "../../features/workout/utils/workoutColors";
 import { EXPERIENCE, ACTIVITY, EQUIPMENT_OPTIONS } from "../../utils/trainingProfileOptions";
 import ProgramReadinessCard from "../AccountComponents/ProgramReadinessCard";
 import { AddNewGoal, GoalDetails } from "../../Pages/AppPages/Goals";
+import ErrorBoundary from "../ErrorBoundary";
 
 const SwipeableViews = SwipeableViewsModule.default ?? SwipeableViewsModule;
 const STEP_TITLES = ["Your time period", "Your training context", "Training Block goals", "Review"];
@@ -198,13 +199,21 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
     return true; // period defaults are valid; context is optional; review is terminal
   };
 
+  // Persist whatever the current step edits so nothing is lost on navigation OR a later crash. Block
+  // fields (weeks/target on step 0, the day-split on step 1) -> ensureBlock; profile (experience, days/
+  // week, equipment, injuries, mobility) on step 1 -> saveContext. The split is EDITED on step 1, so it
+  // must be saved when leaving step 1 (not just at 0->1, which ran before those edits existed).
+  const persistStep = async (s) => {
+    if (s === 0 || s === 1) await ensureBlock();
+    if (s === 1) await saveContext();
+  };
+
   const handleNext = async () => {
     if (!canLeave(step) || busy) return;
     try {
       setBusy(true);
       setErr("");
-      if (step === 0) await ensureBlock();
-      if (step === 1) await saveContext();
+      await persistStep(step);
       setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
     } catch (e) {
       // Surface instead of silently sticking (e.g. a delegation-scope 403 would otherwise be invisible).
@@ -214,7 +223,18 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
     }
   };
 
-  const handleBack = () => setStep((s) => Math.max(0, s - 1));
+  const handleBack = async () => {
+    if (busy) return;
+    try {
+      setBusy(true);
+      await persistStep(step); // save the current step before leaving, so going back never drops edits
+    } catch (e) {
+      // non-fatal going back; still let them navigate
+    } finally {
+      setBusy(false);
+      setStep((s) => Math.max(0, s - 1));
+    }
+  };
 
   const handleSwipe = (index) => {
     if (index === step + 1) handleNext();
@@ -483,28 +503,32 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
         />
       </Dialog>
 
-      <AddNewGoal
-        open={addGoalOpen}
-        onClose={() => setAddGoalOpen(false)}
-        dispatch={dispatch}
-        exerciseLibrary={exerciseLibrary}
-        latestMetric={latestMetric}
-        weightUnit={user.workoutWeightUnit}
-        trainingBlockId={block?._id}
-        defaultTargetDate={blockEndISO}
-      />
-
-      {editGoal && (
-        <GoalDetails
-          goal={editGoal}
-          open={Boolean(editGoal)}
-          onClose={() => setEditGoal(null)}
+      <ErrorBoundary onReset={() => setAddGoalOpen(false)}>
+        <AddNewGoal
+          open={addGoalOpen}
+          onClose={() => setAddGoalOpen(false)}
           dispatch={dispatch}
-          user={user}
           exerciseLibrary={exerciseLibrary}
           latestMetric={latestMetric}
           weightUnit={user.workoutWeightUnit}
+          trainingBlockId={block?._id}
+          defaultTargetDate={blockEndISO}
         />
+      </ErrorBoundary>
+
+      {editGoal && (
+        <ErrorBoundary onReset={() => setEditGoal(null)}>
+          <GoalDetails
+            goal={editGoal}
+            open={Boolean(editGoal)}
+            onClose={() => setEditGoal(null)}
+            dispatch={dispatch}
+            user={user}
+            exerciseLibrary={exerciseLibrary}
+            latestMetric={latestMetric}
+            weightUnit={user.workoutWeightUnit}
+          />
+        </ErrorBoundary>
       )}
     </>
   );
