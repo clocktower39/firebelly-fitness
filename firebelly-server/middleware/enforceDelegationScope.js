@@ -37,6 +37,8 @@ const AREA_PATTERNS = {
   goals: [
     /^\/goals(\/|$)/, /^\/clientGoals$/, /^\/createGoal$/, /^\/removeGoal$/, /^\/updateGoal$/,
     /^\/commentGoal$/, /^\/removeGoalComment$/,
+    // Training Blocks are goal-planning containers — same scope grant as goals.
+    /^\/trainingBlocks(\/|$)/, /^\/clientTrainingBlocks$/,
   ],
   measurements: [/^\/metrics\//],
   readiness: [/^\/readiness(\/|$)/],
@@ -59,6 +61,8 @@ const WRITE_PATTERNS = {
   goals: [
     /^\/createGoal$/, /^\/removeGoal$/, /^\/updateGoal$/, /^\/commentGoal$/, /^\/removeGoalComment$/,
     /^\/goals\/markAchievementSeen$/,
+    // Block create/update are the mutating training-block routes (list_my/GET + clientTrainingBlocks POST are reads).
+    /^\/trainingBlocks$/, /^\/trainingBlocks\/update$/,
   ],
   measurements: [/^\/metrics\/(create|update|delete|review)$/],
   readiness: [/^\/readiness$/],

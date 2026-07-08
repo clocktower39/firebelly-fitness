@@ -67,6 +67,7 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
   const [step, setStep] = useState(0);
   const [block, setBlock] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const [addGoalOpen, setAddGoalOpen] = useState(false);
   const [editGoal, setEditGoal] = useState(null);
 
@@ -201,9 +202,13 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
     if (!canLeave(step) || busy) return;
     try {
       setBusy(true);
+      setErr("");
       if (step === 0) await ensureBlock();
       if (step === 1) await saveContext();
       setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
+    } catch (e) {
+      // Surface instead of silently sticking (e.g. a delegation-scope 403 would otherwise be invisible).
+      setErr("Couldn't save the training block. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -448,6 +453,11 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
             </Box>
           </SwipeableViews>
         </DialogContent>
+        {err && (
+          <Typography variant="caption" color="error" sx={{ px: 2, pb: 0.5, display: "block" }}>
+            {err}
+          </Typography>
+        )}
         <MobileStepper
           variant="dots"
           steps={STEP_TITLES.length}
