@@ -126,7 +126,7 @@ export default function Clients({ socket }) {
   const [selectedClient, setSelectedClient] = useState("");
   const [showOnlyOnline, setShowOnlyOnline] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [engagementFilter, setEngagementFilter] = useState("all");
+  const [engagementFilter, setEngagementFilter] = useState("active");
   const [sortKey, setSortKey] = useState("firstName");
   const [searchParams] = useSearchParams();
 
