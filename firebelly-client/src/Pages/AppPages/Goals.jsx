@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { goalApi } from "../../api/goalApi";
 import { trainingBlockApi } from "../../api/trainingBlockApi";
 import { useSelector, useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Autocomplete,
   Avatar,
@@ -1477,6 +1477,7 @@ export default function Goals({ view = "client", client, }) {
   );
   const weightUnit = normalizeWeightUnit(user.workoutWeightUnit);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedGoal, setSelectedGoal] = useState({});
   const [openGoalDetails, setOpenGoalDetails] = useState(false);
@@ -1531,6 +1532,18 @@ export default function Goals({ view = "client", client, }) {
     dispatch(requestExerciseLibrary());
     dispatch(requestLatestMetric({ userId: view === "trainer" ? client?._id : undefined }));
   }, [dispatch, view, client?._id]);
+
+  // Deep link from the trainer's "Plan a Training Block" shortcut (after entering the client account):
+  // /goals?planBlock=1 auto-opens the wizard on a fresh block, then clears the flag.
+  useEffect(() => {
+    if (view === "client" && searchParams.get("planBlock") === "1") {
+      setResumeBlock(null);
+      setOpenBlockWizard(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("planBlock");
+      setSearchParams(next, { replace: true });
+    }
+  }, [view, searchParams, setSearchParams]);
 
   return (
     <>
