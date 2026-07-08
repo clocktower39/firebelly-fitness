@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Button, CircularProgress, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import { trainingBlockApi } from "../../api/trainingBlockApi";
 import { programApi } from "../../api/programApi";
 
@@ -47,26 +47,45 @@ export default function ClientTrainingBlocks({ client }) {
         </Typography>
       ) : (
         <Stack spacing={1.5}>
-          {blocks.map((b) => (
-            <Box key={b._id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-              <Box>
-                <Typography variant="body2">{b.title || `${b.weeks}-week block`}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {b.weeks} weeks
-                  {b.targetDate ? ` · by ${String(b.targetDate).slice(0, 10)}` : ""}
-                  {b.program ? " · draft generated" : ""}
-                </Typography>
+          {blocks.map((b) => {
+            const prog = b.program && typeof b.program === "object" ? b.program : null;
+            const isPublished = prog && prog.status === "PUBLISHED";
+            return (
+              <Box key={b._id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body2">{b.title || `${b.weeks}-week block`}</Typography>
+                    {prog && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color={isPublished ? "success" : "warning"}
+                        label={isPublished ? "Published" : "Draft"}
+                      />
+                    )}
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    {b.weeks} weeks
+                    {b.targetDate ? ` · by ${String(b.targetDate).slice(0, 10)}` : ""}
+                  </Typography>
+                </Box>
+                {prog ? (
+                  <Button size="small" variant="outlined" onClick={() => navigate(`/programs/${prog._id}/edit`)}>
+                    {isPublished ? "Open program" : "Edit draft"}
+                  </Button>
+                ) : (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={generatingId === b._id}
+                    onClick={() => generate(b)}
+                  >
+                    {generatingId === b._id ? "Generating…" : "Generate draft program"}
+                  </Button>
+                )}
               </Box>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={generatingId === b._id}
-                onClick={() => generate(b)}
-              >
-                {generatingId === b._id ? "Generating…" : "Generate draft program"}
-              </Button>
-            </Box>
-          ))}
+            );
+          })}
         </Stack>
       )}
       {error && <Typography variant="caption" color="error" sx={{ display: "block", mt: 1 }}>{error}</Typography>}

@@ -20,7 +20,9 @@ const create_training_block = async (req, res, next) => {
 
 const list_my_training_blocks = async (req, res, next) => {
   try {
-    const blocks = await TrainingBlock.find({ user: res.locals.user._id }).sort({ createdDate: -1 });
+    const blocks = await TrainingBlock.find({ user: res.locals.user._id })
+      .populate("program", "_id status title") // so the UI can show + label the generated draft
+      .sort({ createdDate: -1 });
     return res.send(blocks);
   } catch (err) {
     return next(err);
@@ -47,7 +49,9 @@ const list_client_training_blocks = async (req, res, next) => {
     const client = req.body.client;
     const rel = await Relationship.findOne({ trainer: res.locals.user._id, client, accepted: true });
     if (!rel) return res.status(403).send({ error: "No accepted relationship with this client." });
-    const blocks = await TrainingBlock.find({ user: client }).sort({ createdDate: -1 });
+    const blocks = await TrainingBlock.find({ user: client })
+      .populate("program", "_id status title") // so the trainer sees + can open the generated draft
+      .sort({ createdDate: -1 });
     return res.send(blocks);
   } catch (err) {
     return next(err);

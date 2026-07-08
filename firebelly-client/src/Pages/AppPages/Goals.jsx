@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { goalApi } from "../../api/goalApi";
 import { trainingBlockApi } from "../../api/trainingBlockApi";
 import { useSelector, useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   Autocomplete,
   Avatar,
@@ -10,6 +11,7 @@ import {
   Button,
   Card,
   CardActionArea,
+  CardActions,
   CardContent,
   Chip,
   Container,
@@ -1474,6 +1476,7 @@ export default function Goals({ view = "client", client, }) {
     (state) => state.metrics.latestByUser[(client?._id || user._id)]
   );
   const weightUnit = normalizeWeightUnit(user.workoutWeightUnit);
+  const navigate = useNavigate();
 
   const [selectedGoal, setSelectedGoal] = useState({});
   const [openGoalDetails, setOpenGoalDetails] = useState(false);
@@ -1557,29 +1560,45 @@ export default function Goals({ view = "client", client, }) {
                 const count = (goals || []).filter(
                   (g) => String(g.trainingBlock?._id || g.trainingBlock || "") === String(b._id)
                 ).length;
-                const inProgress = b.status === "active" && !b.program;
+                const prog = b.program && typeof b.program === "object" ? b.program : null;
+                const isPublished = prog && prog.status === "PUBLISHED";
                 return (
                   <Grid size={12} key={b._id}>
                     <Card variant="outlined">
-                      <CardActionArea onClick={() => { setResumeBlock(b); setOpenBlockWizard(true); }}>
-                        <CardContent sx={{ py: 1.5 }}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {b.title || "Training Block"}
-                            </Typography>
+                      <CardContent
+                        sx={{ py: 1.5, cursor: "pointer" }}
+                        onClick={() => { setResumeBlock(b); setOpenBlockWizard(true); }}
+                      >
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {b.title || "Training Block"}
+                          </Typography>
+                          {prog ? (
                             <Chip
-                              label={b.program ? "program made" : b.status}
+                              label={isPublished ? "Published" : "Draft"}
                               size="small"
                               variant="outlined"
-                              color={inProgress ? "primary" : "default"}
+                              color={isPublished ? "success" : "warning"}
                             />
-                          </Stack>
-                          <Typography variant="body2" color="text.secondary">
-                            {(b.weeks || 0)} weeks · {count} goal{count === 1 ? "" : "s"}
-                            {b.targetDate ? ` · target ${new Date(b.targetDate).toLocaleDateString()}` : ""}
-                          </Typography>
-                        </CardContent>
-                      </CardActionArea>
+                          ) : (
+                            <Chip label={b.status} size="small" variant="outlined" color={b.status === "active" ? "primary" : "default"} />
+                          )}
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          {(b.weeks || 0)} weeks · {count} goal{count === 1 ? "" : "s"}
+                          {b.targetDate ? ` · target ${new Date(b.targetDate).toLocaleDateString()}` : ""}
+                        </Typography>
+                      </CardContent>
+                      <CardActions sx={{ pt: 0, px: 2, pb: 1.5 }}>
+                        <Button size="small" onClick={() => { setResumeBlock(b); setOpenBlockWizard(true); }}>
+                          Edit block
+                        </Button>
+                        {prog && (
+                          <Button size="small" onClick={() => navigate(`/programs/${prog._id}/edit`)}>
+                            {isPublished ? "Open program" : "Edit draft"}
+                          </Button>
+                        )}
+                      </CardActions>
                     </Card>
                   </Grid>
                 );
