@@ -1533,17 +1533,27 @@ export default function Goals({ view = "client", client, }) {
     dispatch(requestLatestMetric({ userId: view === "trainer" ? client?._id : undefined }));
   }, [dispatch, view, client?._id]);
 
-  // Deep link from the trainer's "Plan a Training Block" shortcut (after entering the client account):
-  // /goals?planBlock=1 auto-opens the wizard on a fresh block, then clears the flag.
+  // Deep links from the trainer's client panel (after entering the client account): open the wizard
+  // fresh (planBlock=1), or resumed on a specific block (editBlock=<id>, once that block has loaded).
   useEffect(() => {
-    if (view === "client" && searchParams.get("planBlock") === "1") {
+    if (view !== "client") return;
+    const editId = searchParams.get("editBlock");
+    if (editId) {
+      const b = blocks.find((x) => String(x._id) === editId);
+      if (!b) return; // blocks still loading — this effect re-runs when they arrive
+      setResumeBlock(b);
+      setOpenBlockWizard(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("editBlock");
+      setSearchParams(next, { replace: true });
+    } else if (searchParams.get("planBlock") === "1") {
       setResumeBlock(null);
       setOpenBlockWizard(true);
       const next = new URLSearchParams(searchParams);
       next.delete("planBlock");
       setSearchParams(next, { replace: true });
     }
-  }, [view, searchParams, setSearchParams]);
+  }, [view, searchParams, blocks, setSearchParams]);
 
   return (
     <>
