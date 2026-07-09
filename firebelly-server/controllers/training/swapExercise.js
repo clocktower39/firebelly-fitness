@@ -7,26 +7,46 @@ const {
 const Program = require("../../models/program");
 const { sanitizeTrainingTechniques } = require("../../services/techniqueValidation");
 
-// Reference-only exercise swap inside a training[[ ]] structure. For every entry whose
-// exercise id equals fromId, point it at newExercise while preserving the programmed
-// scheme (goals/achieved/techniques). exerciseType only flips to "Time" when the
-// replacement is an isometric/time-based movement, so a reps scheme is not left on a hold.
-// Robust to bare ObjectId, populated { _id }, and legacy string exercise values.
-const applySwapToTraining = (training, fromId, newExercise) => {
-  let changed = 0;
-  const next = (training || []).map((circuit) =>
-    (circuit || []).map((entry) => {
-      const currentId = String(entry.exercise?._id || entry.exercise || "");
-      if (!currentId || currentId !== String(fromId)) return entry;
-      changed += 1;
-      const updated = { ...entry, exercise: newExercise._id };
-      if (newExercise.measurementType === "time") {
-        updated.exerciseType = "Time";
+// Reference-only exercise swap inside a training[[ ]] structure. Preserves the programmed
+// scheme (goals/achieved/techniques) — only the exercise ref changes. exerciseType only flips
+// to "Time" when the replacement is an isometric/time-based movement, so a reps scheme is not
+// left on a hold. Robust to bare ObjectId, populated { _id }, and legacy string exercise values.
+//
+// POSITION-PRECISE: when `pos` ({ circuitIndex, entryIndex }) is given and that exact slot still
+// holds fromId, only that ONE slot is swapped — so a day holding the same exercise id in two
+// slots (a generator can reuse one when a muscle pool runs dry) no longer gets both co-swapped,
+// which was producing duplicates. Downstream cascade docs share the anchor's structure, so the
+// same (circuitIndex, entryIndex) targets the matching slot there too. If the position is missing
+// or has drifted out of alignment, we fall back to swapping the FIRST id match only (never every
+// match), so a duplicate sibling is left intact instead of being rewritten as well.
+const idOfEntry = (entry) => String(entry?.exercise?._id || entry?.exercise || "");
+const applySwapToTraining = (training, fromId, newExercise, pos = null) => {
+  const from = String(fromId);
+  const swapEntry = (entry) => {
+    const updated = { ...entry, exercise: newExercise._id };
+    if (newExercise.measurementType === "time") updated.exerciseType = "Time";
+    return updated;
+  };
+  // Copy the 2-D structure; only targeted entry objects are replaced.
+  const next = (training || []).map((circuit) => (circuit || []).map((entry) => entry));
+
+  const ci = pos && Number.isInteger(pos.circuitIndex) ? pos.circuitIndex : -1;
+  const ei = pos && Number.isInteger(pos.entryIndex) ? pos.entryIndex : -1;
+  if (ci >= 0 && ei >= 0 && next[ci] && next[ci][ei] && idOfEntry(next[ci][ei]) === from) {
+    next[ci][ei] = swapEntry(next[ci][ei]);
+    return { training: next, changed: 1 };
+  }
+
+  // Fallback: swap the first matching entry only.
+  for (let c = 0; c < next.length; c += 1) {
+    for (let e = 0; e < (next[c] || []).length; e += 1) {
+      if (idOfEntry(next[c][e]) === from) {
+        next[c][e] = swapEntry(next[c][e]);
+        return { training: next, changed: 1 };
       }
-      return updated;
-    })
-  );
-  return { training: next, changed };
+    }
+  }
+  return { training: next, changed: 0 };
 };
 
 // Swap an exercise in one workout and (scope "forward") cascade it to every later workout
@@ -36,8 +56,15 @@ const applySwapToTraining = (training, fromId, newExercise) => {
 // Completed/logged workouts are never rewritten.
 const swap_exercise_forward = async (req, res, next) => {
   try {
-    const { anchorWorkoutId, fromExercise, toExercise, scope = "forward", programId } = req.body;
+    const { anchorWorkoutId, fromExercise, toExercise, scope = "forward", programId, excludeAnchor } = req.body;
     const trainerId = res.locals.user._id;
+    // Which slot the trainer clicked (from the exercise row). Optional for back-compat, but the
+    // client always sends it now so a swap targets exactly that slot and its aligned downstream
+    // slots — never a same-id sibling.
+    const pos =
+      Number.isInteger(req.body.circuitIndex) && Number.isInteger(req.body.entryIndex)
+        ? { circuitIndex: req.body.circuitIndex, entryIndex: req.body.entryIndex }
+        : null;
 
     if (!anchorWorkoutId || !fromExercise || !toExercise) {
       return res.status(400).json({ error: "anchorWorkoutId, fromExercise, and toExercise are required." });
@@ -126,14 +153,20 @@ const swap_exercise_forward = async (req, res, next) => {
       }
     }
 
+    // The client can own the open anchor locally (the editor saves it) and ask the server to
+    // touch only the CASCADE targets — avoids a server write racing the editor's unsaved state.
+    const writeIds = excludeAnchor
+      ? targetIds.filter((id) => String(id) !== String(anchorWorkoutId))
+      : targetIds;
+
     // Apply the swap to each target and bulk-write only those that actually changed and are
     // not completed.
-    const docs = await Training.find({ _id: { $in: targetIds } }).lean();
+    const docs = await Training.find({ _id: { $in: writeIds } }).lean();
     const ops = [];
     const affected = [];
     docs.forEach((doc) => {
       if (doc.complete) return; // never rewrite a completed/logged workout
-      const { training, changed } = applySwapToTraining(doc.training, fromExercise, newExercise);
+      const { training, changed } = applySwapToTraining(doc.training, fromExercise, newExercise, pos);
       if (!changed) return;
       const sanitized = sanitizeTrainingTechniques(training);
       ops.push({ updateOne: { filter: { _id: doc._id }, update: { $set: { training: sanitized } } } });

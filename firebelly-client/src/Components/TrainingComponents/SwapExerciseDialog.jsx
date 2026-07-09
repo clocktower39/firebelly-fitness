@@ -55,7 +55,10 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
   );
 
   const [selected, setSelected] = useState([]); // single replacement, kept as a 1-item array
-  const [scope, setScope] = useState("forward");
+  // Default to just-this-workout. Cascading forward by default was what quietly turned one edit
+  // into program-wide rewrites (and duplicates); use "Update later weeks from Week 1" in the
+  // builder to push structure forward deliberately.
+  const [scope, setScope] = useState("single");
   const [differentEquipmentOnly, setDifferentEquipmentOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -67,31 +70,25 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
   );
 
   const replacement = selected[selected.length - 1] || null;
-  const cannotCascadeTemplate = isTemplate && !programId;
   const canApply =
     replacement &&
     replacement._id &&
     replacement._id !== currentId &&
     workout?._id &&
-    !submitting &&
-    !(scope === "forward" && cannotCascadeTemplate);
+    !submitting;
 
-  const forwardLabel = isTemplate
-    ? "This and all later weeks in this program"
-    : "This and all later workouts in this program";
+  const forwardLabel = "This and all this client's later workouts";
 
   const scopeHint =
     scope === "single"
       ? "Only this workout will change."
-      : isTemplate
-      ? "Changes cascade to later weeks of the program template. Clients already assigned this program are not affected."
-      : "Changes cascade to this client's future, unfinished workouts. Completed workouts are never changed.";
+      : "Also swaps this exercise in the client's future, unfinished workouts. Completed workouts are never changed.";
 
   const reset = () => {
     setSelected([]);
     setResult(null);
     setError("");
-    setScope("forward");
+    setScope("single");
     setDifferentEquipmentOnly(false);
   };
 
@@ -104,12 +101,27 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
     if (!canApply) return;
     setSubmitting(true);
     setError("");
+
+    // Program templates (the builder) + "just this workout": swap is a LOCAL edit of the open
+    // workout. It saves atomically with your other edits via the editor's Save button — no
+    // server round-trip against a possibly-stale DB, which is what mis-targeted swaps and
+    // created duplicates. To push structure across weeks, use "Update later weeks from Week 1".
+    if (isTemplate || scope === "single") {
+      if (onApplied) onApplied(replacement);
+      setResult({ updatedCount: 1, local: true });
+      setSubmitting(false);
+      return;
+    }
+
+    // Client-dated forward cascade: swap this exercise across the client's future, unfinished
+    // workouts (server) — the open anchor is handled locally (excludeAnchor) + saved by the editor.
     const data = await dispatch(
       swapExerciseForward({
         anchorWorkoutId: workout._id,
         fromExercise: currentId,
         toExercise: replacement._id,
-        scope,
+        scope: "forward",
+        excludeAnchor: true,
         ...(programId ? { programId } : {}),
       })
     );
@@ -118,10 +130,8 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
       setError(data?.error || "Something went wrong applying the swap.");
       return;
     }
-    // Keep the open editor entry in sync immediately (the swapped anchor also re-hydrates
-    // from the server, but the entry component won't remount, so refresh its selection).
     if (onApplied) onApplied(replacement);
-    setResult(data);
+    setResult({ ...data, updatedCount: (data.updatedCount || 0) + 1 });
   };
 
   return (
@@ -130,7 +140,9 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
       <DialogContent>
         {result ? (
           <Alert severity="success" sx={{ my: 1 }}>
-            Updated {result.updatedCount} workout{result.updatedCount === 1 ? "" : "s"}.
+            {result.local
+              ? "Exercise swapped in this workout."
+              : `Updated ${result.updatedCount} workout${result.updatedCount === 1 ? "" : "s"}.`}
           </Alert>
         ) : (
           <>
@@ -183,19 +195,22 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2">Apply to</Typography>
-            <RadioGroup value={scope} onChange={(e) => setScope(e.target.value)}>
-              <FormControlLabel value="single" control={<Radio />} label="Just this workout" />
-              <FormControlLabel value="forward" control={<Radio />} label={forwardLabel} />
-            </RadioGroup>
-            <Typography variant="caption" color="text.secondary" display="block">
-              {scopeHint}
-            </Typography>
-
-            {cannotCascadeTemplate && scope === "forward" && (
-              <Alert severity="warning" sx={{ mt: 1 }}>
-                Open this workout from the program builder to cascade the swap across the program.
-              </Alert>
+            {isTemplate ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                This swaps the exercise in this workout only. To apply changes across later weeks,
+                use <strong>&ldquo;Update later weeks from Week 1&rdquo;</strong> in the program builder.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="subtitle2">Apply to</Typography>
+                <RadioGroup value={scope} onChange={(e) => setScope(e.target.value)}>
+                  <FormControlLabel value="single" control={<Radio />} label="Just this workout" />
+                  <FormControlLabel value="forward" control={<Radio />} label={forwardLabel} />
+                </RadioGroup>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {scopeHint}
+                </Typography>
+              </>
             )}
 
             {error && (

@@ -10,6 +10,7 @@ export default function StrengthWorkoutEditor({
   newSet,
   onToggleWeightUnit,
   removeExercise,
+  swapExercise,
   removeSet,
   save,
   selectedDate,
@@ -37,6 +38,7 @@ export default function StrengthWorkoutEditor({
           newSet={newSet}
           removeSet={removeSet}
           removeExercise={removeExercise}
+          swapExercise={swapExercise}
           localTraining={localTraining}
           setLocalTraining={setLocalTraining}
           save={save}

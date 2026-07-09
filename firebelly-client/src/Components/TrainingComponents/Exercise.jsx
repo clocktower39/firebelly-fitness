@@ -51,6 +51,7 @@ export default function Exercise(props) {
     setIndex,
     localTraining,
     removeExercise,
+    swapExercise,
     setHeightToggle,
     weightUnit: weightUnitOverride,
     onToggleWeightUnit,
@@ -675,10 +676,12 @@ export default function Exercise(props) {
                 currentExercise={title}
                 onApplied={(replacement) => {
                   if (!replacement) return;
-                  // Reflect the swap in the open editor entry immediately (the anchor also
-                  // re-hydrates from the server, but this entry component won't remount).
+                  // Update this row's display, then swap EXACTLY this slot via the same persist
+                  // path removeExercise uses (immutable rebuild + updateTraining). Index-targeted,
+                  // so a duplicate copy of the same exercise elsewhere is never touched.
                   setTitle(replacement);
                   if (replacement.measurementType === "time") setExerciseType("Time");
+                  swapExercise(setIndex, exerciseIndex, replacement);
                 }}
               />
               <LogLoader

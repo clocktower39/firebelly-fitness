@@ -417,4 +417,4 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   return { programId: program._id, assumptions };
 }
 
-module.exports = { generateProgramFromBlock };
+module.exports = { generateProgramFromBlock, progressWorkout };

@@ -50,6 +50,7 @@ function SwipeableSet(props) {
     newSet,
     removeSet,
     removeExercise,
+    swapExercise,
     setLocalTraining,
     newExercise,
     toggleNewSet,
@@ -203,6 +204,7 @@ function SwipeableSet(props) {
                     setIndex={index}
                     exerciseIndex={exerciseIndex}
                     removeExercise={removeExercise}
+                    swapExercise={swapExercise}
                     localTraining={localTraining}
                     setLocalTraining={setLocalTraining}
                     setHeightToggle={setHeightToggle}

@@ -287,7 +287,12 @@ export function swapExerciseForward(payload) {
       return null;
     }
 
-    (data.workouts || []).forEach((workout) => dispatch(upsertWorkout(workout)));
+    // Never re-hydrate the OPEN anchor workout from the server — the editor owns its local state
+    // and upserting it would clobber unsaved edits (and could revert the just-applied swap). Only
+    // cascade targets get upserted; the anchor is updated locally by the swap dialog's onApplied.
+    (data.workouts || [])
+      .filter((workout) => String(workout._id) !== String(payload.anchorWorkoutId))
+      .forEach((workout) => dispatch(upsertWorkout(workout)));
     return data;
   };
 }

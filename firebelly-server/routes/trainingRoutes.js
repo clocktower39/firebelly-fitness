@@ -46,6 +46,12 @@ const swapExerciseValidate = {
     scope: Joi.string().valid("single", "forward").optional(),
     programId: objectId.optional(),
     clientId: objectId.optional(),
+    // The exact slot the trainer clicked, so the swap targets only that entry (and its aligned
+    // downstream slots) instead of every occurrence of the same exercise id.
+    circuitIndex: Joi.number().integer().min(0).optional(),
+    entryIndex: Joi.number().integer().min(0).optional(),
+    // The open anchor is edited locally by the client; server should touch only cascade targets.
+    excludeAnchor: Joi.boolean().optional(),
   }),
 };
 

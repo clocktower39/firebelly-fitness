@@ -178,6 +178,9 @@ export default function ProgramBuilder() {
   });
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [clearTarget, setClearTarget] = useState({ weekIndex: null, dayIndex: null });
+  const [resyncConfirmOpen, setResyncConfirmOpen] = useState(false);
+  const [resyncTarget, setResyncTarget] = useState({ dayIndexes: null, label: "all days" });
+  const [isResyncing, setIsResyncing] = useState(false);
 
   const saveTimerRef = useRef(null);
   const inFlightRef = useRef(false);
@@ -580,6 +583,42 @@ export default function ProgramBuilder() {
       setIsAutoProgressing(false);
     }
   }, [program, progressForm, workoutCache, updateDaySlot, setErrorMessage, setSavedMessage]);
+
+  // Push Week 1's exercise structure (added/removed/reordered exercises) to every later week,
+  // re-progressing loads server-side with the generator's own engine. Rewrites later weeks in
+  // place and refreshes the builder cache from the returned docs.
+  const runResync = useCallback(async () => {
+    if (!program?._id) return;
+    setIsResyncing(true);
+    try {
+      const data = await programApi.resyncFromWeekOne(program._id, {
+        dayIndexes: resyncTarget?.dayIndexes || null,
+      });
+      if (data?.error) throw new Error(data.error);
+      if (Array.isArray(data.workouts) && data.workouts.length) {
+        setWorkoutCache((prev) => {
+          const next = { ...prev };
+          data.workouts.forEach((w) => {
+            if (w?._id) next[w._id] = w;
+          });
+          return next;
+        });
+        data.workouts.forEach((w) => w?._id && dispatch(upsertWorkout(w)));
+      }
+      if (data.weeks) setProgram((prev) => ({ ...prev, weeks: data.weeks }));
+      setResyncConfirmOpen(false);
+      const changed = (data.updated || 0) + (data.created || 0);
+      setSavedMessage(
+        changed > 0
+          ? `Updated ${data.weeksSynced} later week${data.weeksSynced === 1 ? "" : "s"} from Week 1.`
+          : "Later weeks already match Week 1 — nothing to update."
+      );
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to update later weeks.");
+    } finally {
+      setIsResyncing(false);
+    }
+  }, [program, resyncTarget, dispatch, setErrorMessage, setSavedMessage]);
 
   useEffect(() => {
     if (programId) {
@@ -1019,6 +1058,26 @@ export default function ProgramBuilder() {
                   >
                     Copy Week
                   </Button>
+                  <Tooltip title="Rebuild every later week from Week 1's exercises (loads re-progressed). Overwrites manual changes to later weeks.">
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setResyncTarget({ dayIndexes: null, label: "all days" });
+                          setResyncConfirmOpen(true);
+                        }}
+                        disabled={
+                          isResyncing ||
+                          weeksCount < 2 ||
+                          program.status === "PUBLISHED" ||
+                          !weeks[0]?.some((day) => day.workoutId)
+                        }
+                      >
+                        Update later weeks
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Stack>
               </Stack>
               <Tabs
@@ -1094,6 +1153,24 @@ export default function ProgramBuilder() {
                               Import
                             </Button>
                           )}
+                          {safeWeekIndex === 0 &&
+                            day.workoutId &&
+                            weeksCount > 1 &&
+                            program.status !== "PUBLISHED" && (
+                              <Tooltip title="Apply this day's exercises to the same day in every later week (loads re-progressed).">
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  disabled={isResyncing}
+                                  onClick={() => {
+                                    setResyncTarget({ dayIndexes: [dayIndex], label: `Day ${dayIndex + 1}` });
+                                    setResyncConfirmOpen(true);
+                                  }}
+                                >
+                                  Apply to later weeks
+                                </Button>
+                              </Tooltip>
+                            )}
                           {day.workoutId && (
                             <Button
                               size="small"
@@ -1383,6 +1460,33 @@ export default function ProgramBuilder() {
             }}
           >
             Clear
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={resyncConfirmOpen}
+        onClose={() => !isResyncing && setResyncConfirmOpen(false)}
+        maxWidth="xs"
+      >
+        <DialogTitle>Update later weeks from Week 1</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Rebuild{" "}
+            {resyncTarget?.dayIndexes ? resyncTarget.label : "every day"} in weeks 2–{weeksCount}{" "}
+            from Week 1's exercises. Later weeks are re-progressed to match Week 1's structure —
+            added exercises appear, removed ones drop, and loads ramp per week.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Any manual changes you made to later weeks will be replaced. Week 1 is not changed.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResyncConfirmOpen(false)} disabled={isResyncing}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={runResync} disabled={isResyncing}>
+            {isResyncing ? "Updating…" : "Update later weeks"}
           </Button>
         </DialogActions>
       </Dialog>

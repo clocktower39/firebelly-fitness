@@ -437,6 +437,31 @@ export default function Workout({ socket }) {
     );
   };
 
+  // Swap ONE exercise entry — the exact [setIndex][exerciseIndex] slot only, never any other copy
+  // of the same exercise. Uses the SAME persist path as removeExercise (immutable rebuild +
+  // updateTraining), so it saves atomically and re-hydrates cleanly instead of racing local state.
+  const swapExercise = (setIndex, exerciseIndex, replacement) => {
+    if (!replacement) return;
+    const isTime = replacement.measurementType === "time";
+    const newTraining = localTraining.map((set, index) =>
+      index !== setIndex
+        ? set
+        : set.map((entry, eIndex) =>
+            eIndex !== exerciseIndex
+              ? entry
+              : { ...entry, exercise: replacement, ...(isTime ? { exerciseType: "Time" } : {}) }
+          )
+    );
+    setLocalTraining(newTraining); // optimistic — the updateTraining round-trip confirms it
+    dispatch(
+      updateTraining(training._id, {
+        ...training,
+        category: [...trainingCategory],
+        training: [...newTraining],
+      })
+    );
+  };
+
   // Save all changes to training
   const save = async (overrides) => {
     const complete =
@@ -619,6 +644,7 @@ export default function Workout({ socket }) {
                       weightLabelUnitToggleEnabled ? toggleWorkoutWeightUnit : undefined
                     }
                     removeExercise={removeExercise}
+                    swapExercise={swapExercise}
                     removeSet={removeSet}
                     save={save}
                     selectedDate={training.date}

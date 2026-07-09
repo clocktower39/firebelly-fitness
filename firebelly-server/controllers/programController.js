@@ -9,6 +9,7 @@ const TrainingBlock = require("../models/trainingBlock");
 const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
 const { createNotification } = require("../services/notificationService");
 const { generateProgramFromBlock } = require("../services/programGenerator");
+const { resyncProgramFromWeekOne } = require("../services/programResync");
 const { recordProgrammingSignal } = require("../services/programmingSignal");
 
 dayjs.extend(utc);
@@ -439,6 +440,35 @@ const generate_program_from_block = async (req, res, next) => {
 };
 
 // Owner deletes a program: removes its template workouts, unlinks any Training Block + marketplace product.
+// Push Week 1's exercise structure forward to every later week of a DRAFT program, re-progressing
+// loads with the generator's own engine. Fixes "I added exercises to Week 1 but later weeks still
+// have the old set" — added/removed/reordered exercises now carry through. Returns the rewritten
+// later-week workouts (populated) so the builder refreshes without a full reload.
+const resync_program_from_week_one = async (req, res, next) => {
+  try {
+    const program = await Program.findOne({ _id: req.params.id, ownerId: res.locals.user._id });
+    if (!program) return res.status(404).json({ error: "Program not found." });
+    if (program.status === "PUBLISHED") {
+      return res.status(400).json({
+        error: "This program is published. Only draft programs can be re-synced from Week 1.",
+      });
+    }
+
+    const { dayIndexes = null } = req.body || {};
+    const result = await resyncProgramFromWeekOne(program, { dayIndexes });
+
+    const workouts = result.updatedIds.length
+      ? await Training.find({ _id: { $in: result.updatedIds } })
+          .populate({ path: "training.exercise", model: "Exercise", select: "_id exerciseTitle" })
+          .lean()
+      : [];
+
+    return res.json({ ...result, weeks: program.weeks, workouts });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 const delete_program = async (req, res, next) => {
   try {
     const program = await Program.findOne({ _id: req.params.id, ownerId: res.locals.user._id });
@@ -466,4 +496,5 @@ module.exports = {
   update_program_day,
   publish_program,
   assign_program,
+  resync_program_from_week_one,
 };

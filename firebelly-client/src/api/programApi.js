@@ -57,4 +57,12 @@ export const programApi = {
       method: "POST",
       body: payload,
     }),
+
+  // Push Week 1's exercise structure to every later week (draft only). dayIndexes (0-based) is
+  // optional — omit to sync all days.
+  resyncFromWeekOne: (programId, { dayIndexes = null } = {}) =>
+    apiFetch(`/programs/${encodeURIComponent(programId)}/resyncFromWeekOne`, {
+      method: "POST",
+      body: dayIndexes ? { dayIndexes } : {},
+    }),
 };
