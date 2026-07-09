@@ -15,6 +15,7 @@ import {
   CardActions,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ import {
 import {
   AccountCircle,
   AddCircle,
+  Close,
   Delete,
   EventNote,
 } from "@mui/icons-material";
@@ -269,6 +271,7 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
   const [goalType, setGoalType] = useState(goal.goalType || '');
   const [importanceScore, setImportanceScore] = useState(goal.importanceScore || '');
   const [measureBy, setMeasureBy] = useState(measureForCategory(goal.category));
+  const [saving, setSaving] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState(goal.exercise || null);
   const [targetWeight, setTargetWeight] = useState(
     goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : ''
@@ -332,7 +335,8 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
     }
   }, [isStrengthGoal, fetchCurrentMax]);
 
-  const saveGoal = () => {
+  const saveGoal = async () => {
+    if (saving) return;
     const goalData = {
       _id: goal._id,
       title: isStrengthGoal && selectedExercise ? selectedExercise.exerciseTitle : title,
@@ -381,7 +385,13 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
       goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
       goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
     }
-    dispatch(updateGoal(goalData));
+    setSaving(true);
+    try {
+      await dispatch(updateGoal(goalData));
+      onClose(); // return to the goals list after a successful save
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Auto-fill the (editable) current-max field from logged history, unless a value is already set.
@@ -521,6 +531,11 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
             <Tooltip title="Delete">
               <IconButton variant="contained" onClick={handleOpenDeleteConfirmation}>
                 <Delete />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Close">
+              <IconButton onClick={onClose} aria-label="Close">
+                <Close />
               </IconButton>
             </Tooltip>
           </Grid>
@@ -883,8 +898,13 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
               </Button>
             </Grid>
             <Grid>
-              <Button variant="contained" onClick={saveGoal}>
-                Save
+              <Button
+                variant="contained"
+                onClick={saveGoal}
+                disabled={saving}
+                startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
+              >
+                {saving ? "Saving…" : "Save"}
               </Button>
             </Grid>
           </Grid>
@@ -968,6 +988,7 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
   const [goalType, setGoalType] = useState('');
   const [importanceScore, setImportanceScore] = useState(5);
   const [measureBy, setMeasureBy] = useState('general');
+  const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(0);
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [targetWeight, setTargetWeight] = useState('');
@@ -1099,11 +1120,13 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
       goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
       goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
     }
-    dispatch(addNewGoal(goalData))
+    setSaving(true);
+    Promise.resolve(dispatch(addNewGoal(goalData)))
       .then(() => {
         resetForm();
         onClose();
-      });
+      })
+      .finally(() => setSaving(false));
   };
 
   const hasName = isStrengthGoal ? Boolean(selectedExercise) : Boolean(title.trim());
@@ -1127,7 +1150,12 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
       }}
     >
       <DialogTitle id="alert-dialog-title">
-        {["Your goal", "Why & how important"][step]}
+        <Grid container alignItems="center" justifyContent="space-between" wrap="nowrap">
+          <span>{["Your goal", "Why & how important"][step]}</span>
+          <Tooltip title="Close">
+            <IconButton onClick={onClose} aria-label="Close"><Close /></IconButton>
+          </Tooltip>
+        </Grid>
       </DialogTitle>
       <DialogContent sx={{ p: 0, flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
         <SwipeableViews
@@ -1458,8 +1486,14 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
               Next
             </Button>
           ) : (
-            <Button size="small" variant="contained" onClick={submitNewGoal} disabled={!hasName}>
-              Save goal
+            <Button
+              size="small"
+              variant="contained"
+              onClick={submitNewGoal}
+              disabled={!hasName || saving}
+              startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
+            >
+              {saving ? "Saving…" : "Save goal"}
             </Button>
           )
         }
