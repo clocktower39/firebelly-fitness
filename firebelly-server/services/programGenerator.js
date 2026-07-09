@@ -16,6 +16,7 @@ const { progressExerciseGoals } = require("./progressionEngine");
 const { sanitizeTrainingTechniques } = require("./techniqueValidation");
 const { snapshotWeekOne } = require("./programmingSignal");
 const { getTrainerExercisePreferences, MIN_SIGNALS } = require("./trainerPreferences");
+const { getTrainerSchemePreferences, schemeParams } = require("./trainerSchemePreferences");
 
 // Each exercise progresses under the scheme implied by its own exerciseType (a workout mixes types).
 const schemeForType = (t) =>
@@ -272,6 +273,11 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   const prefScore = prefs.sampleSize >= MIN_SIGNALS ? prefs.score : null;
   if (prefScore) assumptions.push(`Personalized from ${prefs.sampleSize} of your past programs — biased exercise picks toward your usual choices.`);
 
+  // Scheme learning (v2): seed sets/reps/% from the trainer's usual schemes when there's enough signal.
+  const schemePrefs = await getTrainerSchemePreferences(trainerId);
+  const useScheme = schemePrefs.sampleSize >= MIN_SIGNALS ? schemePrefs.byType : null;
+  if (useScheme) assumptions.push(`Using your usual set/rep schemes from ${schemePrefs.sampleSize} past programs.`);
+
   // Place each anchor lift on the first strength day whose focus covers its muscle (else the next open day).
   const anchorLibs = await Exercise.find({ _id: { $in: anchorGoals.map((g) => g.exercise) } }).select("muscleGroups").lean();
   const anchorMuscle = new Map(anchorLibs.map((l) => [String(l._id), (l.muscleGroups?.primary || [])[0]]));
@@ -325,10 +331,10 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
         const reps = anchor.targetReps || strategy.reps || 5;
         const est1RM = Math.round(anchor.startingWeight * (1 + reps / 30)); // Epley
         assumptions.push(`Anchored "${anchor.title}" at ~${strategy.percent}% of an estimated ${est1RM} 1RM (from ${anchor.startingWeight} × ${reps}).`);
-        circuits.push([makeEntry(anchor.exercise, "percent", { sets: strategy.sets, reps: strategy.reps, percent: strategy.percent, oneRepMax: est1RM })]);
+        circuits.push([makeEntry(anchor.exercise, "percent", { ...schemeParams("percent", { sets: strategy.sets, reps: strategy.reps, percent: strategy.percent }, useScheme), oneRepMax: est1RM })]);
       } else {
         assumptions.push(`Anchored "${anchor.title}" as a rep-range lift${anchor.startingWeight ? ` starting ~${anchor.startingWeight}` : " — no starting load, coach to set"}.`);
-        circuits.push([makeEntry(anchor.exercise, "rep-range", { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12, weight: anchor.startingWeight || 0 })]);
+        circuits.push([makeEntry(anchor.exercise, "rep-range", { ...schemeParams("rep-range", { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }, useScheme), weight: anchor.startingWeight || 0 })]);
       }
       usedIds.add(String(anchor.exercise));
     }
@@ -344,11 +350,11 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       usedIds.add(String(ex._id));
       // accessories aren't %-locked (no 1RM) → rep-range; keep time/reps schemes for mobility/skill blocks
       const kind = strategy.kind === "percent" ? "rep-range" : strategy.kind;
-      const params =
+      const baseParams =
         kind === "rep-range" ? { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }
         : kind === "time" ? { sets: strategy.sets, seconds: strategy.seconds || 30 }
         : { sets: strategy.sets, reps: strategy.reps || 8 };
-      circuits.push([makeEntry(ex._id, kind, params)]);
+      circuits.push([makeEntry(ex._id, kind, schemeParams(kind, baseParams, useScheme))]);
     }
 
     const hasContent = circuits.length > 0;
