@@ -480,7 +480,7 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
     if (!goalId) return;
     setTitle(goal.title || '');
     setDescription(goal.description || '');
-    setCategory(goal.category || '');
+    setMeasureBy(measureForCategory(goal.category));
     setSelectedExercise(goal.exercise || null);
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
     setTargetReps(goal.targetReps || '');
