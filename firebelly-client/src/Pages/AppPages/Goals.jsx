@@ -89,13 +89,15 @@ const goalTypeLabel = (v) => GOAL_TYPES.find((t) => t.value === v)?.label || "";
 // Aesthetic goals: main body groups to focus on + the body measurements (circumferences) to track.
 const BODY_FOCUS_AREAS = ["Chest", "Back", "Shoulders", "Arms", "Forearms", "Core / Waist", "Glutes", "Thighs", "Calves", "Neck"];
 const BODY_MEASUREMENT_AREAS = ["Neck", "Shoulders", "Chest", "Arms", "Forearms", "Waist", "Glutes", "Thighs", "Calves"];
+// Selectable metrics for the "Body metrics" measure — everything the app tracks in Body Metrics.
+const BODY_METRICS = ["Body weight", "Body fat %", "BMI", "Neck", "Shoulders", "Chest", "Arms", "Forearms", "Waist", "Glutes", "Thighs", "Calves"];
 
 // How a goal is measured. Chosen once (defaulted from the goal type) — drives which inputs show and
 // derives the legacy `category` the server/measurement logic keys off, so there's no second dropdown.
 const MEASURE_MODES = [
   { value: "lift", label: "A lift", hint: "weight × reps", category: "Strength" },
   { value: "cardio", label: "Distance / time", hint: "e.g. run a 5k", category: "Cardio" },
-  { value: "bodyweight", label: "Body weight", hint: "scale target", category: "Weight" },
+  { value: "bodyweight", label: "Body metrics", hint: "weight, body fat, measurements…", category: "Weight" },
   { value: "general", label: "General", hint: "describe it", category: "General" },
 ];
 const defaultMeasureForType = (goalType) => {
@@ -369,7 +371,10 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
       goalData.distanceUnit = null;
       goalData.distanceValue = null;
       goalData.goalTime = null;
-      goalData.goalWeight = goalWeight === '' ? null : toStoredLbs(goalWeight, normalizedWeightUnit);
+      goalData.goalWeight = null;
+      goalData.measurementArea = measurementArea;
+      goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
+      goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
       goalData.achievedDate = achievedDate;
     } else {
       goalData.distanceUnit = null;
@@ -410,6 +415,9 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
     setImportanceScore(goal.importanceScore || '');
     setMeasureBy(measureForCategory(goal.category));
     setSelectedExercise(goal.exercise || null);
+    setMeasurementArea(goal.measurementArea || '');
+    setTargetMeasurement(goal.targetMeasurement ?? '');
+    setStartingMeasurement(goal.startingMeasurement ?? '');
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
     setStartingWeight(goal.startingWeight ? String(fromStoredLbs(goal.startingWeight, normalizedWeightUnit)) : '');
     setStartingEdited(Boolean(goal.startingWeight));
@@ -492,6 +500,9 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
     setDescription(goal.description || '');
     setMeasureBy(measureForCategory(goal.category));
     setSelectedExercise(goal.exercise || null);
+    setMeasurementArea(goal.measurementArea || '');
+    setTargetMeasurement(goal.targetMeasurement ?? '');
+    setStartingMeasurement(goal.startingMeasurement ?? '');
     setTargetWeight(goal.targetWeight ? String(fromStoredLbs(goal.targetWeight, normalizedWeightUnit)) : '');
     setTargetReps(goal.targetReps || '');
     setDistanceUnit(goal.distanceUnit || 'Miles');
@@ -692,48 +703,29 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
                 <>
                   <Grid container size={{ xs: 12, sm: 4 }}>
                     <TextField
-                      type="text"
+                      select
                       fullWidth
-                      label={`Current Weight (${weightUnitLabel})`}
-                      value={formatWeightWithUnit(latestMetric?.weight, normalizedWeightUnit)}
-                      helperText={latestMetric?.weight ? "Pulled from Body Metrics" : "No metrics yet"}
-                      slotProps={readOnlyShrinkSlotProps}
-                    />
+                      label="Body metric"
+                      value={measurementArea}
+                      onChange={(e) => setMeasurementArea(e.target.value)}
+                      slotProps={shrinkLabelSlotProps}
+                    >
+                      <MenuItem value=""><em>Select a metric</em></MenuItem>
+                      {BODY_METRICS.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                    </TextField>
                   </Grid>
-                  <Grid container size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                      type="number"
-                      fullWidth
-                      label={`Goal Weight (${weightUnitLabel})`}
-                      value={goalWeight}
-                      onChange={(e) => setGoalWeight(e.target.value)}
-                      slotProps={weightNumberSlotProps}
-                    />
-                  </Grid>
-                </>
-              )}
-              {isWeightGoal && (
-                <>
-                  <Grid container size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                      type="text"
-                      fullWidth
-                      label={`Current Weight (${weightUnitLabel})`}
-                      value={formatWeightWithUnit(latestMetric?.weight, normalizedWeightUnit)}
-                      helperText={latestMetric?.weight ? "Pulled from Body Metrics" : "No metrics yet"}
-                      slotProps={readOnlyShrinkSlotProps}
-                    />
-                  </Grid>
-                  <Grid container size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                      type="number"
-                      fullWidth
-                      label={`Goal Weight (${weightUnitLabel})`}
-                      value={goalWeight}
-                      onChange={(e) => setGoalWeight(e.target.value)}
-                      slotProps={weightNumberSlotProps}
-                    />
-                  </Grid>
+                  {measurementArea && (
+                    <>
+                      <Grid container size={{ xs: 6, sm: 4 }}>
+                        <TextField type="number" fullWidth label="Current" value={startingMeasurement}
+                          onChange={(e) => setStartingMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                      </Grid>
+                      <Grid container size={{ xs: 6, sm: 4 }}>
+                        <TextField type="number" fullWidth label="Target" value={targetMeasurement}
+                          onChange={(e) => setTargetMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                      </Grid>
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -1111,7 +1103,10 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
       goalData.goalTime = goalTime || null;
       goalData.startingTime = startingTime || null;
     } else if (isWeightGoal) {
-      goalData.goalWeight = goalWeight === '' ? null : toStoredLbs(goalWeight, normalizedWeightUnit);
+      goalData.goalWeight = null;
+      goalData.measurementArea = measurementArea;
+      goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
+      goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
     }
     if (isAesthetic) {
       goalData.focusAreas = focusAreas;
@@ -1327,16 +1322,33 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
             </>
           )}
                 {isWeightGoal && (
-                  <Grid container size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      type="number"
-                      fullWidth
-                      label={`Target Body Weight (${weightUnitLabel})`}
-                      value={goalWeight}
-                      onChange={(e) => setGoalWeight(e.target.value)}
-                      slotProps={shrinkLabelSlotProps}
-                    />
-                  </Grid>
+                  <>
+                    <Grid container size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Body metric"
+                        value={measurementArea}
+                        onChange={(e) => setMeasurementArea(e.target.value)}
+                        slotProps={shrinkLabelSlotProps}
+                      >
+                        <MenuItem value=""><em>Select a metric</em></MenuItem>
+                        {BODY_METRICS.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                      </TextField>
+                    </Grid>
+                    {measurementArea && (
+                      <>
+                        <Grid container size={{ xs: 6, sm: 4 }}>
+                          <TextField type="number" fullWidth label="Current" value={startingMeasurement}
+                            onChange={(e) => setStartingMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                        </Grid>
+                        <Grid container size={{ xs: 6, sm: 4 }}>
+                          <TextField type="number" fullWidth label="Target" value={targetMeasurement}
+                            onChange={(e) => setTargetMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                        </Grid>
+                      </>
+                    )}
+                  </>
                 )}
                 {isAesthetic && (
                   <>
