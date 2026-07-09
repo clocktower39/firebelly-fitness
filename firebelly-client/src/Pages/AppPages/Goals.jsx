@@ -91,6 +91,24 @@ const BODY_FOCUS_AREAS = ["Chest", "Back", "Shoulders", "Arms", "Forearms", "Cor
 const BODY_MEASUREMENT_AREAS = ["Neck", "Shoulders", "Chest", "Arms", "Forearms", "Waist", "Glutes", "Thighs", "Calves"];
 // Selectable metrics for the "Body metrics" measure — everything the app tracks in Body Metrics.
 const BODY_METRICS = ["Body weight", "Body fat %", "BMI", "Neck", "Shoulders", "Chest", "Arms", "Forearms", "Waist", "Glutes", "Thighs", "Calves"];
+const ONE_MONTH_MS = 31 * 24 * 60 * 60 * 1000;
+// Pull a body metric's current value from the latest logged Body Metrics entry (null if not present).
+const bodyMetricValue = (m, metric) => {
+  if (!m) return null;
+  const c = m.circumference || {};
+  const v = {
+    "Body weight": m.weight,
+    "Body fat %": m.bodyFatPercent,
+    BMI: m.bmi,
+    Neck: c.neck, Shoulders: c.shoulders, Chest: c.chest, Arms: c.arms, Forearms: c.forearms,
+    Waist: c.waist, Glutes: c.glutes, Thighs: c.thighs, Calves: c.calves,
+  }[metric];
+  return v == null ? null : v;
+};
+// Current auto-fills only if the latest entry is within a month; otherwise a manual entry is required.
+const metricRecordedWithinMonth = (m) =>
+  Boolean(m && m.recordedAt && Date.now() - new Date(m.recordedAt).getTime() <= ONE_MONTH_MS);
+const READONLY_SHRINK = { input: { readOnly: true }, inputLabel: { shrink: true } };
 
 // How a goal is measured. Chosen once (defaulted from the goal type) — drives which inputs show and
 // derives the legacy `category` the server/measurement logic keys off, so there's no second dropdown.
@@ -337,6 +355,9 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
     }
   }, [isStrengthGoal, fetchCurrentMax]);
 
+  const bodyMetricPulled = isWeightGoal && measurementArea ? bodyMetricValue(latestMetric, measurementArea) : null;
+  const bodyMetricRecent = bodyMetricPulled != null && metricRecordedWithinMonth(latestMetric);
+
   const saveGoal = async () => {
     if (saving) return;
     const goalData = {
@@ -374,7 +395,9 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
       goalData.goalWeight = null;
       goalData.measurementArea = measurementArea;
       goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
-      goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
+      goalData.startingMeasurement = bodyMetricRecent
+        ? Number(bodyMetricPulled)
+        : (startingMeasurement === '' ? null : Number(startingMeasurement));
       goalData.achievedDate = achievedDate;
     } else {
       goalData.distanceUnit = null;
@@ -717,8 +740,14 @@ export const GoalDetails = ({ goal, open, onClose, dispatch, user, exerciseLibra
                   {measurementArea && (
                     <>
                       <Grid container size={{ xs: 6, sm: 4 }}>
-                        <TextField type="number" fullWidth label="Current" value={startingMeasurement}
-                          onChange={(e) => setStartingMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                        {bodyMetricRecent ? (
+                          <TextField fullWidth label="Current" value={String(bodyMetricPulled)}
+                            helperText="Pulled from Body Metrics" slotProps={READONLY_SHRINK} />
+                        ) : (
+                          <TextField type="number" fullWidth label="Current" value={startingMeasurement}
+                            onChange={(e) => setStartingMeasurement(e.target.value)}
+                            helperText="No measurement in the last month — enter manually" slotProps={shrinkLabelSlotProps} />
+                        )}
                       </Grid>
                       <Grid container size={{ xs: 6, sm: 4 }}>
                         <TextField type="number" fullWidth label="Target" value={targetMeasurement}
@@ -1081,6 +1110,9 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
     setTargetDate('');
   };
 
+  const bodyMetricPulled = isWeightGoal && measurementArea ? bodyMetricValue(latestMetric, measurementArea) : null;
+  const bodyMetricRecent = bodyMetricPulled != null && metricRecordedWithinMonth(latestMetric);
+
   const submitNewGoal = () => {
     const goalData = {
       title: isStrengthGoal && selectedExercise ? selectedExercise.exerciseTitle : title,
@@ -1106,7 +1138,9 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
       goalData.goalWeight = null;
       goalData.measurementArea = measurementArea;
       goalData.targetMeasurement = targetMeasurement === '' ? null : Number(targetMeasurement);
-      goalData.startingMeasurement = startingMeasurement === '' ? null : Number(startingMeasurement);
+      goalData.startingMeasurement = bodyMetricRecent
+        ? Number(bodyMetricPulled)
+        : (startingMeasurement === '' ? null : Number(startingMeasurement));
     }
     if (isAesthetic) {
       goalData.focusAreas = focusAreas;
@@ -1339,8 +1373,14 @@ export const AddNewGoal = ({ open, onClose, dispatch, exerciseLibrary, latestMet
                     {measurementArea && (
                       <>
                         <Grid container size={{ xs: 6, sm: 4 }}>
-                          <TextField type="number" fullWidth label="Current" value={startingMeasurement}
-                            onChange={(e) => setStartingMeasurement(e.target.value)} slotProps={shrinkLabelSlotProps} />
+                          {bodyMetricRecent ? (
+                            <TextField fullWidth label="Current" value={String(bodyMetricPulled)}
+                              helperText="Pulled from Body Metrics" slotProps={READONLY_SHRINK} />
+                          ) : (
+                            <TextField type="number" fullWidth label="Current" value={startingMeasurement}
+                              onChange={(e) => setStartingMeasurement(e.target.value)}
+                              helperText="No measurement in the last month — enter manually" slotProps={shrinkLabelSlotProps} />
+                          )}
                         </Grid>
                         <Grid container size={{ xs: 6, sm: 4 }}>
                           <TextField type="number" fullWidth label="Target" value={targetMeasurement}
