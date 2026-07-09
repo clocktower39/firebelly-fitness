@@ -24,19 +24,29 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
+      // Fixed overlay so it's visible even when the crashing subtree sat behind a fullscreen dialog.
       return (
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle2" color="error" gutterBottom>
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 2147483647,
+            bgcolor: "#b00020",
+            color: "#fff",
+            p: 2,
+            maxHeight: "60vh",
+            overflow: "auto",
+          }}
+        >
+          <Typography variant="subtitle2" gutterBottom>
             Something went wrong.
           </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block", mb: 1.5, wordBreak: "break-word" }}
-          >
+          <Typography variant="caption" sx={{ display: "block", mb: 1.5, wordBreak: "break-word", fontFamily: "monospace" }}>
             {String(this.state.error?.message || this.state.error)}
           </Typography>
-          <Button size="small" variant="outlined" onClick={this.handleReset}>
+          <Button size="small" variant="outlined" sx={{ color: "#fff", borderColor: "#fff" }} onClick={this.handleReset}>
             Dismiss
           </Button>
         </Box>
