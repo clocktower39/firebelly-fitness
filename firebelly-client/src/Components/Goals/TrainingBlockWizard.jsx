@@ -37,6 +37,7 @@ import { EXPERIENCE, ACTIVITY, EQUIPMENT_OPTIONS } from "../../utils/trainingPro
 import ProgramReadinessCard from "../AccountComponents/ProgramReadinessCard";
 import { AddNewGoal, GoalDetails } from "../../Pages/AppPages/Goals";
 import ErrorBoundary from "../ErrorBoundary";
+import { LOGIN_USER } from "../../Redux/actionTypes";
 
 const SwipeableViews = SwipeableViewsModule.default ?? SwipeableViewsModule;
 const STEP_TITLES = ["Your time period", "Your training context", "Training Block goals", "Review"];
@@ -155,17 +156,20 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
     return created;
   };
 
-  const saveContext = () =>
-    dispatch(
-      updateUserSettings({
-        trainingExperience: experience,
-        activityLevel: activity,
-        weeklyFrequency: daysPerWeek === "" ? undefined : Number(daysPerWeek),
-        equipmentAccess: equipment,
-        injuries,
-        mobilityRestrictions: mobility,
-      })
-    );
+  const saveContext = async () => {
+    const saved = {
+      trainingExperience: experience,
+      activityLevel: activity,
+      equipmentAccess: equipment,
+      injuries,
+      mobilityRestrictions: mobility,
+      ...(daysPerWeek === "" ? {} : { weeklyFrequency: Number(daysPerWeek) }),
+    };
+    await dispatch(updateUserSettings(saved));
+    // A view-as (delegated) session doesn't get a refreshed token, so state.user would stay the stale
+    // snapshot and this page would look "not saved" on re-entry. Reflect the saved training fields locally.
+    dispatch({ type: LOGIN_USER, user: { ...user, ...saved } });
+  };
 
   // Which required basics (not captured elsewhere in the wizard) are still missing.
   const missingBasics = {
@@ -390,16 +394,14 @@ export default function TrainingBlockWizard({ open, onClose, resumeBlock = null 
                 ) : (
                   <Stack spacing={1}>
                     {blockGoals.map((g) => (
-                      <Paper key={g._id} variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <Paper key={g._id} variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
                         <Box sx={{ cursor: "pointer", flex: 1 }} onClick={() => setEditGoal(g)}>
                           <Typography variant="body1">{g.title}</Typography>
-                          <Stack direction="row" spacing={0.5} sx={{ mt: 0.25 }}>
-                            {g.importanceScore ? (
-                              <Chip size="small" variant="outlined" color="primary" label={`Importance ${g.importanceScore}/10`} />
-                            ) : null}
-                            <Chip size="small" variant="outlined" label="Tap to edit" />
-                          </Stack>
+                          {g.importanceScore ? (
+                            <Chip size="small" variant="outlined" color="primary" label={`Importance ${g.importanceScore}/10`} sx={{ mt: 0.25 }} />
+                          ) : null}
                         </Box>
+                        <Button size="small" variant="outlined" onClick={() => setEditGoal(g)}>Edit</Button>
                         <IconButton size="small" onClick={() => dispatch(deleteGoal(g._id))}>
                           <Delete fontSize="small" />
                         </IconButton>
