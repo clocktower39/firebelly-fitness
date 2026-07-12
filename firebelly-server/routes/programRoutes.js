@@ -19,6 +19,7 @@ router.put(
 router.post("/programs/:id/publish", verifyAccessToken, ensureWriteAccess, programController.publish_program);
 router.post("/programs/:id/assign", verifyAccessToken, ensureWriteAccess, programController.assign_program);
 router.post("/programs/:id/resyncFromWeekOne", verifyAccessToken, ensureWriteAccess, programController.resync_program_from_week_one);
+router.post("/programs/:id/reorderDays", verifyAccessToken, ensureWriteAccess, programController.reorder_program_days);
 router.delete("/programs/:id", verifyAccessToken, ensureWriteAccess, programController.delete_program);
 
 module.exports = router;

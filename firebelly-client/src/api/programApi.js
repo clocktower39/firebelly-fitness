@@ -65,4 +65,11 @@ export const programApi = {
       method: "POST",
       body: dayIndexes ? { dayIndexes } : {},
     }),
+
+  // Move day `from` -> `to`; applies to every week and re-stamps dayIndex.
+  reorderDays: (programId, { from, to }) =>
+    apiFetch(`/programs/${encodeURIComponent(programId)}/reorderDays`, {
+      method: "POST",
+      body: { from, to },
+    }),
 };

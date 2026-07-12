@@ -469,6 +469,44 @@ const resync_program_from_week_one = async (req, res, next) => {
   }
 };
 
+// Reorder the days of a program by moving day `from` -> `to`. Applies the SAME move to EVERY week
+// so each day stays a consistent progression column across the program (Day 1 wk1 -> Day 1 wk2 ...).
+// Re-stamps dayIndex to the new positions. Owner-gated.
+const reorder_program_days = async (req, res, next) => {
+  try {
+    const program = await Program.findOne({ _id: req.params.id, ownerId: res.locals.user._id });
+    if (!program) return res.status(404).json({ error: "Program not found." });
+
+    const from = Number(req.body.from);
+    const to = Number(req.body.to);
+    const dpw = Number(program.daysPerWeek);
+    if (
+      !Number.isInteger(from) || !Number.isInteger(to) ||
+      from < 0 || to < 0 || from >= dpw || to >= dpw
+    ) {
+      return res.status(400).json({ error: "Invalid day index." });
+    }
+    if (from === to) return res.json(program);
+
+    program.weeks = (program.weeks || []).map((week) => {
+      const arr = [...(week || [])];
+      const [moved] = arr.splice(from, 1);
+      if (moved === undefined) return week; // week shorter than expected — leave it
+      arr.splice(to, 0, moved);
+      return arr.map((slot, i) => ({
+        dayIndex: i,
+        workoutId: slot?.workoutId || null,
+        notes: slot?.notes || "",
+      }));
+    });
+    program.markModified("weeks");
+    const saved = await program.save();
+    return res.json(saved);
+  } catch (err) {
+    return next(err);
+  }
+};
+
 const delete_program = async (req, res, next) => {
   try {
     const program = await Program.findOne({ _id: req.params.id, ownerId: res.locals.user._id });
@@ -497,4 +535,5 @@ module.exports = {
   publish_program,
   assign_program,
   resync_program_from_week_one,
+  reorder_program_days,
 };

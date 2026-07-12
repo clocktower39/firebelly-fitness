@@ -41,8 +41,43 @@ import {
   DeleteOutlined as DeleteOutlineIcon,
   InfoOutlined as InfoOutlinedIcon,
   FitnessCenter as FitnessCenterIcon,
+  DragIndicator as DragIndicatorIcon,
 } from "@mui/icons-material";
 import { Alert } from "@mui/material";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
+
+// Stable drag id per day slot — travels with the workout when filled so reordering is smooth;
+// empty slots fall back to their position (fine — empty cards carry no state).
+const dayDndId = (day, i) => (day?.workoutId ? `wo-${day.workoutId}` : `empty-${i}`);
+
+// Sortable wrapper for a day card. Only the drag handle starts a drag, so the card's buttons stay
+// clickable. Renders its children with the handle props to attach to the handle icon.
+function SortableDay({ id, disabled, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 20 : undefined,
+  };
+  return (
+    <Grid ref={setNodeRef} style={style} size={{ xs: 12, sm: 6, md: 4 }}>
+      {children({ dragHandleProps: { ...attributes, ...listeners }, isDragging })}
+    </Grid>
+  );
+}
 
 const DEFAULT_WEEKS = 4;
 const DEFAULT_DAYS = 5;
@@ -181,6 +216,8 @@ export default function ProgramBuilder() {
   const [resyncConfirmOpen, setResyncConfirmOpen] = useState(false);
   const [resyncTarget, setResyncTarget] = useState({ dayIndexes: null, label: "all days" });
   const [isResyncing, setIsResyncing] = useState(false);
+  // Small drag threshold so tapping the card's buttons never starts a drag.
+  const daySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const saveTimerRef = useRef(null);
   const inFlightRef = useRef(false);
@@ -716,6 +753,31 @@ export default function ProgramBuilder() {
   const weekPlan = expandMesocycles(blocks);
   const activeWeekPlan = weekPlan[safeWeekIndex] || null;
 
+  // Drag-reorder days. The move applies to EVERY week so each day stays a consistent progression
+  // column; optimistic locally, then persisted (server re-stamps dayIndex and is the source of truth).
+  const handleDayDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !program?._id) return;
+    const ids = activeWeek.map(dayDndId);
+    const from = ids.indexOf(active.id);
+    const to = ids.indexOf(over.id);
+    if (from < 0 || to < 0 || from === to) return;
+    setProgram((prev) => ({
+      ...prev,
+      weeks: (prev.weeks || []).map((week) =>
+        arrayMove(week, from, to).map((slot, i) => ({ ...slot, dayIndex: i }))
+      ),
+    }));
+    setSavedMessage("Days reordered.");
+    programApi
+      .reorderDays(program._id, { from, to })
+      .then((data) => {
+        if (data?.error) throw new Error(data.error);
+        if (data?.weeks) setProgram(data);
+      })
+      .catch((err) => setErrorMessage(err.message || "Couldn't save the new day order."));
+  };
+
   // Block editor handlers. Text/number edits update locally then commit on blur; discrete
   // edits (focus, deload, add, remove) persist immediately so the grid rebuilds at once.
   const updateBlockLocal = (i, patch) =>
@@ -1093,14 +1155,32 @@ export default function ProgramBuilder() {
                   />
                 ))}
               </Tabs>
-              <Grid container spacing={2}>
-                {activeWeek.map((day, dayIndex) => {
-                  const workout = day.workoutId ? workoutCache[day.workoutId] : null;
-                  const exerciseCount =
-                    workout?.training?.reduce((c, circuit) => c + circuit.length, 0) || 0;
-                  const muscleGroups = workout?.category || [];
-                  return (
-                    <Grid key={`day-${dayIndex}`} size={{ xs: 12, sm: 6, md: 4 }}>
+              {activeWeek.length > 1 && (
+                <Typography variant="caption" color="text.secondary">
+                  Tip: drag the ⠿ handle on a day to reorder — the new order applies to every week.
+                </Typography>
+              )}
+              <DndContext
+                sensors={daySensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToWindowEdges]}
+                onDragEnd={handleDayDragEnd}
+              >
+                <SortableContext items={activeWeek.map(dayDndId)} strategy={rectSortingStrategy}>
+                  <Grid container spacing={2}>
+                    {activeWeek.map((day, dayIndex) => {
+                      const workout = day.workoutId ? workoutCache[day.workoutId] : null;
+                      const exerciseCount =
+                        workout?.training?.reduce((c, circuit) => c + circuit.length, 0) || 0;
+                      const muscleGroups = workout?.category || [];
+                      const canReorder = activeWeek.length > 1;
+                      return (
+                        <SortableDay
+                          key={dayDndId(day, dayIndex)}
+                          id={dayDndId(day, dayIndex)}
+                          disabled={!canReorder}
+                        >
+                          {({ dragHandleProps }) => (
                       <Card
                         variant="outlined"
                         sx={{
@@ -1111,9 +1191,22 @@ export default function ProgramBuilder() {
                         }}
                       >
                         <CardContent sx={{ flex: 1 }}>
-                          <Typography variant="overline" color="text.secondary">
-                            Day {dayIndex + 1}
-                          </Typography>
+                          <Stack direction="row" alignItems="center" justifyContent="space-between">
+                            <Typography variant="overline" color="text.secondary">
+                              Day {dayIndex + 1}
+                            </Typography>
+                            {canReorder && (
+                              <Tooltip title="Drag to reorder — applies to every week">
+                                <IconButton
+                                  size="small"
+                                  {...dragHandleProps}
+                                  sx={{ cursor: "grab", touchAction: "none", ml: 1 }}
+                                >
+                                  <DragIndicatorIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Stack>
                           {day.workoutId ? (
                             <>
                               <Typography variant="subtitle2" noWrap title={workout?.title || ""}>
@@ -1186,10 +1279,13 @@ export default function ProgramBuilder() {
                           )}
                         </CardActions>
                       </Card>
-                    </Grid>
-                  );
-                })}
-              </Grid>
+                          )}
+                        </SortableDay>
+                      );
+                    })}
+                  </Grid>
+                </SortableContext>
+              </DndContext>
             </Stack>
           </CardContent>
         </Card>
