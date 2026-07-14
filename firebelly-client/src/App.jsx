@@ -239,15 +239,21 @@ function App({ }) {
         styles={(theme) => ({
           html: {
             backgroundColor: theme.palette.background.default,
+            color: theme.palette.text.primary,
             minHeight: "100vh",
           },
           body: {
             backgroundColor: theme.palette.background.default,
+            // Theme-aware body text color. Without this, elements that inherit (e.g. checkbox
+            // labels, un-colored captions) fall back to the hardcoded near-white in index.css,
+            // which is invisible on light themes (Pink Lemonade et al.).
+            color: theme.palette.text.primary,
             minHeight: "100vh",
             margin: 0,
           },
           "#root": {
             backgroundColor: theme.palette.background.default,
+            color: theme.palette.text.primary,
             minHeight: "100vh",
           },
         })}

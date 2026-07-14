@@ -13,8 +13,10 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0f172a; /* Matches theme default background */
-  color: #f8fafc;
+  /* Body background + text color are set per-theme via GlobalStyles in App.jsx (theme-aware).
+     A hardcoded color here leaks near-white text into light themes, so it's intentionally omitted.
+     This dark background is only the pre-mount fallback (default theme is dark). */
+  background-color: #0f172a;
 }
 
 code {
