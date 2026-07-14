@@ -62,6 +62,14 @@ export default function WorkoutHeader({
       <Grid size={10} container sx={{ justifyContent: "center" }}>
         <Stack spacing={0.5} sx={{ alignItems: "center" }}>
           <Typography variant="h5">{title}</Typography>
+          {training.programWeek && training.programDay && (
+            <Chip
+              label={`Week ${training.programWeek} · Day ${training.programDay}`}
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          )}
           {activeWorkoutType && (
             <Chip label={`${activeWorkoutType} Workout`} size="small" variant="outlined" />
           )}

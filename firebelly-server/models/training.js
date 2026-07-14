@@ -104,6 +104,10 @@ const trainingSchema = new mongoose.Schema(
       default: 0,
     },
     programId: { type: mongoose.Schema.Types.ObjectId, ref: "Program", default: null },
+    // Position within the program (1-indexed), so any view can show "Week X · Day Y" without the
+    // week/day being baked into the title. Stamped on template days + carried to assigned copies.
+    programWeek: { type: Number, default: null },
+    programDay: { type: Number, default: null },
     groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", default: null },
     groupAssignmentId: {
       type: mongoose.Schema.Types.ObjectId,

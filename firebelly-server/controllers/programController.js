@@ -109,6 +109,25 @@ const update_program = async (req, res, next) => {
   }
 };
 
+// Stamp each day's workout with its 1-indexed position, so any view can show "Week X · Day Y"
+// without the week/day being baked into the title. Cheap bulk write; call whenever weeks change.
+const stampProgramPositions = async (program) => {
+  const ops = [];
+  (program.weeks || []).forEach((week, wi) =>
+    (week || []).forEach((day, di) => {
+      if (day.workoutId) {
+        ops.push({
+          updateOne: {
+            filter: { _id: day.workoutId },
+            update: { $set: { programWeek: wi + 1, programDay: di + 1 } },
+          },
+        });
+      }
+    })
+  );
+  if (ops.length) await Training.bulkWrite(ops);
+};
+
 const update_program_day = async (req, res, next) => {
   try {
     const { weekIndex, dayIndex } = req.params;
@@ -145,6 +164,12 @@ const update_program_day = async (req, res, next) => {
     program.weeks[weekIdx][dayIdx].notes = notes ?? "";
 
     const saved = await program.save();
+    if (workoutId) {
+      await Training.updateOne(
+        { _id: workoutId },
+        { $set: { programWeek: weekIdx + 1, programDay: dayIdx + 1 } }
+      );
+    }
     return res.json(saved);
   } catch (err) {
     return next(err);
@@ -351,6 +376,9 @@ const assign_program = async (req, res, next) => {
           // Link the assigned copy back to its program so per-client edits (e.g. cascading an
           // exercise swap to future workouts) can reliably scope to this program.
           programId: program._id,
+          // Carry the position so the client's view can show "Week X · Day Y" (title stays clean).
+          programWeek: weekIdx + 1,
+          programDay: dayIdx + 1,
           assignedBy: trainerId,
           assignedAt: new Date(),
         });
@@ -501,6 +529,7 @@ const reorder_program_days = async (req, res, next) => {
     });
     program.markModified("weeks");
     const saved = await program.save();
+    await stampProgramPositions(saved); // day numbers changed — re-stamp positions
     return res.json(saved);
   } catch (err) {
     return next(err);

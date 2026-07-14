@@ -904,8 +904,16 @@ export default function WorkoutOverview({
                 }}
               >
                 <Grid container sx={{ justifyContent: "center", alignItems: "center" }}>
-                  <Grid size={11} container>
+                  <Grid size={11} container sx={{ alignItems: "center", gap: 1 }}>
                     <Typography variant="h6">{workout.title}</Typography>
+                    {workout.programWeek && workout.programDay && (
+                      <Chip
+                        label={`Week ${workout.programWeek} · Day ${workout.programDay}`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    )}
                   </Grid>
                   <Grid size={1} container sx={{ justifyContent: "center", alignItems: "center" }}>
                     <Tooltip title="Workout Settings">
