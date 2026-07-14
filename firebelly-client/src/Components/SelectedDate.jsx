@@ -34,11 +34,9 @@ export default function SelectedDate(props) {
 
         {/* Select a date from a calendar input */}
         <TextField
-          focused
           id="date"
           label="Date"
           type="date"
-          color="primary"
           value={selectedDate}
           onChange={(e) => setSelectedDate(convertToReadableDateInput(e.target.value))}
           slotProps={{

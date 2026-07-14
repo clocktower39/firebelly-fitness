@@ -645,6 +645,18 @@ const pinkLemonade = {
         },
       },
     },
+
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          // A focused field's label defaults to primary.main (#ec4899, ~3.5:1) — too light on
+          // white. Use a deeper pink so the label stays readable; error labels keep their red.
+          "&.Mui-focused:not(.Mui-error)": {
+            color: "#be185d", // Pink 700
+          },
+        },
+      },
+    },
   },
 };
 
