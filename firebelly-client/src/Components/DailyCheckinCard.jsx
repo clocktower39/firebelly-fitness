@@ -24,20 +24,32 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "rec
 // Fast daily readiness / fatigue check-in (sleep, mood, energy, soreness, joint pain).
 // Own view = editable. When clientId is set (a trainer viewing a client's page) it renders read-only
 // from that client's data — the trainer can see the status but not fill or edit the client's check-in.
-export default function DailyCheckinCard({ clientId = null }) {
+// When `date` is also set (a trainer viewing a client's workout for a day), it shows ONLY that day's
+// check-in (or a "not filled out yet" marker) — no trend/list, no input.
+export default function DailyCheckinCard({ clientId = null, date = null, readOnly: readOnlyProp = false }) {
   const dispatch = useDispatch();
   const reduxReadiness = useSelector((s) => s.readiness) || { entries: [], loaded: false };
-  const readOnly = Boolean(clientId);
+  // Read-only when viewing a client's data explicitly (clientId) OR when forced — e.g. a trainer in a
+  // view-as/delegated session, where "my" readiness IS the viewed client's (sourced from Redux, no edit).
+  const readOnly = Boolean(clientId) || readOnlyProp;
   const [clientEntries, setClientEntries] = useState(null); // null = not yet loaded
   const todayKey = dayKey();
 
-  // Source the entries from the viewed client (read-only) or from my own Redux state.
-  const entries = readOnly ? clientEntries || [] : reduxReadiness.entries || [];
+  // Explicit client (getClientReadiness) vs. Redux "my" readiness (which in a view-as session is the
+  // viewed client's own).
+  const entries = clientId ? clientEntries || [] : reduxReadiness.entries || [];
 
   const todayEntry = useMemo(
     () => entries.find((e) => String(e.date).slice(0, 10) === todayKey) || null,
     [entries, todayKey]
   );
+
+  // The workout day's entry, when a specific date is being viewed (trainer on a client's workout).
+  const targetEntry = useMemo(() => {
+    if (!date) return null;
+    const key = new Date(date).toISOString().slice(0, 10);
+    return entries.find((e) => String(e.date).slice(0, 10) === key) || null;
+  }, [entries, date]);
 
   const [values, setValues] = useState({});
   const [note, setNote] = useState("");
@@ -46,7 +58,7 @@ export default function DailyCheckinCard({ clientId = null }) {
 
   // Load: the viewed client's readiness (read-only) or my own.
   useEffect(() => {
-    if (readOnly) {
+    if (clientId) {
       let cancelled = false;
       setClientEntries(null);
       readinessApi
@@ -61,9 +73,10 @@ export default function DailyCheckinCard({ clientId = null }) {
         cancelled = true;
       };
     }
+    // No explicit client → use "my" readiness (in a view-as session this is the client's own).
     if (!reduxReadiness.loaded) dispatch(getMyReadiness());
     return undefined;
-  }, [readOnly, clientId, dispatch, reduxReadiness.loaded]);
+  }, [clientId, dispatch, reduxReadiness.loaded]);
 
   useEffect(() => {
     if (!readOnly && todayEntry) {
@@ -126,6 +139,56 @@ export default function DailyCheckinCard({ clientId = null }) {
     setSaving(false);
     setEditing(false);
   };
+
+  // Read-only, single workout-day view — a trainer viewing a client's workout for a day. Shows ONLY
+  // that day's check-in (or a "not filled out yet" marker). No trend/list, and no input — the trainer
+  // can see the client's readiness but never fills it in.
+  if (readOnly && date) {
+    const loadingClient = clientId ? clientEntries == null : !reduxReadiness.loaded;
+    const s = targetEntry ? computeReadinessScore(targetEntry) : null;
+    const b = readinessBand(s);
+    return (
+      <Paper sx={{ p: 2, width: "100%" }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            Daily check-in
+          </Typography>
+          {loadingClient ? (
+            <Typography variant="body2" color="text.secondary">
+              Loading…
+            </Typography>
+          ) : targetEntry ? (
+            <Chip size="small" color={b.color} label={s != null ? `${b.label} · ${s}/100` : b.label} />
+          ) : (
+            <Chip size="small" variant="outlined" label="Not filled out yet" />
+          )}
+        </Stack>
+        {!loadingClient && targetEntry && (
+          <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.75, mt: 1 }}>
+            {READINESS_FACTORS.map((f) =>
+              targetEntry[f.key] ? (
+                <Chip
+                  key={f.key}
+                  size="small"
+                  variant="outlined"
+                  label={`${f.label}: ${targetEntry[f.key]}/5`}
+                />
+              ) : null
+            )}
+          </Stack>
+        )}
+        {targetEntry?.note && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 0.75, fontStyle: "italic" }}
+          >
+            “{targetEntry.note}”
+          </Typography>
+        )}
+      </Paper>
+    );
+  }
 
   // Read-only view for a trainer looking at a client's page: show the client's status, no editing.
   if (readOnly) {

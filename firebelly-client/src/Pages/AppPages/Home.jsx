@@ -211,15 +211,22 @@ function Home() {
   // Build the reorderable daily-overview cards as keyed section nodes (null = not shown for this
   // context). The date selector + weekly status strip above stay pinned and are not part of this.
   const personal = isPersonalWorkout();
+  // A trainer viewing the client's account via view-as (delegated session): the app acts AS the client,
+  // so `personal` is true. Show that client's check-in read-only (trainer never fills it) and below the
+  // workout — never pinned to the top like the client's own nudge-to-fill card.
+  const inClientAccount = user?.delegationMode === "trainer_client";
   const sectionNodes = {
     checkin:
       personal && readiness.loaded ? (
         <Grid container size={12} sx={{ p: 1 }}>
-          <DailyCheckinCard />
+          <DailyCheckinCard
+            readOnly={inClientAccount}
+            date={inClientAccount ? selectedDate : undefined}
+          />
         </Grid>
       ) : !personal && client ? (
         <Grid container size={12} sx={{ p: 1 }}>
-          <DailyCheckinCard clientId={client} />
+          <DailyCheckinCard clientId={client} date={selectedDate} />
         </Grid>
       ) : null,
     metrics: latestMetric ? (
@@ -303,7 +310,9 @@ function Home() {
     orderedKeys = resolveDailyOverviewOrder(dailyOverviewOrder);
   } else {
     orderedKeys = DAILY_OVERVIEW_ORDER.filter((key) => key !== "checkin");
-    if (personal && !todayCheckinDone) {
+    // The "pin to top until done" nudge is for the client filling in their own check-in — not for a
+    // trainer in a view-as session, where the check-in stays below the workout.
+    if (personal && !todayCheckinDone && !inClientAccount) {
       orderedKeys.unshift("checkin");
     } else {
       const cardioIndex = orderedKeys.indexOf("cardio");

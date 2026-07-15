@@ -28,6 +28,7 @@ import { buildPilatesTitle } from "../../features/workout/utils/pilatesUtils";
 import StrengthWorkoutEditor from "../../features/workout/components/StrengthWorkoutEditor";
 import WorkoutCategoryField from "../../features/workout/components/WorkoutCategoryField";
 import WorkoutHeader from "../../features/workout/components/WorkoutHeader";
+import DailyCheckinCard from "../../Components/DailyCheckinCard";
 import useWorkoutCardio from "../../features/workout/hooks/useWorkoutCardio";
 import useWorkoutSports from "../../features/workout/hooks/useWorkoutSports";
 import useWorkoutYoga from "../../features/workout/hooks/useWorkoutYoga";
@@ -668,6 +669,21 @@ export default function Workout({ socket }) {
                     </Button>
                   </Grid>
                 )}
+                {/* Trainer looking at a client's workout: show the client's daily check-in for this day,
+                    read-only (trainer never fills it) or a "not filled out yet" marker.
+                    - View-as / delegated session: acting AS the client, so "my" readiness IS theirs.
+                    - Direct trainer view (not delegated): fetch the client's readiness by id. */}
+                {training?.date &&
+                  training?.user?._id &&
+                  (user?.delegationMode === "trainer_client" || !isPersonalWorkout()) && (
+                    <Grid container size={12} sx={{ pt: 2 }}>
+                      {user?.delegationMode === "trainer_client" ? (
+                        <DailyCheckinCard readOnly date={training.date} />
+                      ) : (
+                        <DailyCheckinCard clientId={training.user._id} date={training.date} />
+                      )}
+                    </Grid>
+                  )}
               </Grid>
               <Box
                 sx={{
