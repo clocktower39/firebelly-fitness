@@ -550,8 +550,15 @@ const get_exercise_history = (req, res, next) => {
   const { targetExercise, user } = req.body;
   const targetExerciseId = new mongoose.Types.ObjectId(targetExercise._id);
 
+  // The progress chart shows HISTORY, so exclude future-dated (planned, not-yet-performed) workouts
+  // — they'd clutter the chart with irrelevant data. Cutoff = end of today (UTC). Range operators are
+  // type-bracketed, so this also naturally drops undated template workouts (not real history).
+  const cutoff = new Date();
+  cutoff.setUTCHours(23, 59, 59, 999);
+
   Training.find({
     user: user._id,
+    date: { $lte: cutoff },
     training: {
       $elemMatch: {
         $elemMatch: { exercise: targetExerciseId },
