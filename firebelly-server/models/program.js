@@ -38,6 +38,17 @@ const programSchema = new mongoose.Schema(
       enum: ["DRAFT", "PUBLISHED"],
       default: "DRAFT",
     },
+    // Where a published program is listed — separate axis from `status` (lifecycle):
+    //   private → not listed anywhere (assign to your own clients only)
+    //   profile → listed on the trainer's profile/products page
+    //   public  → also in the public marketplace (browsable by anyone)
+    // Ordered by reach (private < profile < public). Default private so nothing goes public/listed
+    // unless the trainer opts in.
+    visibility: {
+      type: String,
+      enum: ["private", "profile", "public"],
+      default: "private",
+    },
     publishedAt: { type: Date, default: null },
     price: { type: Number, default: null },
     coverImage: { type: String, default: null },

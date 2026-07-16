@@ -14,6 +14,13 @@ const productSchema = new mongoose.Schema(
     currency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
     taxable: { type: Boolean, default: true },
     active: { type: Boolean, default: true },
+    // Mirrors the source Program's visibility so the (future) public marketplace can query Products
+    // directly. "profile" = on the trainer's page; "public" = also in the public marketplace.
+    visibility: {
+      type: String,
+      enum: ["private", "profile", "public"],
+      default: "profile",
+    },
     sessionTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "SessionType", default: null },
     programId: { type: mongoose.Schema.Types.ObjectId, ref: "Program", default: null, index: true },
     creditsPerUnit: { type: Number, default: 0, min: 0 },

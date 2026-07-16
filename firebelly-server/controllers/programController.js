@@ -6,7 +6,14 @@ const Exercise = require("../models/exercise");
 const Product = require("../models/product");
 const Relationship = require("../models/relationship");
 const TrainingBlock = require("../models/trainingBlock");
-const { buildProgramWeeks, mesocycleWeeks, validatePublish } = require("../services/programs");
+const {
+  buildProgramWeeks,
+  mesocycleWeeks,
+  validatePublish,
+  PROGRAM_VISIBILITIES,
+  normalizeVisibility,
+  isListedVisibility,
+} = require("../services/programs");
 const { createNotification } = require("../services/notificationService");
 const { generateProgramFromBlock } = require("../services/programGenerator");
 const { resyncProgramFromWeekOne } = require("../services/programResync");
@@ -74,11 +81,14 @@ const update_program = async (req, res, next) => {
       daysPerWeek = program.daysPerWeek,
       mesocycles,
       price,
+      visibility,
     } = req.body;
 
     program.title = title;
     program.description = description;
     if (price !== undefined) program.price = Number(price) || 0;
+    // Let a published program's listing be changed (private ⇄ profile ⇄ public) without re-publishing.
+    if (PROGRAM_VISIBILITIES.includes(visibility)) program.visibility = visibility;
 
     // When mesocycles are provided they drive the total week count (the macrocycle length).
     let nextWeeksCount = Number(weeksCount);
@@ -180,6 +190,8 @@ const update_program_day = async (req, res, next) => {
 // page. Best-effort — never throws, so publish/update succeed regardless of product issues.
 const syncProgramProduct = async (program) => {
   if (!program?._id || !program.ownerId) return;
+  const published = program.status === "PUBLISHED";
+  const visibility = normalizeVisibility(program.visibility, { published });
   const onInsert = { currency: "USD", taxable: false, deliverableType: "NONE" };
   const fields = {
     trainerId: program.ownerId,
@@ -188,7 +200,10 @@ const syncProgramProduct = async (program) => {
     name: (program.title && program.title.trim()) || "Untitled Program",
     description: program.description || "",
     price: Number(program.price) || 0,
-    active: program.status === "PUBLISHED",
+    visibility,
+    // Live on the trainer's page (and, when public, the marketplace) only when published AND listed.
+    // Private → the Product stays but goes inactive, so buyers keep access and re-listing is trivial.
+    active: published && isListedVisibility(visibility),
   };
   try {
     await Product.findOneAndUpdate(
@@ -230,6 +245,13 @@ const publish_program = async (req, res, next) => {
     }
 
     program.status = "PUBLISHED";
+    // Visibility chosen at publish — default private so nothing is listed unless the trainer opts in.
+    const { visibility } = req.body || {};
+    if (PROGRAM_VISIBILITIES.includes(visibility)) {
+      program.visibility = visibility;
+    } else if (!program.visibility) {
+      program.visibility = "private";
+    }
     program.publishedAt = program.publishedAt || new Date();
     // Snapshot the equipment so the marketplace can show it without per-card scans.
     program.equipmentNeeded = (await computeProgramEquipment(program)).equipment;

@@ -23,6 +23,8 @@ import {
   ListItemButton,
   ListItemText,
   MenuItem,
+  Radio,
+  RadioGroup,
   Select,
   Snackbar,
   Stack,
@@ -58,6 +60,9 @@ import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 // Stable drag id per day slot — travels with the workout when filled so reordering is smooth;
 // empty slots fall back to their position (fine — empty cards carry no state).
 const dayDndId = (day, i) => (day?.workoutId ? `wo-${day.workoutId}` : `empty-${i}`);
+
+// Short labels for a published program's listing tier.
+const VISIBILITY_LABELS = { private: "Private", profile: "On your profile", public: "Public" };
 
 // Sortable wrapper for a day card. Only the drag handle starts a drag, so the card's buttons stay
 // clickable. Renders its children with the handle props to attach to the handle icon.
@@ -216,6 +221,8 @@ export default function ProgramBuilder() {
   const [resyncConfirmOpen, setResyncConfirmOpen] = useState(false);
   const [resyncTarget, setResyncTarget] = useState({ dayIndexes: null, label: "all days" });
   const [isResyncing, setIsResyncing] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishVisibility, setPublishVisibility] = useState("private");
   // Small drag threshold so tapping the card's buttons never starts a drag.
   const daySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -325,28 +332,61 @@ export default function ProgramBuilder() {
     [program, setErrorMessage]
   );
 
-  const publishProgram = useCallback(async () => {
-    if (!program?._id || inFlightRef.current) return;
-    inFlightRef.current = true;
-    setIsSaving(true);
-    try {
-      const data = await programApi.publishProgram(program._id);
-      if (data?.errors?.length) {
-        throw new Error(data.errors.join(" "));
+  const publishProgram = useCallback(
+    async (visibility = "private") => {
+      if (!program?._id || inFlightRef.current) return;
+      inFlightRef.current = true;
+      setIsSaving(true);
+      try {
+        const data = await programApi.publishProgram(program._id, { visibility });
+        if (data?.errors?.length) {
+          throw new Error(data.errors.join(" "));
+        }
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        setProgram(data);
+        setDirty(false);
+        setPublishDialogOpen(false);
+        setSavedMessage(
+          visibility === "private"
+            ? "Published — private to your clients."
+            : "Published and listed on your profile."
+        );
+      } catch (err) {
+        setErrorMessage(err.message || "Unable to publish program.");
+      } finally {
+        inFlightRef.current = false;
+        setIsSaving(false);
       }
-      if (data?.error) {
-        throw new Error(data.error);
+    },
+    [program, setErrorMessage, setSavedMessage]
+  );
+
+  // Change a published program's listing (private ⇄ profile) without re-publishing.
+  const changeVisibility = useCallback(
+    async (visibility) => {
+      if (!program?._id) return;
+      setIsSaving(true);
+      try {
+        const data = await programApi.updateProgram(program._id, { visibility });
+        if (data?.error) throw new Error(data.error);
+        setProgram(data);
+        setSavedMessage(
+          visibility === "private"
+            ? "Unlisted — private to your clients."
+            : visibility === "profile"
+            ? "Listed on your profile."
+            : "Listed publicly."
+        );
+      } catch (err) {
+        setErrorMessage(err.message || "Unable to update visibility.");
+      } finally {
+        setIsSaving(false);
       }
-      setProgram(data);
-      setDirty(false);
-      setSavedMessage("Program published.");
-    } catch (err) {
-      setErrorMessage(err.message || "Unable to publish program.");
-    } finally {
-      inFlightRef.current = false;
-      setIsSaving(false);
-    }
-  }, [program, setErrorMessage, setSavedMessage]);
+    },
+    [program, setErrorMessage, setSavedMessage]
+  );
 
   const updateDaySlot = useCallback(
     async (weekIndex, dayIndex, workoutId) => {
@@ -846,17 +886,47 @@ export default function ProgramBuilder() {
           </Stack>
           <Stack spacing={1} alignItems={{ xs: "flex-start", md: "flex-end" }}>
             <Chip
-              label={program.status === "PUBLISHED" ? "Published" : "Draft"}
+              label={
+                program.status === "PUBLISHED"
+                  ? `Published · ${VISIBILITY_LABELS[program.visibility] || "Private"}`
+                  : "Draft"
+              }
               color={program.status === "PUBLISHED" ? "success" : "default"}
               variant={program.status === "PUBLISHED" ? "filled" : "outlined"}
             />
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} alignItems="center">
               <Button variant="outlined" onClick={saveDraft} disabled={isSaving}>
                 Save Draft
               </Button>
-              <Button variant="contained" onClick={publishProgram} disabled={isSaving}>
-                Publish
-              </Button>
+              {program.status === "PUBLISHED" ? (
+                <FormControl size="small" sx={{ minWidth: 220 }}>
+                  <InputLabel id="program-visibility-label">Visibility</InputLabel>
+                  <Select
+                    labelId="program-visibility-label"
+                    label="Visibility"
+                    value={program.visibility || "private"}
+                    onChange={(e) => changeVisibility(e.target.value)}
+                    disabled={isSaving}
+                  >
+                    <MenuItem value="private">Private — only your clients</MenuItem>
+                    <MenuItem value="profile">Your profile</MenuItem>
+                    <MenuItem value="public" disabled>
+                      Public marketplace (coming soon)
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setPublishVisibility(program.visibility || "private");
+                    setPublishDialogOpen(true);
+                  }}
+                  disabled={isSaving}
+                >
+                  Publish
+                </Button>
+              )}
             </Stack>
           </Stack>
         </Stack>
@@ -1583,6 +1653,89 @@ export default function ProgramBuilder() {
           </Button>
           <Button variant="contained" onClick={runResync} disabled={isResyncing}>
             {isResyncing ? "Updating…" : "Update later weeks"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={publishDialogOpen}
+        onClose={() => !isSaving && setPublishDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Publish program</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Publishing finalizes the program so you can assign it to clients. Choose who can find it:
+          </Typography>
+          <RadioGroup
+            value={publishVisibility}
+            onChange={(e) => setPublishVisibility(e.target.value)}
+          >
+            <FormControlLabel
+              value="private"
+              control={<Radio />}
+              sx={{ alignItems: "flex-start", mb: 0.5 }}
+              label={
+                <Box sx={{ pt: 0.75 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Private
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Only your clients get it (via assignment). Not listed anywhere.
+                  </Typography>
+                </Box>
+              }
+            />
+            <FormControlLabel
+              value="profile"
+              control={<Radio />}
+              sx={{ alignItems: "flex-start", mb: 0.5 }}
+              label={
+                <Box sx={{ pt: 0.75 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Your profile
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Listed on your trainer page so people can find and buy it.
+                  </Typography>
+                </Box>
+              }
+            />
+            <FormControlLabel
+              value="public"
+              disabled
+              control={<Radio />}
+              sx={{ alignItems: "flex-start" }}
+              label={
+                <Box sx={{ pt: 0.75 }}>
+                  <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      Public marketplace
+                    </Typography>
+                    <Chip size="small" label="Coming soon" />
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    Discoverable by anyone browsing the marketplace.
+                  </Typography>
+                </Box>
+              }
+            />
+          </RadioGroup>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+            You can change this anytime after publishing.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPublishDialogOpen(false)} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => publishProgram(publishVisibility)}
+            disabled={isSaving}
+          >
+            {isSaving ? "Publishing…" : "Publish"}
           </Button>
         </DialogActions>
       </Dialog>

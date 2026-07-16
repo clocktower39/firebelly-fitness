@@ -64,9 +64,25 @@ const validatePublish = (program, { requireWorkout = true } = {}) => {
   return errors;
 };
 
+// Program visibility (reach), ordered private < profile < public.
+const PROGRAM_VISIBILITIES = ["private", "profile", "public"];
+const VISIBILITY_RANK = { private: 0, profile: 1, public: 2 };
+// Normalize a possibly-missing value; a published program with no visibility set is treated as
+// "profile" (its Product was already live before this feature) — the migration makes it explicit.
+const normalizeVisibility = (visibility, { published = false } = {}) => {
+  if (PROGRAM_VISIBILITIES.includes(visibility)) return visibility;
+  return published ? "profile" : "private";
+};
+// Listed = shows anywhere (trainer profile or public marketplace).
+const isListedVisibility = (visibility) => (VISIBILITY_RANK[visibility] || 0) >= 1;
+
 module.exports = {
   buildProgramWeeks,
   mesocycleWeeks,
   expandMesocycles,
   validatePublish,
+  PROGRAM_VISIBILITIES,
+  VISIBILITY_RANK,
+  normalizeVisibility,
+  isListedVisibility,
 };
