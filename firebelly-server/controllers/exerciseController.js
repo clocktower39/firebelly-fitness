@@ -4,13 +4,8 @@ const Training = require("../models/training");
 const ExerciseAlias = require("../models/exerciseAlias");
 const ExerciseFavorite = require("../models/exerciseFavorite");
 const { pick } = require("../utils/object");
+const { isExerciseAdmin } = require("../utils/exerciseAdmin");
 
-const exerciseAdminIds = (
-  process.env.EXERCISE_ADMIN_IDS || "612198502f4d5273b466b4e4,613d0935341e9f055c320d81"
-)
-  .split(",")
-  .map((id) => id.trim())
-  .filter(Boolean);
 const EXERCISE_FIELDS = [
   "exerciseTitle",
   "muscleGroups",
@@ -29,8 +24,6 @@ const EXERCISE_FIELDS = [
   "measurementType",
   "verified",
 ];
-
-const isExerciseAdmin = (user) => exerciseAdminIds.includes(user?._id?.toString());
 
 const create_exercise = async (req, res, next) => {
   if (!isExerciseAdmin(res.locals.user)) {

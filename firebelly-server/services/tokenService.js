@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { isAdmin } = require("../utils/admin");
+const { isExerciseAdmin } = require("../utils/exerciseAdmin");
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 
@@ -45,6 +46,7 @@ const buildTokenPayload = (user, overrides = {}) => {
     ? Boolean(overrides.isTrainer)
     : Boolean(user.isTrainer),
   isAdmin: isAdmin(user),
+  isExerciseAdmin: isExerciseAdmin(user),
   accountType: user.accountType || "adult",
   ageBand: user.ageBand || null,
   coppaStatus: user.coppaStatus || null,
@@ -65,6 +67,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   // and never carry admin powers into a delegated session.
   if (overrides.delegationMode) {
     payload.isAdmin = false;
+    payload.isExerciseAdmin = false;
     payload.email = null;
     payload.phoneNumber = null;
     payload.dateOfBirth = null;

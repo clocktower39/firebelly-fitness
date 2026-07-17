@@ -78,9 +78,15 @@ export default function Exercises() {
     }
   }, []);
 
-  const isExerciseAdmin = ["612198502f4d5273b466b4e4", "613d0935341e9f055c320d81"].includes(
-    user?._id
-  );
+  // Server-driven flag (baked into the JWT). The hardcoded list is only a fallback for sessions on
+  // a pre-flag token (until it refreshes) — kept in sync with the current EXERCISE_ADMIN_IDS.
+  const isExerciseAdmin =
+    Boolean(user?.isExerciseAdmin) ||
+    [
+      "612198502f4d5273b466b4e4",
+      "613d0935341e9f055c320d81",
+      "6a3dad30f99a7a66f92664ec",
+    ].includes(user?._id);
 
   // Exercises with neither a demo URL nor a built-in animation — these need a manual upload.
   const needsMedia = exerciseList
@@ -100,28 +106,34 @@ export default function Exercises() {
       </Box>
 
       <CustomTabPanel value={value} index={0}>
-        <Autocomplete
-          disableCloseOnSelect
-          fullWidth
-          value={selectedExercise}
-          options={exerciseList
-            .sort((a, b) => a.exerciseTitle.localeCompare(b.exerciseTitle))
-            .map((option) => option)}
-          isOptionEqualToValue={(option, value) => option._id === value._id}
-          getOptionLabel={(option) => option.exerciseTitle}
-          onChange={(e, newSelection) => setSelectedExercise(newSelection)}
-          filterOptions={(options, { inputValue }) =>
-            options.filter(option => matchWords(option.exerciseTitle, inputValue))
-          }
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Selected Exercise"
-              placeholder="Exercises"
+        {isExerciseAdmin ? (
+          <>
+            <Autocomplete
+              disableCloseOnSelect
+              fullWidth
+              value={selectedExercise}
+              options={exerciseList
+                .sort((a, b) => a.exerciseTitle.localeCompare(b.exerciseTitle))
+                .map((option) => option)}
+              isOptionEqualToValue={(option, value) => option._id === value._id}
+              getOptionLabel={(option) => option.exerciseTitle}
+              onChange={(e, newSelection) => setSelectedExercise(newSelection)}
+              filterOptions={(options, { inputValue }) =>
+                options.filter(option => matchWords(option.exerciseTitle, inputValue))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Selected Exercise"
+                  placeholder="Exercises"
+                />
+              )}
             />
-          )}
-        />
-        {selectedExercise && <ExerciseLibrarySection selectedExercise={selectedExercise} />}
+            {selectedExercise && <ExerciseLibrarySection selectedExercise={selectedExercise} />}
+          </>
+        ) : (
+          <Typography variant="body2">Only the business owner can edit exercises.</Typography>
+        )}
       </CustomTabPanel>
       <CustomTabPanel value={value} index={1}>
         {isExerciseAdmin ? (
