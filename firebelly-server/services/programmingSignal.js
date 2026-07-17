@@ -47,7 +47,8 @@ async function snapshotWeekOne(program) {
     const exercises = [];
     (t.training || []).forEach((circuit) =>
       (circuit || []).forEach((entry) => {
-        if (entry && entry.exercise) exercises.push(exerciseSnapshot(entry));
+        // Warm-ups are excluded from the learning signal (they're not the trainer's programming choices).
+        if (entry && entry.exercise && !entry.isWarmup) exercises.push(exerciseSnapshot(entry));
       })
     );
     const plan = t.cardio && t.cardio.plan;

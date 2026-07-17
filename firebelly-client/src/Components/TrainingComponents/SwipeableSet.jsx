@@ -15,11 +15,13 @@ import {
   FormControlLabel,
   Grid,
   IconButton,
+  MenuItem,
   MobileStepper,
   Paper,
   Radio,
   RadioGroup,
   Slide,
+  Stack,
   TextField,
   Toolbar,
   Tooltip,
@@ -43,6 +45,9 @@ const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
+// A circuit is a "warm-up" circuit if any of its entries is flagged isWarmup.
+const isWarmupCircuit = (group) => Array.isArray(group) && group.some((e) => e?.isWarmup);
+
 function SwipeableSet(props) {
   const {
     workoutUser,
@@ -53,6 +58,7 @@ function SwipeableSet(props) {
     swapExercise,
     setLocalTraining,
     newExercise,
+    newWarmup,
     toggleNewSet,
     toggleRemoveSet,
     maxSteps,
@@ -109,6 +115,21 @@ function SwipeableSet(props) {
   const allExercises = useMemo(() => {
     return localTraining.flatMap((group) => group.map((ex) => ex));
   }, [localTraining]);
+
+  // Per-circuit label: warm-up circuits show "Warm-up"; main circuits are numbered, skipping warm-ups.
+  const circuitLabels = useMemo(
+    () =>
+      (localTraining || []).reduce((acc, group) => {
+        if (isWarmupCircuit(group)) {
+          acc.push({ warmup: true });
+        } else {
+          const priorMain = acc.filter((c) => !c.warmup).length;
+          acc.push({ warmup: false, number: priorMain + 1 });
+        }
+        return acc;
+      }, []),
+    [localTraining]
+  );
 
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const handleFeedbackDialogOpen = () => setFeedbackDialogOpen(true);
@@ -168,6 +189,15 @@ function SwipeableSet(props) {
           </Button>
         }
       />
+      {newWarmup && (
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
+          <Tooltip title="Add movement-based warm-up exercises (won't progress week to week)">
+            <Button size="small" startIcon={<AddCircle />} onClick={newWarmup}>
+              Add warm-up
+            </Button>
+          </Tooltip>
+        </Box>
+      )}
       <SwipeableViews
         axis="x"
         index={activeStep}
@@ -186,7 +216,14 @@ function SwipeableSet(props) {
                         <RemoveCircle />
                       </IconButton>
                     </Tooltip>
-                    <Typography variant="h5">Circuit {index + 1}</Typography>
+                    <Typography
+                      variant="h5"
+                      color={circuitLabels[index]?.warmup ? "info.main" : "text.primary"}
+                    >
+                      {circuitLabels[index]?.warmup
+                        ? "Warm-up"
+                        : `Circuit ${circuitLabels[index]?.number ?? index + 1}`}
+                    </Typography>
                     <Tooltip title="Add a new circuit">
                       <IconButton onClick={newSet}>
                         <AddCircle />
@@ -196,23 +233,36 @@ function SwipeableSet(props) {
                 </Grid>
               </Grid>
               {group.length > 0 &&
-                group.map((exercise, exerciseIndex) => (
-                  <Exercise
-                    key={`exercise-${exercise._id}-${exerciseIndex}`}
-                    workoutUser={workoutUser}
-                    exercise={exercise}
-                    setIndex={index}
-                    exerciseIndex={exerciseIndex}
-                    removeExercise={removeExercise}
-                    swapExercise={swapExercise}
-                    localTraining={localTraining}
-                    setLocalTraining={setLocalTraining}
-                    setHeightToggle={setHeightToggle}
-                    size={size}
-                    weightUnit={weightUnit}
-                    onToggleWeightUnit={onToggleWeightUnit}
-                  />
-                ))}
+                group.map((exercise, exerciseIndex) =>
+                  // All warm-ups (library or custom) render as one compact row — warm-ups don't need
+                  // the full exercise editor (sets/weight grid, progress chart, swap, techniques).
+                  exercise.isWarmup ? (
+                    <WarmupRow
+                      key={`warmup-${exercise._id || exercise.customName || exerciseIndex}`}
+                      entry={exercise}
+                      setIndex={index}
+                      exerciseIndex={exerciseIndex}
+                      removeExercise={removeExercise}
+                      setLocalTraining={setLocalTraining}
+                    />
+                  ) : (
+                    <Exercise
+                      key={`exercise-${exercise._id}-${exerciseIndex}`}
+                      workoutUser={workoutUser}
+                      exercise={exercise}
+                      setIndex={index}
+                      exerciseIndex={exerciseIndex}
+                      removeExercise={removeExercise}
+                      swapExercise={swapExercise}
+                      localTraining={localTraining}
+                      setLocalTraining={setLocalTraining}
+                      setHeightToggle={setHeightToggle}
+                      size={size}
+                      weightUnit={weightUnit}
+                      onToggleWeightUnit={onToggleWeightUnit}
+                    />
+                  )
+                )}
               <Grid container size={12}>
                 <Grid container size={12} sx={{ justifyContent: "center" }}>
                   <Tooltip title="Add a new exercise to the current set">
@@ -520,7 +570,7 @@ const FeedbackExerciseInput = ({ exercise }) => {
   return (
     <Grid container size={12} key={exercise._id} component={Paper} spacing={1} sx={{ padding: '15px 7.5px', }}>
       <Grid container size={12}>
-        <Typography>{exercise.exercise.exerciseTitle}:</Typography>
+        <Typography>{exercise.exercise?.exerciseTitle || exercise.customName || "Exercise"}:</Typography>
       </Grid>
       <Grid container size={12} sx={{ padding: "0px 15px" }}>
         <Typography sx={{ mb: 1 }}>Rate Difficulty:</Typography>
@@ -711,12 +761,13 @@ const FeedbackDialog = ({
           />
           <Divider sx={{ my: 1 }} />
           {exerciseList
+            .filter((exercise) => exercise.exercise?._id)
             .map((exercise) => (
               <FormControlLabel
                 key={exercise.exercise._id}
                 control={
                   <Checkbox
-                    checked={selectedExercises.some((ex) => ex.exercise._id === exercise.exercise._id)}
+                    checked={selectedExercises.some((ex) => ex.exercise?._id === exercise.exercise._id)}
                     onChange={() => handleToggle(exercise)}
                   />
                 }
@@ -727,6 +778,119 @@ const FeedbackDialog = ({
         </FormGroup>
       </DialogContent>
     </Dialog>
+  );
+};
+
+// One compact row for EVERY warm-up (library exercise or free-text custom). Warm-ups don't need the
+// full exercise editor, so this shows just: name + an editable target (Minutes / Reps / As needed) +
+// an optional "Done" log (loggable, never required) + remove.
+const WarmupRow = ({ entry, setIndex, exerciseIndex, removeExercise, setLocalTraining }) => {
+  const exerciseList = useSelector((state) => state.progress.exerciseList) || [];
+  const exId = String(entry.exercise?._id || entry.exercise || "");
+  const libName = entry.exercise?.exerciseTitle || exerciseList.find((e) => e._id === exId)?.exerciseTitle;
+  const name = entry.customName || libName || "Warm-up";
+
+  const g = entry.goals || {};
+  const secs = Number((g.seconds || [])[0]) || 0;
+  const reps = Number((g.exactReps || [])[0]) || 0;
+  const measure = entry.exerciseType === "Time" || secs > 0 ? "time" : reps > 0 ? "reps" : "none";
+  const amount = measure === "time" ? Math.round(secs / 60) : measure === "reps" ? reps : "";
+
+  const ach = entry.achieved || {};
+  const achVal =
+    measure === "time"
+      ? Number((ach.seconds || [])[0])
+        ? Math.round(Number(ach.seconds[0]) / 60)
+        : ""
+      : measure === "reps"
+      ? Number((ach.reps || [])[0]) || ""
+      : "";
+
+  const patchEntry = (fn) =>
+    setLocalTraining((prev) =>
+      (prev || []).map((circuit, ci) =>
+        ci !== setIndex ? circuit : circuit.map((e, ei) => (ei !== exerciseIndex ? e : fn({ ...e })))
+      )
+    );
+
+  const setMeasure = (m) =>
+    patchEntry((e) => {
+      const goals = { ...(e.goals || {}), sets: 1, minReps: [0], maxReps: [0], exactReps: [0], weight: [0], percent: [0], seconds: [0] };
+      let exerciseType = "Reps";
+      if (m === "time") {
+        exerciseType = "Time";
+        goals.seconds = ["300"];
+      } else if (m === "reps") {
+        goals.exactReps = ["10"];
+      }
+      return { ...e, exerciseType, goals };
+    });
+
+  const setAmount = (v) =>
+    patchEntry((e) => {
+      const n = Math.max(0, Number(v) || 0);
+      const goals = { ...(e.goals || {}), sets: 1 };
+      if (measure === "time") goals.seconds = [String(n * 60)];
+      else if (measure === "reps") goals.exactReps = [String(n)];
+      return { ...e, goals };
+    });
+
+  const setAchieved = (v) =>
+    patchEntry((e) => {
+      const n = Math.max(0, Number(v) || 0);
+      const achieved = { ...(e.achieved || {}), sets: 1 };
+      if (measure === "time") achieved.seconds = [String(n * 60)];
+      else if (measure === "reps") achieved.reps = [String(n)];
+      return { ...e, achieved };
+    });
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.25, mb: 1.5, width: "100%" }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+        <Typography variant="subtitle2" sx={{ flex: "1 1 140px" }}>
+          {name}
+        </Typography>
+        <TextField
+          select
+          size="small"
+          label="Target"
+          value={measure}
+          onChange={(e) => setMeasure(e.target.value)}
+          sx={{ minWidth: 110 }}
+        >
+          <MenuItem value="time">Minutes</MenuItem>
+          <MenuItem value="reps">Reps</MenuItem>
+          <MenuItem value="none">As needed</MenuItem>
+        </TextField>
+        {measure !== "none" && (
+          <TextField
+            size="small"
+            type="number"
+            label={measure === "time" ? "Min" : "Reps"}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            sx={{ width: 80 }}
+            slotProps={{ htmlInput: { min: 0 } }}
+          />
+        )}
+        {measure !== "none" && (
+          <TextField
+            size="small"
+            type="number"
+            label="Done"
+            value={achVal}
+            onChange={(e) => setAchieved(e.target.value)}
+            sx={{ width: 80 }}
+            slotProps={{ htmlInput: { min: 0 } }}
+          />
+        )}
+        <Tooltip title="Remove warm-up">
+          <IconButton size="small" onClick={() => removeExercise(setIndex, exerciseIndex)}>
+            <RemoveCircle />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    </Paper>
   );
 };
 

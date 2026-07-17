@@ -7,6 +7,7 @@ export default function StrengthWorkoutEditor({
   allowFeedback,
   localTraining,
   newExercise,
+  newWarmup,
   newSet,
   onToggleWeightUnit,
   removeExercise,
@@ -35,6 +36,7 @@ export default function StrengthWorkoutEditor({
         <SwipeableSet
           workoutUser={workoutUser}
           newExercise={newExercise}
+          newWarmup={newWarmup}
           newSet={newSet}
           removeSet={removeSet}
           removeExercise={removeExercise}

@@ -42,8 +42,15 @@ const trainingSchema = new mongoose.Schema(
       type: [
         [
           {
-            exercise: { type: mongoose.Schema.Types.ObjectId, ref: "Exercise", required: true },
+            // Not required: a free-text custom warm-up ("Foam roll IT band") carries no library
+            // exercise — it uses customName instead. Every non-warm-up entry still sets this.
+            exercise: { type: mongoose.Schema.Types.ObjectId, ref: "Exercise", required: false, default: null },
+            // Typed label for a custom warm-up that isn't in the exercise library.
+            customName: { type: String, default: "" },
             exerciseType: { type: String },
+            // Movement-based warm-up exercise. Loggable but never required; exempt from the
+            // progression engine, reactive load seeding, and the programming-signal learning.
+            isWarmup: { type: Boolean, default: false },
             goals: {
               sets: { type: Number },
               minReps: { type: Array },

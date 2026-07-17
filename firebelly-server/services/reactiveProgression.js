@@ -135,6 +135,7 @@ const applyResultsToFutureProgram = async (completed) => {
   const signalByExercise = new Map();
   completed.training.forEach((circuit) =>
     (circuit || []).forEach((entry) => {
+      if (entry.isWarmup) return; // warm-ups don't seed future loads
       const id = exIdOf(entry);
       if (!id) return;
       const signal = analyzeEntry(entry);
@@ -165,6 +166,7 @@ const applyResultsToFutureProgram = async (completed) => {
     let changed = false;
     (w.training || []).forEach((circuit) =>
       (circuit || []).forEach((entry) => {
+        if (entry.isWarmup) return; // never overwrite a warm-up's loads
         const signal = signalByExercise.get(exIdOf(entry));
         if (!signal) return;
         if (applySignalToEntry(entry, signal, ctxById.get(exIdOf(entry)) || {})) changed = true;

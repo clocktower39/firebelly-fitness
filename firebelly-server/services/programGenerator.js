@@ -31,7 +31,7 @@ async function progressWorkout(training, { step, deload }) {
   const map = new Map(libs.map((l) => [String(l._id), l]));
   training.forEach((c) =>
     c.forEach((e) => {
-      if (!e.goals) return;
+      if (!e.goals || e.isWarmup) return; // warm-ups don't progress week to week
       const lib = map.get(String(e.exercise)) || {};
       e.goals = progressExerciseGoals(
         e.goals,

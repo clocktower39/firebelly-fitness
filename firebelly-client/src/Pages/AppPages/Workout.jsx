@@ -336,11 +336,106 @@ export default function Workout({ socket }) {
     "Triceps",
   ];
 
+  // When true, the next confirmed add creates a WARM-UP circuit (flagged isWarmup) at the front,
+  // instead of adding to the current circuit.
+  const [addingWarmup, setAddingWarmup] = useState(false);
+
   const newExercise = (index) => {
+    setAddingWarmup(false);
     handleAddExerciseOpen();
   };
 
-  // Create a new exercise on the current set
+  // Open the picker to add a movement-based warm-up (its exercises become a warm-up circuit).
+  const newWarmup = () => {
+    setAddingWarmup(true);
+    handleAddExerciseOpen();
+  };
+
+  // Build a library-exercise entry (optionally flagged as a warm-up), seeding goals from history.
+  const buildExerciseEntry = (exercise, isWarmup, setCount, selectedHistoryByExercise, exerciseList) => {
+    const reduxExercise = exerciseList.find((item) => item._id === exercise._id);
+    const history = reduxExercise?.history?.[user._id] || [];
+    const selectedHistoryId = selectedHistoryByExercise?.[exercise._id];
+    const selectedHistory =
+      history.find((item) => item._id === selectedHistoryId) || history[history.length - 1];
+    const achieved = selectedHistory?.achieved || {};
+    const normalizeToSets = (values) => {
+      const source = Array.isArray(values) ? values : [];
+      return Array.from({ length: setCount }, (_, idx) => source[idx] ?? 0);
+    };
+    return {
+      exercise,
+      exerciseType: "Reps",
+      isWarmup,
+      goals: {
+        sets: setCount,
+        minReps: Array(setCount).fill(0),
+        maxReps: Array(setCount).fill(0),
+        exactReps: normalizeToSets(achieved.reps),
+        weight: normalizeToSets(achieved.weight),
+        percent: normalizeToSets(achieved.percent),
+        seconds: normalizeToSets(achieved.seconds),
+      },
+      achieved: {
+        sets: 0,
+        reps: Array(setCount).fill(0),
+        weight: Array(setCount).fill(0),
+        percent: Array(setCount).fill(0),
+        seconds: Array(setCount).fill(0),
+      },
+      techniques: [],
+    };
+  };
+
+  // Build a library warm-up entry in the SIMPLE single-target shape (warm-ups render in a compact row,
+  // not the full sets/weight grid). Default target seeded from the exercise's measurement type.
+  const buildWarmupLibraryEntry = (exercise) => {
+    const isTime = exercise?.measurementType === "time";
+    return {
+      exercise,
+      customName: "",
+      isWarmup: true,
+      exerciseType: isTime ? "Time" : "Reps",
+      goals: {
+        sets: 1,
+        minReps: [0],
+        maxReps: [0],
+        exactReps: [isTime ? 0 : "10"],
+        weight: [0],
+        percent: [0],
+        seconds: [isTime ? "300" : 0],
+      },
+      achieved: { sets: 0, reps: [0], weight: [0], percent: [0], seconds: [0] },
+      techniques: [],
+    };
+  };
+
+  // Build a free-text custom warm-up entry (no library exercise). measure: "time" (min) | "reps" | "none".
+  const buildCustomWarmupEntry = ({ name, measure, amount }) => {
+    const label = (name || "").trim();
+    if (!label) return null;
+    const n = Math.max(0, Number(amount) || 0);
+    let exerciseType = "Reps";
+    const goals = { sets: 1, minReps: [0], maxReps: [0], exactReps: [0], weight: [0], percent: [0], seconds: [0] };
+    if (measure === "time") {
+      exerciseType = "Time";
+      goals.seconds = [String(n * 60)];
+    } else if (measure === "reps") {
+      goals.exactReps = [String(n)];
+    }
+    return {
+      exercise: null,
+      customName: label,
+      isWarmup: true,
+      exerciseType,
+      goals,
+      achieved: { sets: 0, reps: [0], weight: [0], percent: [0], seconds: [0] },
+      techniques: [],
+    };
+  };
+
+  // Create a new exercise on the current set. Added exercises inherit the target circuit's warm-up
+  // status (so adding to a warm-up circuit keeps them warm-ups). Warm-up adds go via confirmedWarmups.
   const confirmedNewExercise = (
     index,
     selectedExercises,
@@ -351,42 +446,16 @@ export default function Workout({ socket }) {
     exerciseList,
   ) => {
     if (selectedExercises.length > 0) {
+      const targetIsWarmup = (localTraining[index] || []).some((e) => e.isWarmup);
       const newTraining = localTraining.map((group, i) => {
         if (index === i) {
-          selectedExercises.forEach((exercise) => {
-            const reduxExercise = exerciseList.find((item) => item._id === exercise._id);
-            const history = reduxExercise?.history?.[user._id] || [];
-            const selectedHistoryId = selectedHistoryByExercise?.[exercise._id];
-            const selectedHistory =
-              history.find((item) => item._id === selectedHistoryId) ||
-              history[history.length - 1];
-            const achieved = selectedHistory?.achieved || {};
-            const normalizeToSets = (values) => {
-              const source = Array.isArray(values) ? values : [];
-              return Array.from({ length: setCount }, (_, idx) => source[idx] ?? 0);
-            };
-            group.push({
-              exercise: exercise,
-              exerciseType: "Reps",
-              goals: {
-                sets: setCount,
-                minReps: Array(setCount).fill(0),
-                maxReps: Array(setCount).fill(0),
-                exactReps: normalizeToSets(achieved.reps),
-                weight: normalizeToSets(achieved.weight),
-                percent: normalizeToSets(achieved.percent),
-                seconds: normalizeToSets(achieved.seconds),
-              },
-              achieved: {
-                sets: 0,
-                reps: Array(setCount).fill(0),
-                weight: Array(setCount).fill(0),
-                percent: Array(setCount).fill(0),
-                seconds: Array(setCount).fill(0),
-              },
-              techniques: [],
-            });
-          });
+          selectedExercises.forEach((exercise) =>
+            group.push(
+              targetIsWarmup
+                ? buildWarmupLibraryEntry(exercise)
+                : buildExerciseEntry(exercise, false, setCount, selectedHistoryByExercise, exerciseList)
+            )
+          );
         }
         return group;
       });
@@ -400,6 +469,32 @@ export default function Workout({ socket }) {
     }
     setSelectedExercises([]);
     setSelectedExercisesSetCount(4);
+    setAddingWarmup(false);
+    handleAddExerciseClose();
+  };
+
+  // Warm-up confirm: post ALL staged custom warm-ups AND all searched library warm-ups together, as
+  // one front warm-up circuit (created if there isn't one). Called once from the modal's Confirm.
+  const confirmedWarmups = ({ selectedExercises, customWarmups }) => {
+    const entries = [
+      ...(customWarmups || []).map(buildCustomWarmupEntry).filter(Boolean),
+      ...(selectedExercises || []).map(buildWarmupLibraryEntry),
+    ];
+    if (entries.length) {
+      const frontIsWarmup = (localTraining[0] || []).some((e) => e.isWarmup);
+      const newTraining = frontIsWarmup
+        ? localTraining.map((g, i) => (i === 0 ? [...g, ...entries] : g))
+        : [entries, ...localTraining];
+      dispatch(
+        updateTraining(training._id, {
+          ...training,
+          category: [...trainingCategory],
+          training: [...newTraining],
+        })
+      );
+      setActiveStep(0);
+    }
+    setAddingWarmup(false);
     handleAddExerciseClose();
   };
 
@@ -640,6 +735,7 @@ export default function Workout({ socket }) {
                     allowFeedback={!training.isTemplate}
                     localTraining={localTraining}
                     newExercise={newExercise}
+                    newWarmup={newWarmup}
                     newSet={newSet}
                     onToggleWeightUnit={
                       weightLabelUnitToggleEnabled ? toggleWorkoutWeightUnit : undefined
@@ -739,8 +835,10 @@ export default function Workout({ socket }) {
                 addExerciseOpen={addExerciseOpen}
                 handleAddExerciseClose={handleAddExerciseClose}
                 confirmedNewExercise={confirmedNewExercise}
+                confirmedWarmups={confirmedWarmups}
                 activeStep={activeStep}
                 weightUnit={activeWorkoutWeightUnit}
+                warmup={addingWarmup}
               />
               <WorkoutTrainerSessionDialog
                 open={openTrainerSessionDialog}

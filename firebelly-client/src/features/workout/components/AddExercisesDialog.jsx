@@ -5,17 +5,20 @@ import {
   AppBar,
   Autocomplete,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogContent,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
   List,
   ListItem,
   MenuItem,
+  Paper,
   Select,
   Slide,
   Stack,
@@ -23,6 +26,8 @@ import {
   Toolbar,
   Typography,
 } from "@mui/material";
+
+const WARMUP_TAG = "Warm-up";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { getExerciseAliases, requestExerciseProgress } from "../../../Redux/actions";
 import { displayWeightUnit, formatWeightList, normalizeWeightUnit } from "../../../utils/weightUnits";
@@ -92,13 +97,88 @@ export const ExerciseListAutocomplete = ({ exerciseList, selectedExercises, setS
   );
 };
 
-const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmedNewExercise, activeStep, user, weightUnit: weightUnitOverride, }) => {
+const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmedNewExercise, confirmedWarmups, activeStep, user, weightUnit: weightUnitOverride, warmup = false, }) => {
   const exerciseList = useSelector((state) => state.progress.exerciseList);
   const weightUnit = normalizeWeightUnit(weightUnitOverride || user.workoutWeightUnit);
 
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [selectedExercisesSetCount, setSelectedExercisesSetCount] = useState(4);
   const [selectedHistoryByExercise, setSelectedHistoryByExercise] = useState({});
+  // Warm-up mode: lead the picker with warm-up-tagged movements (toggle to search everything), plus
+  // a free-text custom warm-up entry for anything not in the library.
+  const [showAllExercises, setShowAllExercises] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customMeasure, setCustomMeasure] = useState("time");
+  const [customAmount, setCustomAmount] = useState("5");
+  // Custom warm-ups staged in the modal — they post together with any searched library warm-ups
+  // when Confirm is clicked (so you don't have to reopen the modal to add more).
+  const [stagedCustomWarmups, setStagedCustomWarmups] = useState([]);
+
+  const pickerList =
+    warmup && !showAllExercises
+      ? (exerciseList || []).filter((e) => (e.tags || []).includes(WARMUP_TAG))
+      : exerciseList;
+
+  const measureLabel = (cw) =>
+    cw.measure === "time"
+      ? `${cw.amount} min`
+      : cw.measure === "reps"
+      ? `${cw.amount} reps`
+      : "as needed";
+
+  // "Add" stages the typed custom warm-up in the list and clears the fields — it does NOT submit.
+  const handleAddCustomWarmup = () => {
+    if (!customName.trim()) return;
+    setStagedCustomWarmups((prev) => [
+      ...prev,
+      { name: customName.trim(), measure: customMeasure, amount: customAmount },
+    ]);
+    setCustomName("");
+    setCustomMeasure("time");
+    setCustomAmount("5");
+  };
+
+  const resetDialog = () => {
+    setSelectedExercises([]);
+    setSelectedExercisesSetCount(4);
+    setStagedCustomWarmups([]);
+    setCustomName("");
+    setCustomMeasure("time");
+    setCustomAmount("5");
+    setShowAllExercises(false);
+  };
+
+  // One Confirm for warm-up mode: gather staged customs (plus any typed-but-not-yet-added one) and
+  // the searched library selections, and post them all together.
+  const handleConfirm = () => {
+    if (warmup) {
+      const customWarmups = [...stagedCustomWarmups];
+      if (customName.trim()) {
+        customWarmups.push({ name: customName.trim(), measure: customMeasure, amount: customAmount });
+      }
+      confirmedWarmups({
+        selectedExercises,
+        customWarmups,
+        setCount: selectedExercisesSetCount,
+        selectedHistoryByExercise,
+        exerciseList,
+      });
+      resetDialog();
+    } else {
+      confirmedNewExercise(
+        activeStep,
+        selectedExercises,
+        setSelectedExercises,
+        selectedExercisesSetCount,
+        setSelectedExercisesSetCount,
+        selectedHistoryByExercise,
+        exerciseList
+      );
+    }
+  };
+
+  const confirmDisabled =
+    warmup && !selectedExercises.length && !stagedCustomWarmups.length && !customName.trim();
 
   const handleSelectedExercisesSetCountChange = (e) =>
     setSelectedExercisesSetCount(Number(e.target.value));
@@ -158,41 +238,117 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
           <IconButton
             edge="start"
             color="inherit"
-            onClick={handleAddExerciseClose}
+            onClick={() => {
+              resetDialog();
+              handleAddExerciseClose();
+            }}
             aria-label="close"
           >
             <CloseIcon />
           </IconButton>
           <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-            Add Exercises
+            {warmup ? "Add Warm-up Exercises" : "Add Exercises"}
           </Typography>
-          <Button
-            variant="contained"
-            onClick={() =>
-              confirmedNewExercise(
-                activeStep,
-                selectedExercises,
-                setSelectedExercises,
-                selectedExercisesSetCount,
-                setSelectedExercisesSetCount,
-                selectedHistoryByExercise,
-                exerciseList
-              )
-            }
-          >
+          <Button variant="contained" onClick={handleConfirm} disabled={confirmDisabled}>
             Confirm
           </Button>
         </Toolbar>
       </AppBar>
       <DialogContent>
         <Grid container spacing={1} sx={{ padding: "10px 0px" }}>
+          {warmup && (
+            <Grid container size={12}>
+              <Paper variant="outlined" sx={{ p: 1.5, width: "100%" }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Custom warm-up (not in the library)
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems="stretch">
+                  <TextField
+                    label="Name"
+                    placeholder="e.g. Foam roll IT band"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    select
+                    label="Measure"
+                    value={customMeasure}
+                    onChange={(e) => setCustomMeasure(e.target.value)}
+                    size="small"
+                    sx={{ minWidth: 130 }}
+                  >
+                    <MenuItem value="time">Minutes</MenuItem>
+                    <MenuItem value="reps">Reps</MenuItem>
+                    <MenuItem value="none">As needed</MenuItem>
+                  </TextField>
+                  {customMeasure !== "none" && (
+                    <TextField
+                      label={customMeasure === "time" ? "Min" : "Reps"}
+                      type="number"
+                      value={customAmount}
+                      onChange={(e) => setCustomAmount(e.target.value)}
+                      size="small"
+                      sx={{ width: 90 }}
+                      slotProps={{ htmlInput: { min: 0 } }}
+                    />
+                  )}
+                  <Button
+                    variant="outlined"
+                    onClick={handleAddCustomWarmup}
+                    disabled={!customName.trim()}
+                  >
+                    Add to list
+                  </Button>
+                </Stack>
+                {stagedCustomWarmups.length > 0 && (
+                  <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5, mt: 1.25 }}>
+                    {stagedCustomWarmups.map((cw, i) => (
+                      <Chip
+                        key={`${cw.name}-${i}`}
+                        label={`${cw.name} · ${measureLabel(cw)}`}
+                        onDelete={() =>
+                          setStagedCustomWarmups((prev) => prev.filter((_, idx) => idx !== i))
+                        }
+                        size="small"
+                      />
+                    ))}
+                  </Stack>
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                  Add as many as you like, then press <strong>Confirm</strong> — custom and searched
+                  warm-ups post together.
+                </Typography>
+              </Paper>
+              <Divider sx={{ width: "100%", my: 1.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  or pick from the library
+                </Typography>
+              </Divider>
+            </Grid>
+          )}
           <Grid container size={12}>
             <ExerciseListAutocomplete
-              exerciseList={exerciseList}
+              exerciseList={pickerList}
               selectedExercises={selectedExercises}
               setSelectedExercises={setSelectedExercises}
             />
           </Grid>
+          {warmup && (
+            <Grid container size={12}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={showAllExercises}
+                    onChange={(e) => setShowAllExercises(e.target.checked)}
+                  />
+                }
+                label="Show all exercises (not just warm-ups)"
+              />
+            </Grid>
+          )}
           <Grid container size={12}>
             <TextField
               label="Sets"
