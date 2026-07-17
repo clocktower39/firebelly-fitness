@@ -27,6 +27,7 @@ import {
   ListItemIcon,
   ListItemButton,
   ListItemText,
+  ListSubheader,
   Menu,
   MenuItem,
   Toolbar,
@@ -50,7 +51,6 @@ import {
   Storefront as StorefrontIcon,
   FitnessCenter as ExerciseLibraryIcon,
   Chat as MessagesIcon,
-  NotificationsNone as NotificationsNavIcon,
   Feedback as FeedbackIcon,
   Inbox as InboxIcon,
 } from "@mui/icons-material";
@@ -86,121 +86,100 @@ export default function NavDrawer() {
 
   const unreadMessages = (conversations || []).reduce((sum, c) => sum + (c.unread || 0), 0);
 
-  const pages = [
+  // Grouped, labeled nav sections (a header of null renders no subheader). Messages + Notifications
+  // now live in the top bar, so they're not in the drawer.
+  const commonSections = [
+    { header: null, items: [{ title: "Home", to: "/", icon: <HomeIcon /> }] },
     {
-      title: "Home",
-      to: "/",
-      icon: <HomeIcon />,
+      header: "Training",
+      items: [
+        { title: "Workout Calendar", to: "/calendar", icon: <CalendarIcon /> },
+        { title: "Progress", to: "/progress", icon: <ProgressIcon /> },
+        { title: "Exercise Library", to: "/exercise-library", icon: <ExerciseLibraryIcon /> },
+        { title: "Goals", to: "/goals", icon: <GoalsIcon />, badge: unseenAchievements },
+      ],
     },
     {
-      title: "Scheduling",
-      to: "/sessions",
-      icon: <CalendarIcon />,
+      header: "Sessions & Community",
+      items: [
+        { title: "Scheduling", to: "/sessions", icon: <CalendarIcon /> },
+        { title: "Groups", to: "/groups", icon: <GroupsIcon /> },
+        { title: "Trainers", to: "/account/trainers", icon: <TrainersIcon /> },
+        { title: "Shop", to: "/trainer-store", icon: <StorefrontIcon /> },
+      ],
     },
     {
-      title: "Workout Calendar",
-      to: "/calendar",
-      icon: <CalendarIcon />,
-    },
-    {
-      title: "Goals",
-      to: "/goals",
-      icon: <GoalsIcon />,
-      badge: unseenAchievements,
-    },
-    {
-      title: "Messages",
-      to: "/messages",
-      icon: <MessagesIcon />,
-      badge: unreadMessages,
-    },
-    {
-      title: "Notifications",
-      to: "/notifications",
-      icon: <NotificationsNavIcon />,
-    },
-    {
-      title: "Progress",
-      to: "/progress",
-      icon: <ProgressIcon />,
-    },
-    {
-      title: "Exercise Library",
-      to: "/exercise-library",
-      icon: <ExerciseLibraryIcon />,
-    },
-    {
-      title: "Trainers",
-      to: "/account/trainers",
-      icon: <TrainersIcon />,
-    },
-    {
-      title: "Shop",
-      to: "/trainer-store",
-      icon: <StorefrontIcon />,
-    },
-    {
-      title: "Groups",
-      to: "/groups",
-      icon: <GroupsIcon />,
-    },
-    {
-      title: "Feedback",
-      to: "/feedback",
-      icon: <FeedbackIcon />,
-    },
-    {
-      title: "Account Settings",
-      to: "/account",
-      icon: <AccountIcon />,
+      header: "Account",
+      items: [
+        { title: "Feedback", to: "/feedback", icon: <FeedbackIcon /> },
+        { title: "Account Settings", to: "/account", icon: <AccountIcon /> },
+      ],
     },
   ];
 
-  const adminPages = [
+  const trainerSections = [
     {
-      title: "App Feedback",
-      to: "/admin/feedback",
-      icon: <InboxIcon />,
+      header: "Coaching",
+      items: [
+        { title: "Clients", to: "/clients", icon: <ClientsIcon /> },
+        { title: "Coverage", to: "/coverage", icon: <CoverageIcon /> },
+        { title: "Programs", to: "/programs", icon: <GoalsIcon /> },
+        { title: "Workout Templates", to: "/workout-templates", icon: <CalendarIcon /> },
+        { title: "Exercises", to: "/exercises", icon: <GoalsIcon /> },
+      ],
+    },
+    {
+      header: "Business",
+      items: [
+        { title: "Invoices", to: "/invoices", icon: <SessionIcon /> },
+        { title: "Products", to: "/products", icon: <GoalsIcon /> },
+      ],
     },
   ];
 
-  const trainerPages = [
-    {
-      title: "Clients",
-      to: "/clients",
-      icon: <ClientsIcon />,
-    },
-    {
-      title: "Coverage",
-      to: "/coverage",
-      icon: <CoverageIcon />,
-    },
-    {
-      title: "Programs",
-      to: "/programs",
-      icon: <GoalsIcon />,
-    },
-    {
-      title: "Workout Templates",
-      to: "/workout-templates",
-      icon: <CalendarIcon />,
-    },
-    {
-      title: "Invoices",
-      to: "/invoices",
-      icon: <SessionIcon />,
-    },
-    {
-      title: "Products",
-      to: "/products",
-      icon: <GoalsIcon />,
-    },
-    {
-      title: "Exercises",
-      to: "/exercises",
-      icon: <GoalsIcon />,
-    },
+  const adminSections = [
+    { header: "Admin", items: [{ title: "App Feedback", to: "/admin/feedback", icon: <InboxIcon /> }] },
   ];
+
+  // Areas hidden while a trainer is viewing a client (the server also blocks them).
+  const SENSITIVE_IN_VIEW_AS = ["/account", "/account/trainers", "/trainer-store", "/groups"];
+
+  const renderSections = (sections) =>
+    sections.map((section) => {
+      const items = section.items.filter(
+        (page) => !(viewAsTrainer && SENSITIVE_IN_VIEW_AS.includes(page.to))
+      );
+      if (!items.length) return null;
+      return (
+        <React.Fragment key={section.header || "main"}>
+          {section.header && (
+            <ListSubheader
+              disableSticky
+              sx={{
+                bgcolor: "transparent",
+                lineHeight: "34px",
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 0.6,
+                color: "text.secondary",
+              }}
+            >
+              {section.header}
+            </ListSubheader>
+          )}
+          {items.map((page) => (
+            <ListItem key={page.title} disablePadding>
+              <ListItemButton component={Link} to={page.to}>
+                <ListItemIcon>{page.icon}</ListItemIcon>
+                <ListItemText primary={page.title} />
+                {page.badge > 0 && <Badge badgeContent={page.badge} color="error" sx={{ mr: 2 }} />}
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </React.Fragment>
+      );
+    });
 
   const noAuthPages = [
     {
@@ -303,58 +282,19 @@ export default function NavDrawer() {
               </Button>
             </Box>
           )}
-          <List>
-            {pages
-              .filter(
-                (page) =>
-                  // Hide sensitive areas while a trainer is viewing a client (server also blocks them).
-                  !(
-                    viewAsTrainer &&
-                    ["/account", "/account/trainers", "/trainer-store", "/groups", "/messages"].includes(page.to)
-                  )
-              )
-              .map((page, index) => (
-              <ListItem key={page.title} disablePadding>
-                <ListItemButton component={Link} to={page.to}>
-                  <ListItemIcon>{page.icon}</ListItemIcon>
-                  <ListItemText primary={page.title} />
-                  {page.badge > 0 && (
-                    <Badge badgeContent={page.badge} color="error" sx={{ mr: 2 }} />
-                  )}
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          <List>{renderSections(commonSections)}</List>
 
           {user.isTrainer && (
             <>
               <Divider />
-              <List>
-                {trainerPages.map((page, index) => (
-                  <ListItem key={page.title} disablePadding>
-                    <ListItemButton component={Link} to={page.to}>
-                      <ListItemIcon>{page.icon}</ListItemIcon>
-                      <ListItemText primary={page.title} />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
+              <List>{renderSections(trainerSections)}</List>
             </>
           )}
 
           {user.isAdmin && (
             <>
               <Divider />
-              <List>
-                {adminPages.map((page) => (
-                  <ListItem key={page.title} disablePadding>
-                    <ListItemButton component={Link} to={page.to}>
-                      <ListItemIcon>{page.icon}</ListItemIcon>
-                      <ListItemText primary={page.title} />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
+              <List>{renderSections(adminSections)}</List>
             </>
           )}
         </>
@@ -446,6 +386,17 @@ export default function NavDrawer() {
               </Button>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              {user._id && !viewAsTrainer && (
+                <IconButton
+                  color="inherit"
+                  onClick={() => navigate("/messages")}
+                  aria-label="messages"
+                >
+                  <Badge badgeContent={unreadMessages} color="error">
+                    <MessagesIcon />
+                  </Badge>
+                </IconButton>
+              )}
               {user._id && !viewAsTrainer && <NotificationBell />}
               {user._id && (
                 <Box sx={{ textAlign: "right", display: { xs: isImpersonating ? "block" : "none", sm: "block" } }}>
