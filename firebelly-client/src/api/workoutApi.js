@@ -139,5 +139,13 @@ export const workoutApi = {
       method: "POST",
       body: payload,
     }),
+
+  // Preferred default sport for a new Sports workout (the user's most-used favorite). `user` targets
+  // self (default) or a client.
+  getSportsDefault: ({ user = null } = {}) =>
+    apiFetch("/sportsDefault", {
+      method: "POST",
+      body: { user },
+    }),
 };
 

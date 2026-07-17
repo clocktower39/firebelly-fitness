@@ -64,6 +64,7 @@ router.post('/createTraining', validate(createTrainingValidate, {}, {}), verifyA
 router.post('/trainingWeek', verifyAccessToken, trainingController.get_weekly_training);
 router.post('/exerciseHistory', verifyAccessToken, trainingController.get_exercise_history);
 router.post('/exerciseProgressSummary', verifyAccessToken, trainingController.get_exercise_progress_summary);
+router.post('/sportsDefault', verifyAccessToken, trainingController.get_sports_default);
 router.post('/myExerciseList', verifyAccessToken, trainingController.get_exercise_list);
 router.post('/copyWorkoutById', verifyAccessToken, ensureWriteAccess, trainingController.copy_workout_by_id);
 router.post('/updateWorkoutDateById', validate(idBodyValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.update_workout_date_by_id);

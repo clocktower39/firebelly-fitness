@@ -672,6 +672,55 @@ const get_exercise_progress_summary = async (req, res, next) => {
   }
 };
 
+// Preferred default sport for a NEW Sports workout: the user's MOST-USED favorite sport. Ties break
+// by the order the sports sit in the user's favorites (first favorite wins). If they have favorites
+// but haven't logged any yet, the first favorite; if no favorites, their most-used sport overall;
+// nothing logged at all → "" (the client keeps its own default). Body { user } targets self or a
+// client (relationship-gated), matching get_exercise_progress_summary.
+const get_sports_default = async (req, res, next) => {
+  try {
+    const { user } = req.body || {};
+    const targetUserId = (typeof user === "object" ? user?._id : user) || res.locals.user._id;
+    if (!mongoose.Types.ObjectId.isValid(String(targetUserId))) {
+      return res.status(400).json({ error: "A valid user is required." });
+    }
+    const relationship = await checkClientRelationship(res.locals.user._id, targetUserId);
+    const canView = String(res.locals.user._id) === String(targetUserId) || relationship?.accepted;
+    if (!canView) return res.status(403).json({ error: "Restricted" });
+
+    const targetUser = await User.findById(targetUserId).select("favoriteSports").lean();
+    const favorites = Array.isArray(targetUser?.favoriteSports) ? targetUser.favoriteSports : [];
+
+    const agg = await Training.aggregate([
+      {
+        $match: {
+          user: new mongoose.Types.ObjectId(String(targetUserId)),
+          workoutType: "Sports",
+          isTemplate: { $ne: true },
+        },
+      },
+      { $group: { _id: "$sports.sport", count: { $sum: 1 } } },
+    ]);
+    const counts = {};
+    agg.forEach((a) => { if (a._id) counts[a._id] = a.count; });
+
+    let sport = "";
+    if (favorites.length) {
+      let best = -1;
+      favorites.forEach((f) => {
+        const c = counts[f] || 0;
+        if (c > best) { best = c; sport = f; }
+      });
+    } else {
+      const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      sport = top ? top[0] : "";
+    }
+    return res.json({ sport, counts });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_training,
   update_training,
@@ -682,5 +731,6 @@ module.exports = {
   get_weekly_training,
   get_exercise_list,
   get_exercise_history,
-  get_exercise_progress_summary
+  get_exercise_progress_summary,
+  get_sports_default,
 };

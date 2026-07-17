@@ -28,6 +28,7 @@ const AREA_PATTERNS = {
     /^\/training$/, /^\/workouts$/, /^\/nextWorkout$/, /^\/createTraining$/, /^\/updateTraining$/,
     /^\/swapExerciseForward$/,
     /^\/trainingWeek$/, /^\/exerciseHistory$/, /^\/exerciseProgressSummary$/, /^\/myExerciseList$/,
+    /^\/sportsDefault$/,
     /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/, /^\/workoutsRange$/, /^\/trainingRangeEnd$/,
     /^\/bulkMoveCopyWorkouts$/, /^\/undoBulkMoveCopy$/, /^\/bulkDeleteWorkouts$/, /^\/undoBulkDelete$/,
     /^\/deleteWorkoutById$/, /^\/getWorkoutHistory$/,
