@@ -8,6 +8,7 @@ import {
   Button,
   Checkbox,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -37,6 +38,7 @@ import {
 import SwipeableViewsModule from "react-swipeable-views";
 import Exercise from "./Exercise";
 import CircuitFeedback from "./CircuitFeedback";
+import { warmupTemplateApi } from "../../api/warmupTemplateApi";
 import { ExerciseListAutocomplete } from "../../features/workout/components/AddExercisesDialog";
 import dayjs from "dayjs";
 
@@ -77,6 +79,29 @@ function SwipeableSet(props) {
 
   const [heightToggle, setHeightToggle] = useState(true);
   const ref = useRef(null);
+
+  // Save-as-warm-up-template (trainer's own session only; hidden in a delegated view-as session).
+  const currentUser = useSelector((state) => state.user);
+  const canManageTemplates = !currentUser?.delegationMode;
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [saveTemplateEntries, setSaveTemplateEntries] = useState([]);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const openSaveTemplate = (group) => {
+    setSaveTemplateEntries(group);
+    setSaveTemplateName("");
+    setSaveTemplateOpen(true);
+  };
+  const handleSaveTemplate = () => {
+    if (!saveTemplateName.trim()) return;
+    setSavingTemplate(true);
+    warmupTemplateApi
+      .create({ name: saveTemplateName.trim(), exercises: saveTemplateEntries })
+      .then((res) => {
+        if (!res?.error) setSaveTemplateOpen(false);
+      })
+      .finally(() => setSavingTemplate(false));
+  };
 
   const handleNext = () => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
@@ -231,6 +256,13 @@ function SwipeableSet(props) {
                     </Tooltip>
                   </Box>
                 </Grid>
+                {circuitLabels[index]?.warmup && canManageTemplates && group.length > 0 && (
+                  <Grid container size={12} sx={{ justifyContent: "center", mt: 0.5 }}>
+                    <Button size="small" onClick={() => openSaveTemplate(group)}>
+                      Save as template
+                    </Button>
+                  </Grid>
+                )}
               </Grid>
               {group.length > 0 &&
                 group.map((exercise, exerciseIndex) =>
@@ -367,6 +399,32 @@ function SwipeableSet(props) {
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={saveTemplateOpen} onClose={() => !savingTemplate && setSaveTemplateOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Save warm-up as template</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Save these {saveTemplateEntries.length} warm-up move
+            {saveTemplateEntries.length === 1 ? "" : "s"} as a reusable warm-up you can add to any workout.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Name"
+            placeholder="e.g. Lower-body warm-up"
+            value={saveTemplateName}
+            onChange={(e) => setSaveTemplateName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSaveTemplateOpen(false)} disabled={savingTemplate}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveTemplate} disabled={savingTemplate || !saveTemplateName.trim()}>
+            {savingTemplate ? "Saving…" : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {feedbackDialogOpen && (
         <FeedbackDialog

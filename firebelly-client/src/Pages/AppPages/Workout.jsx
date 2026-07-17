@@ -475,8 +475,9 @@ export default function Workout({ socket }) {
 
   // Warm-up confirm: post ALL staged custom warm-ups AND all searched library warm-ups together, as
   // one front warm-up circuit (created if there isn't one). Called once from the modal's Confirm.
-  const confirmedWarmups = ({ selectedExercises, customWarmups }) => {
+  const confirmedWarmups = ({ selectedExercises, customWarmups, presetEntries }) => {
     const entries = [
+      ...(presetEntries || []), // pre-built entries from inserted warm-up templates
       ...(customWarmups || []).map(buildCustomWarmupEntry).filter(Boolean),
       ...(selectedExercises || []).map(buildWarmupLibraryEntry),
     ];

@@ -32,6 +32,8 @@ import { Close as CloseIcon } from "@mui/icons-material";
 import { getExerciseAliases, requestExerciseProgress } from "../../../Redux/actions";
 import { displayWeightUnit, formatWeightList, normalizeWeightUnit } from "../../../utils/weightUnits";
 import { exerciseDisplayName } from "../../../utils/exerciseName";
+import { warmupTemplateApi } from "../../../api/warmupTemplateApi";
+import { Delete as DeleteIcon } from "@mui/icons-material";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -113,11 +115,48 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
   // Custom warm-ups staged in the modal — they post together with any searched library warm-ups
   // when Confirm is clicked (so you don't have to reopen the modal to add more).
   const [stagedCustomWarmups, setStagedCustomWarmups] = useState([]);
+  // Reusable saved warm-ups (trainer's own; hidden in a delegated view-as session).
+  const currentUser = useSelector((state) => state.user);
+  const canUseTemplates = warmup && !currentUser?.delegationMode;
+  const [templates, setTemplates] = useState([]);
+  const [stagedTemplates, setStagedTemplates] = useState([]);
+
+  useEffect(() => {
+    if (!canUseTemplates || !addExerciseOpen) return;
+    let cancelled = false;
+    warmupTemplateApi
+      .list()
+      .then((res) => {
+        if (!cancelled) setTemplates(Array.isArray(res) ? res : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTemplates([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canUseTemplates, addExerciseOpen]);
+
+  // Warm-ups are single-target compact rows, so default the Sets selector to 1 in warm-up mode.
+  useEffect(() => {
+    if (addExerciseOpen) setSelectedExercisesSetCount(warmup ? 1 : 4);
+  }, [addExerciseOpen, warmup]);
 
   const pickerList =
     warmup && !showAllExercises
       ? (exerciseList || []).filter((e) => (e.tags || []).includes(WARMUP_TAG))
       : exerciseList;
+
+  // Turn a saved template's stored warm-up into a fresh entry (cloned goals, zeroed achieved).
+  const templateToEntry = (te) => ({
+    exercise: te.exercise || null,
+    customName: te.customName || "",
+    isWarmup: true,
+    exerciseType: te.exerciseType || "Reps",
+    goals: JSON.parse(JSON.stringify(te.goals || {})),
+    achieved: { sets: 0, reps: [0], weight: [0], percent: [0], seconds: [0] },
+    techniques: [],
+  });
 
   const measureLabel = (cw) =>
     cw.measure === "time"
@@ -140,8 +179,9 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
 
   const resetDialog = () => {
     setSelectedExercises([]);
-    setSelectedExercisesSetCount(4);
+    setSelectedExercisesSetCount(warmup ? 1 : 4);
     setStagedCustomWarmups([]);
+    setStagedTemplates([]);
     setCustomName("");
     setCustomMeasure("time");
     setCustomAmount("5");
@@ -156,13 +196,8 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
       if (customName.trim()) {
         customWarmups.push({ name: customName.trim(), measure: customMeasure, amount: customAmount });
       }
-      confirmedWarmups({
-        selectedExercises,
-        customWarmups,
-        setCount: selectedExercisesSetCount,
-        selectedHistoryByExercise,
-        exerciseList,
-      });
+      const presetEntries = stagedTemplates.flatMap((t) => (t.exercises || []).map(templateToEntry));
+      confirmedWarmups({ selectedExercises, customWarmups, presetEntries });
       resetDialog();
     } else {
       confirmedNewExercise(
@@ -177,8 +212,22 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
     }
   };
 
+  const deleteTemplate = (id) => {
+    warmupTemplateApi
+      .remove(id)
+      .then(() => {
+        setTemplates((prev) => prev.filter((t) => t._id !== id));
+        setStagedTemplates((prev) => prev.filter((t) => t._id !== id));
+      })
+      .catch(() => {});
+  };
+
   const confirmDisabled =
-    warmup && !selectedExercises.length && !stagedCustomWarmups.length && !customName.trim();
+    warmup &&
+    !selectedExercises.length &&
+    !stagedCustomWarmups.length &&
+    !stagedTemplates.length &&
+    !customName.trim();
 
   const handleSelectedExercisesSetCountChange = (e) =>
     setSelectedExercisesSetCount(Number(e.target.value));
@@ -256,6 +305,52 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
       </AppBar>
       <DialogContent>
         <Grid container spacing={1} sx={{ padding: "10px 0px" }}>
+          {canUseTemplates && templates.length > 0 && (
+            <Grid container size={12}>
+              <Paper variant="outlined" sx={{ p: 1.5, width: "100%" }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Saved warm-ups
+                </Typography>
+                <Stack spacing={0.5}>
+                  {templates.map((t) => {
+                    const staged = stagedTemplates.some((s) => s._id === t._id);
+                    return (
+                      <Stack
+                        key={t._id}
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                      >
+                        <Typography variant="body2" sx={{ flex: 1 }}>
+                          {t.name}{" "}
+                          <Typography component="span" variant="caption" color="text.secondary">
+                            · {(t.exercises || []).length} move
+                            {(t.exercises || []).length === 1 ? "" : "s"}
+                          </Typography>
+                        </Typography>
+                        <Button
+                          size="small"
+                          variant={staged ? "contained" : "outlined"}
+                          onClick={() =>
+                            setStagedTemplates((prev) =>
+                              staged ? prev.filter((s) => s._id !== t._id) : [...prev, t]
+                            )
+                          }
+                        >
+                          {staged ? "Added" : "Add to list"}
+                        </Button>
+                        <IconButton size="small" onClick={() => deleteTemplate(t._id)} aria-label="delete">
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    );
+                  })}
+                </Stack>
+              </Paper>
+              <Divider sx={{ width: "100%", my: 1.5 }} />
+            </Grid>
+          )}
           {warmup && (
             <Grid container size={12}>
               <Paper variant="outlined" sx={{ p: 1.5, width: "100%" }}>
