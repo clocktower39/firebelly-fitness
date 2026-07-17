@@ -124,14 +124,13 @@ export default function MyAccount() {
           </Grid>
           <Grid container size={12}>
             <TextField
-              mask="+1 (999) 999-9999"
+              label="Phone Number"
               value={phoneNumber}
               onChange={(e) => handleChange(e.target.value, setPhoneNumber)}
-              disabled={false}
-              // maskChar=" "
-            >
-              {() => <TextField label="Phone Number" fullWidth type="tel" />}
-            </TextField>
+              fullWidth
+              type="tel"
+              placeholder="(555) 123-4567"
+            />
           </Grid>
           <Grid container size={12}>
             <TextField
@@ -145,15 +144,12 @@ export default function MyAccount() {
           </Grid>
           <Grid container size={12}>
             <TextField
-              mask={`9' ?9"`}
-              // formatChars={{ 9: "[0-9]", "?": "[0-9 ]" }}
+              label="Height"
               value={height}
               onChange={(e) => handleChange(e.target.value, setHeight)}
-              disabled={false}
-              // maskChar=" "
-            >
-              {() => <TextField label="Height" fullWidth type="tel" />}
-            </TextField>
+              fullWidth
+              placeholder={`e.g. 5' 10"`}
+            />
           </Grid>
           <Grid container size={12}>
             <TextField
