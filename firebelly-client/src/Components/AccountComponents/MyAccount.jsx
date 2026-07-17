@@ -1,9 +1,19 @@
 import React, { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Avatar, Button, CardMedia, Chip, Container, Dialog, Divider, Input, MenuItem, Paper, Stack, TextField, Tooltip, Typography, Grid } from "@mui/material";
-// InputMask relies on findDOMNode, which was deprecated in React 18. Need to find alternative
-import InputMask from "react-input-mask";
 import { editUser, uploadProfilePicture, serverURL, } from "../../Redux/actions";
+
+// Format a US phone number as the user types → "(555) 123-4567". Keeps only digits, drops a leading
+// country-code 1 (so pasted "+1 555…" works), and caps at 10 digits.
+const formatPhoneNumber = (value) => {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  digits = digits.slice(0, 10);
+  if (digits.length === 0) return "";
+  if (digits.length < 4) return `(${digits}`;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+};
 
 export default function MyAccount() {
   const dispatch = useDispatch();
@@ -11,7 +21,7 @@ export default function MyAccount() {
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
-  const [phoneNumber, setPhoneNumber] = useState(user.phoneNumber || "");
+  const [phoneNumber, setPhoneNumber] = useState(formatPhoneNumber(user.phoneNumber || ""));
   const [dateOfBirth, setDateOfBirth] = useState(
     user.dateOfBirth ? user.dateOfBirth.substr(0, 10) : ""
   );
@@ -56,7 +66,7 @@ export default function MyAccount() {
     setFirstName(user.firstName);
     setLastName(user.lastName);
     setEmail(user.email);
-    setPhoneNumber(user.phoneNumber);
+    setPhoneNumber(formatPhoneNumber(user.phoneNumber || ""));
     setDateOfBirth(user.dateOfBirth.substr(0, 10) || "");
     setHeight(user.height);
     setSex(user.sex);
@@ -126,7 +136,7 @@ export default function MyAccount() {
             <TextField
               label="Phone Number"
               value={phoneNumber}
-              onChange={(e) => handleChange(e.target.value, setPhoneNumber)}
+              onChange={(e) => handleChange(formatPhoneNumber(e.target.value), setPhoneNumber)}
               fullWidth
               type="tel"
               placeholder="(555) 123-4567"

@@ -66,7 +66,9 @@ const signup_user = async (req, res, next) => {
     const user = new User({
       firstName,
       lastName,
-      email,
+      // Normalize new emails to lowercase so accounts are stored consistently (login is
+      // case-insensitive) — prevents case-variant duplicate accounts going forward.
+      email: (email || "").trim().toLowerCase(),
       password,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
       accountType,
@@ -154,10 +156,11 @@ const verify_email = async (req, res, next) => {
 };
 
 const resend_verification_email = async (req, res, next) => {
-  const { email } = req.body;
+  const email = (req.body.email || "").trim();
 
   try {
-    const user = await User.findOne({ email });
+    // Case-insensitive email match (see login_user) so a capitalized email still resolves.
+    const user = await User.findOne({ email }).collation({ locale: "en", strength: 2 });
 
     if (!user) {
       return res.status(400).json({ error: "Email not found." });
@@ -207,7 +210,11 @@ const resend_verification_email = async (req, res, next) => {
 
 const login_user = async (req, res, next) => {
   try {
-    const user = await User.findOne({ email: req.body.email });
+    // Case-insensitive email match (+ trim), so a stray capital or trailing space still logs in.
+    // Collation strength 2 compares case-insensitively on both the input and the stored value,
+    // which also covers any legacy accounts saved with a mixed-case email.
+    const email = (req.body.email || "").trim();
+    const user = await User.findOne({ email }).collation({ locale: "en", strength: 2 });
     if (!user) {
       return res.status(401).send({
         authenticated: false,
