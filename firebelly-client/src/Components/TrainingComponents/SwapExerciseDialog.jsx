@@ -55,10 +55,11 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
   );
 
   const [selected, setSelected] = useState([]); // single replacement, kept as a 1-item array
-  // Default to just-this-workout. Cascading forward by default was what quietly turned one edit
-  // into program-wide rewrites (and duplicates); use "Update later weeks from Week 1" in the
-  // builder to push structure forward deliberately.
-  const [scope, setScope] = useState("single");
+  // In an ASSIGNED client program, default to cascading the swap to the client's later workouts —
+  // that's what trainers expect ("replace this exercise going forward"). (For a program template in
+  // the builder, scope is ignored: the swap is a local edit and "Update later weeks from Week 1"
+  // pushes structure forward.) "Just this workout" stays available for one-off substitutions.
+  const [scope, setScope] = useState("forward");
   const [differentEquipmentOnly, setDifferentEquipmentOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -88,7 +89,7 @@ export default function SwapExerciseDialog({ open, onClose, currentExercise, onA
     setSelected([]);
     setResult(null);
     setError("");
-    setScope("single");
+    setScope("forward");
     setDifferentEquipmentOnly(false);
   };
 
