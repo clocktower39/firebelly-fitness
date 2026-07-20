@@ -139,6 +139,34 @@ const invoiceReportValidate = {
   }),
 };
 
+const logSessionsValidate = {
+  body: Joi.object({
+    clientId: objectId.required(),
+    sessionTypeId: objectId.allow(null).optional(),
+    unitPrice: Joi.number().min(0).optional(),
+    description: Joi.string().trim().allow("").max(200).optional(),
+    dates: Joi.array().items(Joi.date()).min(1).max(500).required(),
+    paid: Joi.boolean().optional(),
+    paymentMode: Joi.string().valid("batch", "perSession").optional(),
+    paymentDate: Joi.date().optional(),
+    method: Joi.string().trim().allow("").max(120).optional(),
+    notes: Joi.string().trim().allow("").max(2000).optional(),
+  }),
+};
+
+const checkLoggedDatesValidate = {
+  body: Joi.object({
+    clientId: objectId.required(),
+    dates: Joi.array().items(Joi.date()).min(1).max(500).required(),
+  }),
+};
+
+const undoLoggedSessionsValidate = {
+  body: Joi.object({
+    batchId: Joi.string().trim().min(1).max(64).required(),
+  }),
+};
+
 const emailInvoiceValidate = {
   body: Joi.object({
     invoiceId: objectId.required(),
@@ -149,6 +177,9 @@ const emailInvoiceValidate = {
 };
 
 router.post("/invoices", validate(createInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.create_invoice);
+router.post("/invoices/logSessions", validate(logSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.bulk_log_sessions);
+router.post("/invoices/logSessions/check", validate(checkLoggedDatesValidate, {}, {}), verifyAccessToken, invoiceController.check_logged_dates);
+router.post("/invoices/logSessions/undo", validate(undoLoggedSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.undo_logged_sessions);
 router.post("/invoices/request", validate(requestInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.request_invoice);
 router.post("/invoices/list", validate(listInvoicesValidate, {}, {}), verifyAccessToken, invoiceController.list_invoices);
 router.post("/invoices/detail", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.get_invoice);

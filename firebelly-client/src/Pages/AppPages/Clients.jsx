@@ -46,6 +46,7 @@ import Calendar from "./Calendar";
 import Goals from "./Goals";
 import TrainingProfileView from "../../Components/AccountComponents/TrainingProfileView";
 import ClientTrainingBlocks from "../../Components/Goals/ClientTrainingBlocks";
+import LogSessionsDialog from "../../Components/LogSessionsDialog";
 import { styled } from "@mui/material/styles";
 import {
   ENGAGEMENT_STATUS_OPTIONS,
@@ -274,6 +275,7 @@ export default function Clients({ socket }) {
     );
     const [menuAnchor, setMenuAnchor] = useState(null);
     const [expanded, setExpanded] = useState(false);
+    const [logSessionsOpen, setLogSessionsOpen] = useState(false);
 
     useEffect(() => {
       setLocalEngagementStatus(getRelationshipEngagementStatus(clientRelationship));
@@ -523,6 +525,14 @@ export default function Clients({ socket }) {
                         Invoices
                       </MenuItem>
                       <MenuItem
+                        onClick={() => {
+                          setMenuAnchor(null);
+                          setLogSessionsOpen(true);
+                        }}
+                      >
+                        Log sessions
+                      </MenuItem>
+                      <MenuItem
                         component={Link}
                         to={`/progress?client=${clientRelationship.client._id}`}
                         onClick={() => setMenuAnchor(null)}
@@ -530,6 +540,12 @@ export default function Clients({ socket }) {
                         Progress
                       </MenuItem>
                     </Menu>
+                    <LogSessionsDialog
+                      open={logSessionsOpen}
+                      onClose={() => setLogSessionsOpen(false)}
+                      clientId={clientRelationship.client._id}
+                      clientName={`${clientRelationship.client.firstName} ${clientRelationship.client.lastName}`}
+                    />
                   </Stack>
 
                   <Typography

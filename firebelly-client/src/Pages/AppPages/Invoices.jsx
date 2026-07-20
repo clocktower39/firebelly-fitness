@@ -32,6 +32,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import CloseIcon from "@mui/icons-material/Close";
 import InvoiceReportsDialog from "../../Components/InvoiceReportsDialog";
+import LogSessionsDialog from "../../Components/LogSessionsDialog";
 import { alpha } from "@mui/material/styles";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
@@ -107,6 +108,7 @@ export default function Invoices() {
   const [refundMode, setRefundMode] = useState(false);
   const [refundReason, setRefundReason] = useState("");
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [logSessionsOpen, setLogSessionsOpen] = useState(false);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -571,6 +573,14 @@ export default function Invoices() {
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" onClick={() => setReportsOpen(true)}>
             Reports
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => setLogSessionsOpen(true)}
+            disabled={!filteredClient}
+            title={filteredClient ? "" : "Filter by a client first to log their sessions"}
+          >
+            Log sessions
           </Button>
           <Button variant="contained" onClick={startCreate}>
             New invoice
@@ -1161,6 +1171,21 @@ export default function Invoices() {
       </Menu>
 
       <InvoiceReportsDialog open={reportsOpen} onClose={() => setReportsOpen(false)} />
+
+      <LogSessionsDialog
+        open={logSessionsOpen}
+        onClose={() => setLogSessionsOpen(false)}
+        clientId={filteredClient?._id}
+        clientName={
+          filteredClient
+            ? `${filteredClient.firstName} ${filteredClient.lastName}`
+            : ""
+        }
+        onLogged={() => {
+          refreshInvoices();
+          refreshSummary(clientFilter);
+        }}
+      />
 
       <Dialog
         open={Boolean(detailInvoice)}

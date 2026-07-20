@@ -61,6 +61,7 @@ const normalizeLineItems = (lineItems = []) =>
       itemType,
       sessionTypeId: itemType === "SESSION" ? item.sessionTypeId || null : null,
       description: String(item.description || "").trim() || "Line item",
+      sessionDate: item.sessionDate ? new Date(item.sessionDate) : null,
       quantity,
       unitPrice,
       sessionCredits,
@@ -1189,8 +1190,218 @@ const send_reminder = async (req, res, next) => {
   }
 };
 
+// Bulk-record past ("backdated") training sessions for a client as INCOME, so year-end invoice/income
+// reporting is complete. Each session is a plain income line item (using a session type's name + price)
+// — it deliberately does NOT touch the prepaid session-credit ledger, because these sessions are
+// already done (crediting them would inflate the client's balance). paymentMode:
+//   "batch"      → one invoice dated to paymentDate, all session dates as line items, one payment.
+//   "perSession" → one paid invoice per session, dated + paid on that session's day.
+//   (paid:false) → one unpaid invoice (owed), all sessions as line items.
+const bulk_log_sessions = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can log sessions." });
+    }
+    const {
+      clientId,
+      sessionTypeId = null,
+      unitPrice,
+      description,
+      dates = [],
+      paid = true,
+      paymentMode = "batch",
+      paymentDate,
+      method,
+      notes,
+    } = req.body;
+
+    if (!clientId) return res.status(400).json({ error: "clientId is required." });
+    const uniqueDates = [
+      ...new Set((Array.isArray(dates) ? dates : []).map((d) => dayjs(d).format("YYYY-MM-DD")).filter((d) => d !== "Invalid Date")),
+    ].sort();
+    if (!uniqueDates.length) return res.status(400).json({ error: "At least one session date is required." });
+
+    const relationship = await ensureRelationship(userId, clientId);
+    if (!relationship) return res.status(403).json({ error: "Unauthorized access." });
+
+    let price = Number(unitPrice);
+    let label = String(description || "").trim() || "Training session";
+    let currency = "USD";
+    if (sessionTypeId) {
+      const st = await SessionType.findOne({ _id: sessionTypeId, trainerId: userId }).lean();
+      if (!st) return res.status(400).json({ error: "Session type not found." });
+      if (!Number.isFinite(price)) price = Number(st.defaultPrice) || 0;
+      if (!description) label = st.name || label;
+      currency = st.currency || "USD";
+    }
+    if (!Number.isFinite(price) || price < 0) price = 0;
+
+    const { billToName, billToEmail } = await resolveBillTo({ billToType: "CLIENT", clientId });
+    // One id per run so the whole batch can be reversed in a single click (undo).
+    const batchId = new mongoose.Types.ObjectId().toString();
+    const mkLine = (dateStr) => ({
+      itemType: "CUSTOM", // income only — never touches the session-credit ledger
+      description: `${label} — ${dayjs(dateStr).format("MMM D, YYYY")}`,
+      sessionDate: dayjs(dateStr).toDate(),
+      quantity: 1,
+      unitPrice: price,
+      taxable: false,
+    });
+
+    const buildInvoice = async ({ dateList, issuedAt, payment: pay }) => {
+      const lineItems = normalizeLineItems(dateList.map(mkLine));
+      const totals = calculateTotals({ lineItems, tax: 0, discount: 0 });
+      const payments = pay ? normalizePayments([pay]) : [];
+      const amountPaid = payments.reduce((s, p) => s + p.amount, 0);
+      const status = totals.total > 0 && amountPaid >= totals.total ? "PAID" : "SENT";
+      const inv = new Invoice({
+        trainerId: userId,
+        clientId,
+        billToType: "CLIENT",
+        billToName,
+        billToEmail,
+        invoiceNumber: buildInvoiceNumber(),
+        status,
+        currency,
+        source: "BACKFILL",
+        backfillBatchId: batchId,
+        issuedAt: new Date(issuedAt),
+        dueAt: null,
+        notes: String(notes || "").trim(),
+        lineItems,
+        subtotal: totals.subtotal,
+        tax: 0,
+        discount: 0,
+        total: totals.total,
+        amountPaid,
+        balanceDue: Math.max(totals.total - amountPaid, 0),
+        payments,
+        sessionCreditsTotal: 0,
+        createdBy: userId,
+        updatedBy: userId,
+      });
+      if (status === "PAID") inv.paidAt = new Date(pay?.paidAt || issuedAt);
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          return await inv.save();
+        } catch (e) {
+          if (e?.code === 11000) {
+            inv.invoiceNumber = buildInvoiceNumber();
+            continue;
+          }
+          throw e;
+        }
+      }
+      throw new Error("Could not generate a unique invoice number.");
+    };
+
+    const created = [];
+    if (!paid) {
+      created.push(await buildInvoice({ dateList: uniqueDates, issuedAt: uniqueDates[0], payment: null }));
+    } else if (paymentMode === "perSession") {
+      for (const d of uniqueDates) {
+        created.push(await buildInvoice({ dateList: [d], issuedAt: d, payment: { amount: price, paidAt: d, method } }));
+      }
+    } else {
+      const pdate = paymentDate ? dayjs(paymentDate).format("YYYY-MM-DD") : uniqueDates[uniqueDates.length - 1];
+      created.push(
+        await buildInvoice({
+          dateList: uniqueDates,
+          issuedAt: pdate,
+          payment: { amount: price * uniqueDates.length, paidAt: pdate, method },
+        })
+      );
+    }
+
+    return res.json({
+      ok: true,
+      batchId,
+      sessionsLogged: uniqueDates.length,
+      totalAmount: Number((price * uniqueDates.length).toFixed(2)),
+      invoiceCount: created.length,
+      invoices: created.map((i) => ({
+        _id: i._id,
+        invoiceNumber: i.invoiceNumber,
+        status: i.status,
+        total: i.total,
+        issuedAt: i.issuedAt,
+      })),
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Pre-check: of the dates the trainer is about to log for this client, which were
+// ALREADY logged in a prior backfill run? Powers the duplicate warning in the dialog.
+const check_logged_dates = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can log sessions." });
+    }
+    const { clientId, dates = [] } = req.body;
+    if (!clientId) return res.status(400).json({ error: "clientId is required." });
+
+    const relationship = await ensureRelationship(userId, clientId);
+    if (!relationship) return res.status(403).json({ error: "Unauthorized access." });
+
+    const wanted = new Set(
+      (Array.isArray(dates) ? dates : [])
+        .map((d) => dayjs(d).format("YYYY-MM-DD"))
+        .filter((d) => d !== "Invalid Date")
+    );
+    if (!wanted.size) return res.json({ duplicates: [] });
+
+    const existing = await Invoice.find(
+      { trainerId: userId, clientId, source: "BACKFILL" },
+      { "lineItems.sessionDate": 1 }
+    ).lean();
+
+    const already = new Set();
+    for (const inv of existing) {
+      for (const li of inv.lineItems || []) {
+        if (!li.sessionDate) continue;
+        const key = dayjs(li.sessionDate).format("YYYY-MM-DD");
+        if (wanted.has(key)) already.add(key);
+      }
+    }
+
+    return res.json({ duplicates: [...already].sort() });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Undo an entire "Log sessions" run. Strictly scoped: only BACKFILL invoices this
+// trainer created under this batch id are deleted — never a client-issued invoice.
+const undo_logged_sessions = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can undo logged sessions." });
+    }
+    const { batchId } = req.body;
+    if (!batchId) return res.status(400).json({ error: "batchId is required." });
+
+    const result = await Invoice.deleteMany({
+      trainerId: userId,
+      source: "BACKFILL",
+      backfillBatchId: String(batchId),
+    });
+
+    return res.json({ ok: true, deleted: result.deletedCount || 0 });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_invoice,
+  bulk_log_sessions,
+  check_logged_dates,
+  undo_logged_sessions,
   request_invoice,
   list_invoices,
   get_invoice,

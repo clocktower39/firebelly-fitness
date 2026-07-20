@@ -10,6 +10,9 @@ const invoiceLineItemSchema = new mongoose.Schema(
     },
     sessionTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "SessionType", default: null },
     description: { type: String, required: true },
+    // For backfilled/logged past sessions: the calendar date the session actually happened.
+    // Lets us detect duplicate logging and reverse a backfill batch precisely.
+    sessionDate: { type: Date, default: null },
     quantity: { type: Number, default: 1, min: 1 },
     unitPrice: { type: Number, default: 0, min: 0 },
     sessionCredits: { type: Number, default: 0, min: 0 },
@@ -53,6 +56,13 @@ const invoiceSchema = new mongoose.Schema(
       default: "DRAFT",
     },
     currency: { type: String, enum: ["USD", "EUR", "JPY"], default: "USD" },
+    // STANDARD = a normal invoice the trainer issues to a client (may be shown/emailed to them).
+    // BACKFILL = a historical income record the trainer logged for their OWN books (past sessions,
+    // often already paid off-platform). Never emailed/reminded and excluded from any client-facing
+    // billing view — it must never read to a client as "please pay this."
+    source: { type: String, enum: ["STANDARD", "BACKFILL"], default: "STANDARD", index: true },
+    // Groups all invoices created in one "Log sessions" run so the whole batch can be undone.
+    backfillBatchId: { type: String, default: "", index: true },
     issuedAt: { type: Date, default: Date.now },
     dueAt: { type: Date, default: null },
     paidAt: { type: Date, default: null },

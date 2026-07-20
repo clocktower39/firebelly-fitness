@@ -19,6 +19,27 @@ export const billingApi = {
       body: payload,
     }),
 
+  // Bulk-record past sessions for a client as income (backdating). See server bulk_log_sessions.
+  logSessions: (payload) =>
+    apiFetch("/invoices/logSessions", {
+      method: "POST",
+      body: payload,
+    }),
+
+  // Pre-check which of these dates were already logged for this client (duplicate warning).
+  checkLoggedDates: ({ clientId, dates }) =>
+    apiFetch("/invoices/logSessions/check", {
+      method: "POST",
+      body: { clientId, dates },
+    }),
+
+  // Reverse an entire Log-sessions run by its batch id.
+  undoLoggedSessions: ({ batchId }) =>
+    apiFetch("/invoices/logSessions/undo", {
+      method: "POST",
+      body: { batchId },
+    }),
+
   updateInvoiceStatus: ({ invoiceId, status }) =>
     apiFetch("/invoices/status", {
       method: "POST",
