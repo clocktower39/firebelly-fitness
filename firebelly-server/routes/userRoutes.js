@@ -10,7 +10,7 @@ const router = express.Router();
 const loginValidate = {
     body: Joi.object({
         email: Joi.string()
-            .required().email(),
+            .trim().required().email(),
         password: Joi.string()
             .required(),
     }),
@@ -30,6 +30,7 @@ const signupValidate = {
         lastName: Joi.string()
             .required(),
         email: Joi.string()
+            .trim()
             .email()
             .required(),
         password: Joi.string()
