@@ -188,6 +188,7 @@ router.post("/invoices/payment", validate(recordPaymentValidate, {}, {}), verify
 router.post("/invoices/refund", validate(recordRefundValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.record_refund);
 router.post("/invoices/payment/remove", validate(removePaymentValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.remove_payment);
 router.post("/invoices/report", validate(invoiceReportValidate, {}, {}), verifyAccessToken, invoiceController.invoice_report);
+router.post("/invoices/payoutReport", validate(invoiceReportValidate, {}, {}), verifyAccessToken, invoiceController.payout_report);
 router.post("/invoices/remind", validate(invoiceIdValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.send_reminder);
 router.post("/invoices/pdf", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.export_invoice_pdf);
 router.post("/invoices/email", validate(emailInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.email_invoice);

@@ -51,6 +51,7 @@ const Progress = lazy(() => import("./Pages/AppPages/Progress"));
 const Goals = lazy(() => import("./Pages/AppPages/Goals"));
 const Account = lazy(() => import("./Pages/AppPages/Account"));
 const Invoices = lazy(() => import("./Pages/AppPages/Invoices"));
+const SessionHistory = lazy(() => import("./Pages/AppPages/SessionHistory"));
 const Products = lazy(() => import("./Pages/AppPages/Products"));
 const TrainerStore = lazy(() => import("./Pages/AppPages/TrainerStore"));
 const MyAccount = lazy(() => import("./Components/AccountComponents/MyAccount"));
@@ -305,6 +306,7 @@ function App({ }) {
                     <Route exact path="/exercise-library" element={<ExerciseLibrary />} />
                     <Route exact path="/exercise-library/:id" element={<ExerciseDetail />} />
                     <Route exact path="/invoices" element={<Invoices />} />
+                    <Route exact path="/session-history" element={<SessionHistory />} />
                     <Route exact path="/session-counter" element={<Navigate to="/invoices" replace />} />
                     <Route exact path="/products" element={<Products />} />
                     <Route exact path="/trainer-store" element={<TrainerStore />} />

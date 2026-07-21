@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const dayjs = require("dayjs");
 const Invoice = require("../models/invoice");
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
+const ScheduleEvent = require("../models/scheduleEvent");
 const Relationship = require("../models/relationship");
 const GroupMembership = require("../models/groupMembership");
 const Group = require("../models/group");
@@ -62,6 +63,7 @@ const normalizeLineItems = (lineItems = []) =>
       sessionTypeId: itemType === "SESSION" ? item.sessionTypeId || null : null,
       description: String(item.description || "").trim() || "Line item",
       sessionDate: item.sessionDate ? new Date(item.sessionDate) : null,
+      scheduleEventId: item.scheduleEventId || null,
       quantity,
       unitPrice,
       sessionCredits,
@@ -1162,6 +1164,68 @@ const invoice_report = async (req, res, next) => {
   }
 };
 
+// What the logged-in trainer is owed for the sessions they ran: sums payoutAmount over their
+// COMPLETED appointments in a date range. Payouts are set per session-type/appointment; this
+// surfaces the total that was stored but never reported (payroll / year-end contractor total).
+const payout_report = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can run reports." });
+    }
+    const { from, to } = req.body;
+    const start = from ? dayjs(from).startOf("day").toDate() : new Date(0);
+    const end = to ? dayjs(to).endOf("day").toDate() : new Date(8640000000000000);
+
+    const events = await ScheduleEvent.find({
+      trainerId: userId,
+      eventType: "APPOINTMENT",
+      status: "COMPLETED",
+      startDateTime: { $gte: start, $lte: end },
+      payoutAmount: { $ne: null, $gt: 0 },
+    })
+      .select("startDateTime clientId sessionTypeId payoutAmount payoutCurrency customClientName")
+      .sort({ startDateTime: 1 })
+      .lean();
+
+    const clientIds = [...new Set(events.map((e) => e.clientId).filter(Boolean).map(String))];
+    const typeIds = [...new Set(events.map((e) => e.sessionTypeId).filter(Boolean).map(String))];
+    const [clients, types] = await Promise.all([
+      User.find({ _id: { $in: clientIds } }).select("firstName lastName").lean(),
+      SessionType.find({ _id: { $in: typeIds } }).select("name").lean(),
+    ]);
+    const clientName = new Map(
+      clients.map((c) => [String(c._id), `${c.firstName || ""} ${c.lastName || ""}`.trim()])
+    );
+    const typeName = new Map(types.map((t) => [String(t._id), t.name]));
+
+    let totalPayout = 0;
+    let currency = "USD";
+    const payoutRows = events.map((e) => {
+      totalPayout += Number(e.payoutAmount || 0);
+      currency = e.payoutCurrency || currency;
+      return {
+        date: e.startDateTime,
+        client: clientName.get(String(e.clientId)) || e.customClientName || "—",
+        sessionType: typeName.get(String(e.sessionTypeId)) || "Session",
+        payout: Number(e.payoutAmount || 0),
+        currency: e.payoutCurrency || "USD",
+      };
+    });
+
+    return res.json({
+      summary: {
+        totalPayout: Number(totalPayout.toFixed(2)),
+        sessionCount: events.length,
+        currency,
+      },
+      payoutRows,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // Trainer-initiated payment reminder (always allowed — it's the trainer's own action).
 const send_reminder = async (req, res, next) => {
   try {
@@ -1240,10 +1304,42 @@ const bulk_log_sessions = async (req, res, next) => {
     const { billToName, billToEmail } = await resolveBillTo({ billToType: "CLIENT", clientId });
     // One id per run so the whole batch can be reversed in a single click (undo).
     const batchId = new mongoose.Types.ObjectId().toString();
+
+    // Hard-link each logged session to its calendar appointment when one clearly exists.
+    // Match on the appointment's date in the TRAINER'S timezone (a 12pm-Phoenix session is
+    // stored at 19:00 UTC — comparing in the trainer tz keeps the calendar date correct).
+    const trainer = await User.findById(userId).select("timezone").lean();
+    const tz = trainer?.timezone || "UTC";
+    const apptDate = (dt) => {
+      try {
+        return new Date(dt).toLocaleDateString("en-CA", { timeZone: tz });
+      } catch (e) {
+        return dayjs(dt).format("YYYY-MM-DD");
+      }
+    };
+    const spanStart = dayjs(uniqueDates[0]).subtract(1, "day").toDate();
+    const spanEnd = dayjs(uniqueDates[uniqueDates.length - 1]).add(2, "day").toDate();
+    const appts = await ScheduleEvent.find({
+      trainerId: userId,
+      clientId,
+      eventType: "APPOINTMENT",
+      startDateTime: { $gte: spanStart, $lt: spanEnd },
+    })
+      .select("startDateTime")
+      .lean();
+    const eventsByDate = {};
+    for (const a of appts) {
+      const k = apptDate(a.startDateTime);
+      (eventsByDate[k] = eventsByDate[k] || []).push(a._id);
+    }
+    // Only link when exactly one appointment sits on that date — never guess if ambiguous.
+    const eventIdForDate = (d) => (eventsByDate[d]?.length === 1 ? eventsByDate[d][0] : null);
+
     const mkLine = (dateStr) => ({
       itemType: "CUSTOM", // income only — never touches the session-credit ledger
       description: `${label} — ${dayjs(dateStr).format("MMM D, YYYY")}`,
       sessionDate: dayjs(dateStr).toDate(),
+      scheduleEventId: eventIdForDate(dateStr),
       quantity: 1,
       unitPrice: price,
       taxable: false,
@@ -1410,6 +1506,7 @@ module.exports = {
   record_refund,
   remove_payment,
   invoice_report,
+  payout_report,
   send_reminder,
   export_invoice_pdf,
   email_invoice,

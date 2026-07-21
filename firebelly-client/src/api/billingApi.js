@@ -70,6 +70,13 @@ export const billingApi = {
       body: { from, to, clientId },
     }),
 
+  // Trainer's own payout total (sessions they ran) for a date range — payroll / year-end.
+  payoutReport: ({ from, to } = {}) =>
+    apiFetch("/invoices/payoutReport", {
+      method: "POST",
+      body: { from, to },
+    }),
+
   sendReminder: ({ invoiceId }) =>
     apiFetch("/invoices/remind", {
       method: "POST",

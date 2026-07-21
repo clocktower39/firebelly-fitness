@@ -13,6 +13,10 @@ const invoiceLineItemSchema = new mongoose.Schema(
     // For backfilled/logged past sessions: the calendar date the session actually happened.
     // Lets us detect duplicate logging and reverse a backfill batch precisely.
     sessionDate: { type: Date, default: null },
+    // Hard link from this billed session to its calendar appointment (ScheduleEvent), so a
+    // session can be traced to its invoice and back (and on to the session's workout). Null
+    // when the line isn't a single dated session (e.g. package/quantity lines).
+    scheduleEventId: { type: mongoose.Schema.Types.ObjectId, ref: "ScheduleEvent", default: null },
     quantity: { type: Number, default: 1, min: 1 },
     unitPrice: { type: Number, default: 0, min: 0 },
     sessionCredits: { type: Number, default: 0, min: 0 },

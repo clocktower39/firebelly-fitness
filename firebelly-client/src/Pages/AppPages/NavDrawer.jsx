@@ -38,6 +38,7 @@ import {
   Home as HomeIcon,
   Assessment as ProgressIcon,
   ReceiptLong as SessionIcon,
+  EventNote as SessionHistoryIcon,
   CalendarMonth as CalendarIcon,
   Assignment as GoalsIcon,
   FactCheck as CoverageIcon,
@@ -132,6 +133,7 @@ export default function NavDrawer() {
       header: "Business",
       items: [
         { title: "Invoices", to: "/invoices", icon: <SessionIcon /> },
+        { title: "Session History", to: "/session-history", icon: <SessionHistoryIcon /> },
         { title: "Products", to: "/products", icon: <GoalsIcon /> },
       ],
     },

@@ -519,6 +519,13 @@ export default function Clients({ socket }) {
                       </MenuItem>
                       <MenuItem
                         component={Link}
+                        to={`/session-history?client=${clientRelationship.client._id}`}
+                        onClick={() => setMenuAnchor(null)}
+                      >
+                        Session History
+                      </MenuItem>
+                      <MenuItem
+                        component={Link}
                         to={`/invoices?client=${clientRelationship.client._id}`}
                         onClick={() => setMenuAnchor(null)}
                       >

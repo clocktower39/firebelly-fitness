@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { billingApi } from "../../api/billingApi";
 import { groupApi } from "../../api/groupApi";
 import { scheduleApi } from "../../api/scheduleApi";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link as RouterLink } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Alert,
@@ -14,6 +14,7 @@ import {
   Divider,
   Grid,
   IconButton,
+  Link,
   Stack,
   TextField,
   Typography,
@@ -216,6 +217,26 @@ export default function Invoices() {
   useEffect(() => {
     refreshSummary(clientFilter);
   }, [clientFilter]);
+
+  // Deep link: /invoices?invoice=<id> opens that invoice's detail once it's loaded
+  // (e.g. clicked from a session in Session History). Opens once so closing won't reopen.
+  // Inlined (not openDetail) so this hook stays above the component's trainer-only return.
+  const handledInvoiceParam = useRef(null);
+  useEffect(() => {
+    const invoiceParam = searchParams.get("invoice");
+    if (!invoiceParam || !invoiceList.length) return;
+    if (handledInvoiceParam.current === invoiceParam) return;
+    const found = invoiceList.find((i) => String(i._id) === String(invoiceParam));
+    if (!found) return;
+    handledInvoiceParam.current = invoiceParam;
+    setDetailInvoice(found);
+    setRefundMode(false);
+    setRefundReason("");
+    setPayMethod("Cash");
+    setPayDate(dayjs().format("YYYY-MM-DD"));
+    setPayReference("");
+    setPayAmount(Number(found.balanceDue || 0) > 0 ? String(found.balanceDue) : "");
+  }, [searchParams, invoiceList]);
 
   const selectedClient = clients.find((clientRel) => clientRel.client?._id === selectedClientId);
   const selectedGroup = groups.find((entry) => entry.group?._id === selectedGroupId);
@@ -1234,6 +1255,21 @@ export default function Invoices() {
                           ? ` · ${li.sessionCreditsTotal} credits`
                           : ""}
                       </Typography>
+                      {li.scheduleEventId && detailInvoice.clientId && (
+                        <Box>
+                          <Link
+                            component={RouterLink}
+                            to={`/session-history?client=${detailInvoice.clientId}&event=${li.scheduleEventId}${
+                              li.sessionDate ? `&date=${dayjs(li.sessionDate).format("YYYY-MM-DD")}` : ""
+                            }`}
+                            variant="caption"
+                            underline="hover"
+                            onClick={() => setDetailInvoice(null)}
+                          >
+                            View session
+                          </Link>
+                        </Box>
+                      )}
                     </Box>
                     <Typography variant="body2">
                       {formatPrice(li.lineTotal, detailInvoice.currency)}

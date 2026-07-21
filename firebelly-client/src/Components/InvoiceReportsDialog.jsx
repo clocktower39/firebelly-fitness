@@ -71,6 +71,14 @@ const PAYMENT_COLUMNS = [
   { label: "Currency", get: (r) => r.currency },
 ];
 
+const PAYOUT_COLUMNS = [
+  { label: "Date", get: (r) => fmtDate(r.date) },
+  { label: "Client", get: (r) => r.client },
+  { label: "Session type", get: (r) => r.sessionType },
+  { label: "Payout", get: (r) => Number(r.payout || 0).toFixed(2) },
+  { label: "Currency", get: (r) => r.currency },
+];
+
 const StatCard = ({ label, value, color }) => (
   <Grid size={{ xs: 6, sm: 4 }}>
     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1.5 }}>
@@ -88,6 +96,7 @@ export default function InvoiceReportsDialog({ open, onClose }) {
   const [from, setFrom] = useState(dayjs().startOf("year").format("YYYY-MM-DD"));
   const [to, setTo] = useState(dayjs().endOf("year").format("YYYY-MM-DD"));
   const [report, setReport] = useState(null);
+  const [payout, setPayout] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -95,13 +104,17 @@ export default function InvoiceReportsDialog({ open, onClose }) {
     setLoading(true);
     setErr("");
     try {
-      const data = await billingApi.invoiceReport({ from, to });
+      const [data, payoutData] = await Promise.all([
+        billingApi.invoiceReport({ from, to }),
+        billingApi.payoutReport({ from, to }),
+      ]);
       if (data?.error) {
         setErr(data.error);
         setReport(null);
       } else {
         setReport(data);
       }
+      setPayout(payoutData && !payoutData.error ? payoutData : null);
     } catch (e) {
       setErr(e.message || "Unable to load report.");
     } finally {
@@ -201,6 +214,25 @@ export default function InvoiceReportsDialog({ open, onClose }) {
                 {s.invoiceCount === 1 ? "" : "s"} issued in range.
               </Typography>
 
+              {payout?.summary?.sessionCount > 0 && (
+                <>
+                  <Divider />
+                  <Typography variant="subtitle2">Your payout</Typography>
+                  <Grid container spacing={1}>
+                    <StatCard
+                      label="Payout owed to you"
+                      value={money(payout.summary.totalPayout)}
+                      color="success.main"
+                    />
+                    <StatCard label="Sessions with payout" value={payout.summary.sessionCount} />
+                  </Grid>
+                  <Typography variant="caption" color="text.secondary">
+                    Your share of the completed sessions you ran in this range (from each
+                    session&apos;s payout amount). Each trainer sees their own.
+                  </Typography>
+                </>
+              )}
+
               <Divider />
               <Typography variant="subtitle2">Export (CSV)</Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
@@ -229,6 +261,16 @@ export default function InvoiceReportsDialog({ open, onClose }) {
                   }
                 >
                   Payments ({report.paymentRows?.length || 0})
+                </Button>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  disabled={!payout?.payoutRows?.length}
+                  onClick={() =>
+                    downloadCsv(`payout_${rangeLabel}.csv`, buildCsv(PAYOUT_COLUMNS, payout.payoutRows))
+                  }
+                >
+                  Payout ({payout?.payoutRows?.length || 0})
                 </Button>
               </Stack>
               <Typography variant="caption" color="text.secondary">
