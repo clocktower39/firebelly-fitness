@@ -1,5 +1,9 @@
 const mongoose = require("mongoose");
 const dayjs = require("dayjs");
+const dayjsUtc = require("dayjs/plugin/utc");
+const dayjsTimezone = require("dayjs/plugin/timezone");
+dayjs.extend(dayjsUtc);
+dayjs.extend(dayjsTimezone);
 const Invoice = require("../models/invoice");
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
 const ScheduleEvent = require("../models/scheduleEvent");
@@ -45,6 +49,24 @@ const normalizeNumber = (value, fallback = 0) => {
 
 const buildInvoiceNumber = () =>
   `INV-${dayjs().format("YYYYMMDD")}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+
+// Day boundaries interpreted in an IANA timezone (reports must use the TRAINER'S day, not the
+// server's/UTC — an 8pm Dec 31 Phoenix payment is 3am Jan 1 UTC and must stay in the old year).
+// Falls back to server-local parsing if the tz string is missing/bad.
+const tzDayStart = (dateStr, tz) => {
+  try {
+    return dayjs.tz(String(dateStr), tz).startOf("day").toDate();
+  } catch (e) {
+    return dayjs(String(dateStr)).startOf("day").toDate();
+  }
+};
+const tzDayEnd = (dateStr, tz) => {
+  try {
+    return dayjs.tz(String(dateStr), tz).endOf("day").toDate();
+  } catch (e) {
+    return dayjs(String(dateStr)).endOf("day").toDate();
+  }
+};
 
 const LINE_ITEM_TYPES = new Set(["SESSION", "PROGRAM", "NUTRITION", "MERCH", "CUSTOM"]);
 
@@ -136,10 +158,17 @@ const normalizePayments = (payments = []) =>
       const amount = Math.max(0, normalizeNumber(payment.amount, 0));
       if (!amount) return null;
       return {
+        // Preserve the payment's identity — dropping `type` silently re-labels a REFUND as a
+        // PAYMENT (the schema default) and inflates collected income; dropping processor ids
+        // breaks webhook-retry dedupe for payments recorded at create time.
+        type: payment.type === "REFUND" ? "REFUND" : "PAYMENT",
         amount,
         currency: payment.currency || "USD",
         paidAt: payment.paidAt ? new Date(payment.paidAt) : new Date(),
         method: String(payment.method || "").trim(),
+        processor: String(payment.processor || "MANUAL").trim() || "MANUAL",
+        processorPaymentId: String(payment.processorPaymentId || "").trim(),
+        reference: String(payment.reference || "").trim(),
         notes: String(payment.notes || "").trim(),
       };
     })
@@ -391,7 +420,11 @@ const create_invoice = async (req, res, next) => {
 
     const totals = calculateTotals({ lineItems: normalizedLineItems, tax, discount });
     const normalizedPayments = normalizePayments(payments);
-    const amountPaid = normalizedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    // Signed like settleInvoice: refunds subtract from what's been collected.
+    const amountPaid = normalizedPayments.reduce(
+      (sum, payment) => sum + (payment.type === "REFUND" ? -payment.amount : payment.amount),
+      0
+    );
     const balanceDue = Math.max(totals.total - amountPaid, 0);
 
     let { billToName, billToEmail: resolvedBillToEmail } = await resolveBillTo({
@@ -1078,10 +1111,20 @@ const invoice_report = async (req, res, next) => {
       return res.status(403).json({ error: "Only trainers can run reports." });
     }
     const { from, to, clientId } = req.body;
-    const fromDate = from ? new Date(from) : new Date(0);
-    const toDate = to ? new Date(to) : new Date();
-    toDate.setHours(23, 59, 59, 999);
+    // Range boundaries + month buckets run in the trainer's timezone so evening payments
+    // near a month/year boundary land in the trainer's tax period, not UTC's.
+    const trainer = await User.findById(userId).select("timezone").lean();
+    const tz = trainer?.timezone || "UTC";
+    const fromDate = from ? tzDayStart(from, tz) : new Date(0);
+    const toDate = to ? tzDayEnd(to, tz) : new Date();
     const now = new Date();
+    const monthKey = (d) => {
+      try {
+        return new Date(d).toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 7);
+      } catch (e) {
+        return new Date(d).toISOString().slice(0, 7);
+      }
+    };
 
     const query = { trainerId: userId };
     if (clientId && isValidObjectId(clientId)) query.clientId = clientId;
@@ -1138,7 +1181,7 @@ const invoice_report = async (req, res, next) => {
         const signed = p.type === "REFUND" ? -amt : amt;
         summary.collected += signed;
         if (p.type === "REFUND") summary.refunded += amt;
-        const key = new Date(p.paidAt).toISOString().slice(0, 7);
+        const key = monthKey(p.paidAt);
         byMonth[key] = (byMonth[key] || 0) + signed;
         paymentRows.push({
           paidAt: p.paidAt,
@@ -1174,8 +1217,11 @@ const payout_report = async (req, res, next) => {
       return res.status(403).json({ error: "Only trainers can run reports." });
     }
     const { from, to } = req.body;
-    const start = from ? dayjs(from).startOf("day").toDate() : new Date(0);
-    const end = to ? dayjs(to).endOf("day").toDate() : new Date(8640000000000000);
+    // Same tz rule as invoice_report: a "day" is the trainer's day, not the server's.
+    const trainer = await User.findById(userId).select("timezone").lean();
+    const tz = trainer?.timezone || "UTC";
+    const start = from ? tzDayStart(from, tz) : new Date(0);
+    const end = to ? tzDayEnd(to, tz) : new Date(8640000000000000);
 
     const events = await ScheduleEvent.find({
       trainerId: userId,
@@ -1317,6 +1363,17 @@ const bulk_log_sessions = async (req, res, next) => {
         return dayjs(dt).format("YYYY-MM-DD");
       }
     };
+    // Anchor date-only payment/issue dates at NOON in the trainer's tz. They're stored as
+    // instants, and tz-aware reports bucket by the trainer's day — UTC midnight would read
+    // as the previous evening in any western timezone (an "Apr 1" payment must not report
+    // as March, or a "Jan 1" payment as last year).
+    const tzNoon = (dateStr) => {
+      try {
+        return dayjs.tz(String(dateStr), tz).startOf("day").add(12, "hour").toDate();
+      } catch (e) {
+        return dayjs(String(dateStr)).startOf("day").add(12, "hour").toDate();
+      }
+    };
     const spanStart = dayjs(uniqueDates[0]).subtract(1, "day").toDate();
     const spanEnd = dayjs(uniqueDates[uniqueDates.length - 1]).add(2, "day").toDate();
     const appts = await ScheduleEvent.find({
@@ -1348,7 +1405,8 @@ const bulk_log_sessions = async (req, res, next) => {
     const buildInvoice = async ({ dateList, issuedAt, payment: pay }) => {
       const lineItems = normalizeLineItems(dateList.map(mkLine));
       const totals = calculateTotals({ lineItems, tax: 0, discount: 0 });
-      const payments = pay ? normalizePayments([pay]) : [];
+      // issuedAt / pay.paidAt arrive as "YYYY-MM-DD" strings — anchor them to the trainer's day.
+      const payments = pay ? normalizePayments([{ ...pay, paidAt: tzNoon(pay.paidAt) }]) : [];
       const amountPaid = payments.reduce((s, p) => s + p.amount, 0);
       const status = totals.total > 0 && amountPaid >= totals.total ? "PAID" : "SENT";
       const inv = new Invoice({
@@ -1362,7 +1420,7 @@ const bulk_log_sessions = async (req, res, next) => {
         currency,
         source: "BACKFILL",
         backfillBatchId: batchId,
-        issuedAt: new Date(issuedAt),
+        issuedAt: tzNoon(issuedAt),
         dueAt: null,
         notes: String(notes || "").trim(),
         lineItems,
@@ -1377,7 +1435,7 @@ const bulk_log_sessions = async (req, res, next) => {
         createdBy: userId,
         updatedBy: userId,
       });
-      if (status === "PAID") inv.paidAt = new Date(pay?.paidAt || issuedAt);
+      if (status === "PAID") inv.paidAt = tzNoon(pay?.paidAt || issuedAt);
       for (let attempt = 0; attempt < 4; attempt += 1) {
         try {
           return await inv.save();
@@ -1400,7 +1458,9 @@ const bulk_log_sessions = async (req, res, next) => {
         created.push(await buildInvoice({ dateList: [d], issuedAt: d, payment: { amount: price, paidAt: d, method } }));
       }
     } else {
-      const pdate = paymentDate ? dayjs(paymentDate).format("YYYY-MM-DD") : uniqueDates[uniqueDates.length - 1];
+      // Default to the FIRST session date: blocks are prepaid at/near the start (and this
+      // matches the unpaid path). Defaulting to the last date pushed income later than reality.
+      const pdate = paymentDate ? dayjs(paymentDate).format("YYYY-MM-DD") : uniqueDates[0];
       created.push(
         await buildInvoice({
           dateList: uniqueDates,

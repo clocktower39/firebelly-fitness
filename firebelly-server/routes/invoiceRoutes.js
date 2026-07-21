@@ -24,10 +24,14 @@ const lineItem = Joi.object({
 });
 
 const payment = Joi.object({
+  type: Joi.string().valid("PAYMENT", "REFUND").optional(),
   amount: Joi.number().greater(0).required(),
   currency: currency.optional(),
   paidAt: Joi.date().optional(),
   method: Joi.string().trim().allow("").max(120).optional(),
+  processor: Joi.string().trim().allow("").max(40).optional(),
+  processorPaymentId: Joi.string().trim().allow("").max(200).optional(),
+  reference: Joi.string().trim().allow("").max(200).optional(),
   notes: Joi.string().trim().allow("").max(1000).optional(),
 });
 

@@ -53,6 +53,9 @@ const scheduleEventSchema = new mongoose.Schema(
 
 scheduleEventSchema.index({ trainerId: 1, startDateTime: 1, endDateTime: 1 });
 scheduleEventSchema.index({ clientId: 1, startDateTime: 1 });
+// Status-filtered range scans: payout report (COMPLETED sessions in a period), Session
+// History status chips, completed-but-unbilled sweeps.
+scheduleEventSchema.index({ trainerId: 1, status: 1, startDateTime: 1 });
 
 const ScheduleEvent = mongoose.model("ScheduleEvent", scheduleEventSchema);
 module.exports = ScheduleEvent;

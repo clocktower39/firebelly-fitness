@@ -90,6 +90,11 @@ const invoiceSchema = new mongoose.Schema(
 );
 
 invoiceSchema.index({ trainerId: 1, invoiceNumber: 1 }, { unique: true });
+// Serves the Log Sessions duplicate check ({trainerId, clientId, source, lineItems.sessionDate}).
+invoiceSchema.index({ trainerId: 1, clientId: 1, "lineItems.sessionDate": 1 });
+// Session ↔ invoice lookups: which invoice claimed this appointment (Session History links,
+// future "already invoiced" checks).
+invoiceSchema.index({ "lineItems.scheduleEventId": 1 });
 
 const Invoice = mongoose.model("Invoice", invoiceSchema);
 module.exports = Invoice;

@@ -1,6 +1,19 @@
 import { createTheme } from "@mui/material";
 import { store } from "./Redux/store";
 
+// AA-safe amber for LIGHT themes. MUI's default light warning.main (#ed6c02) is used as
+// TEXT on white (overdue totals, balance due, past-due captions) but only reaches 3.1:1 —
+// below the WCAG AA 4.5:1 minimum. This amber clears AA on every light surface we use
+// (5.4:1 on white, 4.7:1 on the #eceff3 page bg) and 5.4:1 under the white text of filled
+// warning chips, so both directions pass. Dark themes keep MUI's default (#ffa726), which
+// already passes on dark surfaces.
+const LIGHT_WARNING = {
+  main: "#ad4e07", // between Amber 700 and 800
+  light: "#f59e0b", // Amber 500
+  dark: "#92400e", // Amber 800
+  contrastText: "#ffffff",
+};
+
 const dark = {
   palette: {
     mode: "dark",
@@ -380,6 +393,7 @@ const light = {
       primary: "#1e293b",   // Slate 800 — softer than near-black, less harsh contrast
       secondary: "#475569", // Slate 600
     },
+    warning: LIGHT_WARNING,
     divider: "rgba(15, 23, 42, 0.12)",
   },
 
@@ -529,6 +543,7 @@ const pinkLemonade = {
       primary: "#3a2b31", // dark berry — strong contrast on the pink wash
       secondary: "#6d4f59",
     },
+    warning: LIGHT_WARNING,
     divider: "rgba(74, 37, 51, 0.12)",
   },
 
@@ -690,6 +705,7 @@ const julyFourth = {
       primary: "#1e293b", // slate — strong contrast on the light background
       secondary: "#475569",
     },
+    warning: LIGHT_WARNING,
     divider: "rgba(30, 41, 59, 0.12)",
     setNumber: "#dc2626", // set numbers in red pop against the blue/white theme
   },
@@ -1019,6 +1035,7 @@ const makeHolidayTheme = ({
         Footer: isLight ? bgPaper : bgDefault,
       },
       text: { primary: textPrimary, secondary: textSecondary },
+      ...(isLight ? { warning: LIGHT_WARNING } : {}),
       divider: isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(148, 163, 184, 0.18)",
     },
     typography: HOLIDAY_TYPOGRAPHY,

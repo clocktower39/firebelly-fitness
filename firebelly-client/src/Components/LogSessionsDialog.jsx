@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -64,10 +64,12 @@ export default function LogSessionsDialog({ open, onClose, clientId, clientName,
       .catch(() => setSessionTypes([]));
   }, [open]);
 
-  // Selecting a session type fills in its default price (still editable).
+  // Selecting a session type fills in its default price — but never over a price the
+  // trainer already typed (e.g. a grandfathered rate entered before picking the type).
+  const priceEditedRef = useRef(false);
   useEffect(() => {
     const t = sessionTypes.find((s) => s._id === sessionTypeId);
-    if (t) setPrice(String(t.defaultPrice ?? ""));
+    if (t && !priceEditedRef.current) setPrice(String(t.defaultPrice ?? ""));
   }, [sessionTypeId, sessionTypes]);
 
   const priceNum = Math.max(0, Number(price) || 0);
@@ -96,6 +98,7 @@ export default function LogSessionsDialog({ open, onClose, clientId, clientName,
   const removeDate = (d) => setDates((prev) => prev.filter((x) => x !== d));
 
   const reset = () => {
+    priceEditedRef.current = false;
     setSessionTypeId("");
     setPrice("");
     setDates([]);
@@ -256,7 +259,10 @@ export default function LogSessionsDialog({ open, onClose, clientId, clientName,
                 label="Price / session"
                 type="number"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => {
+                  priceEditedRef.current = e.target.value !== "";
+                  setPrice(e.target.value);
+                }}
                 size="small"
                 sx={{ width: { xs: "100%", sm: 150 } }}
                 slotProps={{ htmlInput: { min: 0 } }}
