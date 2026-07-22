@@ -90,7 +90,22 @@ import {
   formatRange,
   pickDefaultBookingEnd,
 } from "./utils/scheduleUtils";
+import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
 
+
+// billing summary → { [sessionTypeId]: { remaining, purchased } } for the booking dialogs'
+// session type pickers: purchased types float to the top with their remaining count.
+const summaryToCreditsByType = (summary) => {
+  const map = {};
+  (summary?.bySessionType || []).forEach((entry) => {
+    if (!entry.sessionTypeId) return;
+    map[entry.sessionTypeId] = {
+      remaining: entry.remainingSessions ?? 0,
+      purchased: (entry.credits || 0) > 0 || (entry.entryCount || 0) > 0,
+    };
+  });
+  return map;
+};
 
 export default function Schedule() {
   const dispatch = useDispatch();
@@ -165,6 +180,7 @@ export default function Schedule() {
   const [quickBookRecurring, setQuickBookRecurring] = useState(false);
   const [quickBookRecurUntil, setQuickBookRecurUntil] = useState("");
   const [quickBookClientSummary, setQuickBookClientSummary] = useState(null);
+  const [trainerBookClientSummary, setTrainerBookClientSummary] = useState(null);
   const [openSelectionDialog, setOpenSelectionDialog] = useState(false);
   const [openSellPackageDialog, setOpenSellPackageDialog] = useState(false);
   const [openClientAccessDialog, setOpenClientAccessDialog] = useState(false);
@@ -430,7 +446,7 @@ export default function Schedule() {
     (event) => {
       if (!event?.sessionTypeId) return "";
       const type = sessionTypeLookup.get(event.sessionTypeId);
-      return type?.name || "Session type";
+      return type ? sessionTypeLabel(type) : "Session type";
     },
     [sessionTypeLookup]
   );
@@ -1408,6 +1424,34 @@ export default function Schedule() {
     };
   }, [openSelectionDialog, isTrainerView, quickBookClientId, user?._id]);
 
+  // Same, for the availability-slot booking dialog's chosen client — powers the
+  // purchased-types-first ordering + remaining counts in its session type picker.
+  useEffect(() => {
+    if (!openTrainerBookDialog || !isTrainerView || !trainerBookClientId || !user?._id) {
+      setTrainerBookClientSummary(null);
+      return undefined;
+    }
+    let cancelled = false;
+    billingApi
+      .getSummary({ trainerId: user._id, clientId: trainerBookClientId })
+      .then((data) => {
+        if (!cancelled && data && !data.error) setTrainerBookClientSummary(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [openTrainerBookDialog, isTrainerView, trainerBookClientId, user?._id]);
+
+  const quickBookCreditsByType = useMemo(
+    () => summaryToCreditsByType(quickBookClientSummary),
+    [quickBookClientSummary]
+  );
+  const trainerBookCreditsByType = useMemo(
+    () => summaryToCreditsByType(trainerBookClientSummary),
+    [trainerBookClientSummary]
+  );
+
   // Remaining prepaid sessions for the chosen client + session type (overall if no type).
   const quickBookRemainingCredits = useMemo(() => {
     if (!quickBookClientSummary) return null;
@@ -1819,6 +1863,8 @@ export default function Schedule() {
         sessionTypes={sessionTypes}
         bookingConflictLabels={bookingConflictLabels}
         quickBookRemainingCredits={quickBookRemainingCredits}
+        quickBookCreditsByType={quickBookCreditsByType}
+        trainerBookCreditsByType={trainerBookCreditsByType}
         handleQuickBookClient={handleQuickBookClient}
         handleQuickBookCreateWorkout={handleQuickBookCreateWorkout}
         quickBookCustomName={quickBookCustomName}

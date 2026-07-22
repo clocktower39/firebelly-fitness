@@ -31,6 +31,34 @@ import {
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
+import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
+
+// Purchased session types float to the top of the booking pickers (most remaining first,
+// then purchased-but-used-up, then the rest in their usual order), with the client's
+// remaining prepaid count shown next to the name.
+const orderTypesByCredits = (sessionTypes, creditsByType = {}) => {
+  const rank = (type) => {
+    const c = creditsByType[type._id];
+    if (c && c.remaining > 0) return 0;
+    if (c && c.purchased) return 1;
+    return 2;
+  };
+  return [...sessionTypes].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    if (ra === 0) {
+      return (creditsByType[b._id]?.remaining || 0) - (creditsByType[a._id]?.remaining || 0);
+    }
+    return 0; // stable sort keeps the original order within a rank
+  });
+};
+const creditSuffix = (type, creditsByType = {}) => {
+  const c = creditsByType[type._id];
+  if (!c || !c.purchased) return "";
+  const n = Math.max(c.remaining, 0);
+  return ` — ${n} left`;
+};
 
 export default function EventActionDialogs({
   openSelectionDialog,
@@ -50,6 +78,7 @@ export default function EventActionDialogs({
   quickBookQueuedWorkouts,
   quickBookSessionTypeId,
   handleSelectQuickBookSessionType,
+  quickBookCreditsByType,
   quickBookPrice,
   setQuickBookPrice,
   quickBookPriceCurrency,
@@ -179,6 +208,7 @@ export default function EventActionDialogs({
   trainerBookClientId,
   setTrainerBookClientId,
   trainerBookSessionTypeId,
+  trainerBookCreditsByType,
   setTrainerBookSessionTypeId,
   trainerBookCustomName,
   setTrainerBookCustomName,
@@ -238,10 +268,10 @@ export default function EventActionDialogs({
           onChange={(event) => handleSelectQuickBookSessionType(event.target.value)}
         >
           <MenuItem value="">No session type</MenuItem>
-          {sessionTypes.map((type) => (
+          {orderTypesByCredits(sessionTypes, quickBookCreditsByType).map((type) => (
             <MenuItem key={type._id} value={type._id}>
-              {type.name}
-              {type.durationMinutes ? ` · ${type.durationMinutes} min` : ""}
+              {sessionTypeLabel(type)}
+              {creditSuffix(type, quickBookCreditsByType)}
             </MenuItem>
           ))}
         </Select>
@@ -929,7 +959,7 @@ export default function EventActionDialogs({
                     <MenuItem value="">No session type</MenuItem>
                     {sessionTypes.map((type) => (
                       <MenuItem key={type._id} value={type._id}>
-                        {type.name}
+                        {sessionTypeLabel(type)}
                       </MenuItem>
                     ))}
                   </Select>
@@ -1252,9 +1282,10 @@ export default function EventActionDialogs({
                 onChange={(event) => setTrainerBookSessionTypeId(event.target.value)}
               >
                 <MenuItem value="">No session type</MenuItem>
-                {sessionTypes.map((type) => (
+                {orderTypesByCredits(sessionTypes, trainerBookCreditsByType).map((type) => (
                   <MenuItem key={type._id} value={type._id}>
-                    {type.name}
+                    {sessionTypeLabel(type)}
+                    {creditSuffix(type, trainerBookCreditsByType)}
                   </MenuItem>
                 ))}
               </Select>
