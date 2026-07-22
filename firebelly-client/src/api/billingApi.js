@@ -40,6 +40,26 @@ export const billingApi = {
       body: { batchId },
     }),
 
+  // Import→Reconcile→Commit: classify pasted session rows against the calendar + invoices
+  // (read-only preview), apply a reviewed plan, or revert an entire committed run.
+  reconcilePreview: ({ clientId, rows, options }) =>
+    apiFetch("/invoices/reconcile/preview", {
+      method: "POST",
+      body: { clientId, rows, options },
+    }),
+
+  reconcileCommit: ({ clientId, rows, options, idempotencyKey }) =>
+    apiFetch("/invoices/reconcile/commit", {
+      method: "POST",
+      body: { clientId, rows, options, idempotencyKey },
+    }),
+
+  reconcileUndo: ({ batchId }) =>
+    apiFetch("/invoices/reconcile/undo", {
+      method: "POST",
+      body: { batchId },
+    }),
+
   updateInvoiceStatus: ({ invoiceId, status }) =>
     apiFetch("/invoices/status", {
       method: "POST",

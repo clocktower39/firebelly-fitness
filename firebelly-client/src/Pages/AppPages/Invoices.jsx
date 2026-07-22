@@ -603,6 +603,13 @@ export default function Invoices() {
           >
             Log sessions
           </Button>
+          <Button
+            variant="outlined"
+            component={RouterLink}
+            to={filteredClient ? `/import-sessions?client=${filteredClient._id}` : "/import-sessions"}
+          >
+            Import sessions
+          </Button>
           <Button variant="contained" onClick={startCreate}>
             New invoice
           </Button>

@@ -171,6 +171,49 @@ const undoLoggedSessionsValidate = {
   }),
 };
 
+const timeHHMM = Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/);
+const reconcileRow = Joi.object({
+  date: Joi.date().required(),
+  time: timeHHMM.allow(null, "").optional(),
+  price: Joi.number().min(0).allow(null).optional(),
+  method: Joi.string().trim().allow("").max(120).optional(),
+  paymentDate: Joi.date().allow(null).optional(),
+  // Commit-only per-row choices (preview ignores them):
+  calendarAction: Joi.string().valid("CREATE", "COMPLETE", "USE_EXISTING", "SKIP").optional(),
+  incomeAction: Joi.string().valid("LOG", "SKIP").optional(),
+  eventId: objectId.allow(null).optional(),
+});
+const reconcileOptions = Joi.object({
+  sessionTypeId: objectId.allow(null).optional(),
+  defaultPrice: Joi.number().min(0).optional(),
+  defaultTime: timeHHMM.allow(null, "").optional(),
+  paymentMode: Joi.string().valid("perSession", "batch", "unpaid").optional(),
+  paymentDate: Joi.date().allow(null).optional(),
+  description: Joi.string().trim().allow("").max(200).optional(),
+  method: Joi.string().trim().allow("").max(120).optional(),
+  notes: Joi.string().trim().allow("").max(2000).optional(),
+});
+const reconcilePreviewValidate = {
+  body: Joi.object({
+    clientId: objectId.required(),
+    rows: Joi.array().items(reconcileRow).min(1).max(500).required(),
+    options: reconcileOptions.optional(),
+  }),
+};
+const reconcileCommitValidate = {
+  body: Joi.object({
+    clientId: objectId.required(),
+    rows: Joi.array().items(reconcileRow).min(1).max(500).required(),
+    options: reconcileOptions.optional(),
+    idempotencyKey: Joi.string().trim().min(8).max(64).required(),
+  }),
+};
+const reconcileUndoValidate = {
+  body: Joi.object({
+    batchId: objectId.required(),
+  }),
+};
+
 const emailInvoiceValidate = {
   body: Joi.object({
     invoiceId: objectId.required(),
@@ -184,6 +227,9 @@ router.post("/invoices", validate(createInvoiceValidate, {}, {}), verifyAccessTo
 router.post("/invoices/logSessions", validate(logSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.bulk_log_sessions);
 router.post("/invoices/logSessions/check", validate(checkLoggedDatesValidate, {}, {}), verifyAccessToken, invoiceController.check_logged_dates);
 router.post("/invoices/logSessions/undo", validate(undoLoggedSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.undo_logged_sessions);
+router.post("/invoices/reconcile/preview", validate(reconcilePreviewValidate, {}, {}), verifyAccessToken, invoiceController.reconcile_preview);
+router.post("/invoices/reconcile/commit", validate(reconcileCommitValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_commit);
+router.post("/invoices/reconcile/undo", validate(reconcileUndoValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_undo);
 router.post("/invoices/request", validate(requestInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.request_invoice);
 router.post("/invoices/list", validate(listInvoicesValidate, {}, {}), verifyAccessToken, invoiceController.list_invoices);
 router.post("/invoices/detail", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.get_invoice);

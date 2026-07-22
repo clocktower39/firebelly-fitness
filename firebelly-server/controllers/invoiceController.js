@@ -13,7 +13,13 @@ const Group = require("../models/group");
 const User = require("../models/user");
 const Product = require("../models/product");
 const SessionType = require("../models/sessionType");
+const ReconcileBatch = require("../models/reconcileBatch");
 const { areTypesPurchasable } = require("./sessionTypeController");
+const {
+  classifyRows,
+  alreadySettledDates,
+  instantInTz,
+} = require("../services/sessionReconcile");
 const { createNotification } = require("../services/notificationService");
 const { sendEmail } = require("../services/emailService");
 const { buildInvoicePdf } = require("../services/invoicePdf");
@@ -65,6 +71,15 @@ const tzDayEnd = (dateStr, tz) => {
     return dayjs.tz(String(dateStr), tz).endOf("day").toDate();
   } catch (e) {
     return dayjs(String(dateStr)).endOf("day").toDate();
+  }
+};
+// Noon in the trainer's tz for a date-only string — the neutral anchor for stored payment/
+// issue instants, so tz-aware reports keep them on the right calendar day.
+const tzNoonFor = (dateStr, tz) => {
+  try {
+    return dayjs.tz(String(dateStr), tz).startOf("day").add(12, "hour").toDate();
+  } catch (e) {
+    return dayjs(String(dateStr)).startOf("day").add(12, "hour").toDate();
   }
 };
 
@@ -1300,6 +1315,83 @@ const send_reminder = async (req, res, next) => {
   }
 };
 
+// Build + save ONE income-only BACKFILL invoice from dated line specs. Shared by
+// bulk_log_sessions (Log Sessions dialog) and reconcile_commit (Import→Reconcile→Commit):
+// same guardrails (source:BACKFILL + batch id, CUSTOM lines that never touch the credit
+// ledger), same tz-noon anchoring for date-only instants, same invoice-number retry.
+// `lines`: [{description, sessionDate:"YYYY-MM-DD", scheduleEventId|null, unitPrice}];
+// `issuedAt`/`payment.paidAt`: "YYYY-MM-DD" strings.
+const createBackfillInvoice = async ({
+  userId,
+  clientId,
+  billToName,
+  billToEmail,
+  currency = "USD",
+  notes = "",
+  batchId,
+  tz,
+  lines,
+  issuedAt,
+  payment,
+}) => {
+  const lineItems = normalizeLineItems(
+    lines.map((l) => ({
+      itemType: "CUSTOM", // income only — never touches the session-credit ledger
+      description: l.description,
+      sessionDate: dayjs(l.sessionDate).toDate(),
+      scheduleEventId: l.scheduleEventId || null,
+      quantity: 1,
+      unitPrice: l.unitPrice,
+      taxable: false,
+    }))
+  );
+  const totals = calculateTotals({ lineItems, tax: 0, discount: 0 });
+  const payments = payment
+    ? normalizePayments([{ ...payment, paidAt: tzNoonFor(payment.paidAt, tz) }])
+    : [];
+  const amountPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const status = totals.total > 0 && amountPaid >= totals.total ? "PAID" : "SENT";
+  const inv = new Invoice({
+    trainerId: userId,
+    clientId,
+    billToType: "CLIENT",
+    billToName,
+    billToEmail,
+    invoiceNumber: buildInvoiceNumber(),
+    status,
+    currency,
+    source: "BACKFILL",
+    backfillBatchId: batchId,
+    issuedAt: tzNoonFor(issuedAt, tz),
+    dueAt: null,
+    notes: String(notes || "").trim(),
+    lineItems,
+    subtotal: totals.subtotal,
+    tax: 0,
+    discount: 0,
+    total: totals.total,
+    amountPaid,
+    balanceDue: Math.max(totals.total - amountPaid, 0),
+    payments,
+    sessionCreditsTotal: 0,
+    createdBy: userId,
+    updatedBy: userId,
+  });
+  if (status === "PAID") inv.paidAt = tzNoonFor(payment?.paidAt || issuedAt, tz);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await inv.save();
+    } catch (e) {
+      if (e?.code === 11000) {
+        inv.invoiceNumber = buildInvoiceNumber();
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("Could not generate a unique invoice number.");
+};
+
 // Bulk-record past ("backdated") training sessions for a client as INCOME, so year-end invoice/income
 // reporting is complete. Each session is a plain income line item (using a session type's name + price)
 // — it deliberately does NOT touch the prepaid session-credit ledger, because these sessions are
@@ -1363,17 +1455,6 @@ const bulk_log_sessions = async (req, res, next) => {
         return dayjs(dt).format("YYYY-MM-DD");
       }
     };
-    // Anchor date-only payment/issue dates at NOON in the trainer's tz. They're stored as
-    // instants, and tz-aware reports bucket by the trainer's day — UTC midnight would read
-    // as the previous evening in any western timezone (an "Apr 1" payment must not report
-    // as March, or a "Jan 1" payment as last year).
-    const tzNoon = (dateStr) => {
-      try {
-        return dayjs.tz(String(dateStr), tz).startOf("day").add(12, "hour").toDate();
-      } catch (e) {
-        return dayjs(String(dateStr)).startOf("day").add(12, "hour").toDate();
-      }
-    };
     const spanStart = dayjs(uniqueDates[0]).subtract(1, "day").toDate();
     const spanEnd = dayjs(uniqueDates[uniqueDates.length - 1]).add(2, "day").toDate();
     const appts = await ScheduleEvent.find({
@@ -1392,63 +1473,28 @@ const bulk_log_sessions = async (req, res, next) => {
     // Only link when exactly one appointment sits on that date — never guess if ambiguous.
     const eventIdForDate = (d) => (eventsByDate[d]?.length === 1 ? eventsByDate[d][0] : null);
 
-    const mkLine = (dateStr) => ({
-      itemType: "CUSTOM", // income only — never touches the session-credit ledger
-      description: `${label} — ${dayjs(dateStr).format("MMM D, YYYY")}`,
-      sessionDate: dayjs(dateStr).toDate(),
-      scheduleEventId: eventIdForDate(dateStr),
-      quantity: 1,
-      unitPrice: price,
-      taxable: false,
-    });
+    const mkLines = (dateList) =>
+      dateList.map((d) => ({
+        description: `${label} — ${dayjs(d).format("MMM D, YYYY")}`,
+        sessionDate: d,
+        scheduleEventId: eventIdForDate(d),
+        unitPrice: price,
+      }));
 
-    const buildInvoice = async ({ dateList, issuedAt, payment: pay }) => {
-      const lineItems = normalizeLineItems(dateList.map(mkLine));
-      const totals = calculateTotals({ lineItems, tax: 0, discount: 0 });
-      // issuedAt / pay.paidAt arrive as "YYYY-MM-DD" strings — anchor them to the trainer's day.
-      const payments = pay ? normalizePayments([{ ...pay, paidAt: tzNoon(pay.paidAt) }]) : [];
-      const amountPaid = payments.reduce((s, p) => s + p.amount, 0);
-      const status = totals.total > 0 && amountPaid >= totals.total ? "PAID" : "SENT";
-      const inv = new Invoice({
-        trainerId: userId,
+    const buildInvoice = ({ dateList, issuedAt, payment }) =>
+      createBackfillInvoice({
+        userId,
         clientId,
-        billToType: "CLIENT",
         billToName,
         billToEmail,
-        invoiceNumber: buildInvoiceNumber(),
-        status,
         currency,
-        source: "BACKFILL",
-        backfillBatchId: batchId,
-        issuedAt: tzNoon(issuedAt),
-        dueAt: null,
-        notes: String(notes || "").trim(),
-        lineItems,
-        subtotal: totals.subtotal,
-        tax: 0,
-        discount: 0,
-        total: totals.total,
-        amountPaid,
-        balanceDue: Math.max(totals.total - amountPaid, 0),
-        payments,
-        sessionCreditsTotal: 0,
-        createdBy: userId,
-        updatedBy: userId,
+        notes,
+        batchId,
+        tz,
+        lines: mkLines(dateList),
+        issuedAt,
+        payment,
       });
-      if (status === "PAID") inv.paidAt = tzNoon(pay?.paidAt || issuedAt);
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        try {
-          return await inv.save();
-        } catch (e) {
-          if (e?.code === 11000) {
-            inv.invoiceNumber = buildInvoiceNumber();
-            continue;
-          }
-          throw e;
-        }
-      }
-      throw new Error("Could not generate a unique invoice number.");
-    };
 
     const created = [];
     if (!paid) {
@@ -1503,28 +1549,29 @@ const check_logged_dates = async (req, res, next) => {
     const relationship = await ensureRelationship(userId, clientId);
     if (!relationship) return res.status(403).json({ error: "Unauthorized access." });
 
-    const wanted = new Set(
-      (Array.isArray(dates) ? dates : [])
-        .map((d) => dayjs(d).format("YYYY-MM-DD"))
-        .filter((d) => d !== "Invalid Date")
-    );
-    if (!wanted.size) return res.json({ duplicates: [] });
+    const wanted = [
+      ...new Set(
+        (Array.isArray(dates) ? dates : [])
+          .map((d) => dayjs(d).format("YYYY-MM-DD"))
+          .filter((d) => d !== "Invalid Date")
+      ),
+    ];
+    if (!wanted.length) return res.json({ duplicates: [], alreadyLogged: [], alreadyInvoiced: [] });
 
-    const existing = await Invoice.find(
-      { trainerId: userId, clientId, source: "BACKFILL" },
-      { "lineItems.sessionDate": 1 }
-    ).lean();
+    // Settled = logged by a prior backfill OR the date's appointment already carries ANY
+    // non-void invoice (STANDARD too) via the scheduleEventId link — either way, logging
+    // it again would double-count the session.
+    const { logged, invoiced } = await alreadySettledDates({
+      trainerId: userId,
+      clientId,
+      dates: wanted,
+    });
 
-    const already = new Set();
-    for (const inv of existing) {
-      for (const li of inv.lineItems || []) {
-        if (!li.sessionDate) continue;
-        const key = dayjs(li.sessionDate).format("YYYY-MM-DD");
-        if (wanted.has(key)) already.add(key);
-      }
-    }
-
-    return res.json({ duplicates: [...already].sort() });
+    return res.json({
+      duplicates: [...new Set([...logged, ...invoiced])].sort(),
+      alreadyLogged: logged.sort(),
+      alreadyInvoiced: invoiced.sort(),
+    });
   } catch (err) {
     return next(err);
   }
@@ -1553,11 +1600,403 @@ const undo_logged_sessions = async (req, res, next) => {
   }
 };
 
+// ---------------------------------------------------------------------------------------
+// Import → Reconcile → Commit: the self-serve bridge between "a session happened" (rows
+// pasted from a spreadsheet) and BOTH systems — the calendar (create missing / complete
+// booked appointments) and income (BACKFILL invoices), in one undoable batch.
+// ---------------------------------------------------------------------------------------
+
+// Read-only: classify each row against the calendar + invoices and return the plan the
+// trainer reviews (create / complete / use existing / ambiguous; log / skip income).
+const reconcile_preview = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can reconcile sessions." });
+    }
+    const { clientId, rows = [], options = {} } = req.body;
+    if (!clientId) return res.status(400).json({ error: "clientId is required." });
+    const relationship = await ensureRelationship(userId, clientId);
+    if (!relationship) return res.status(403).json({ error: "Unauthorized access." });
+
+    const plan = await classifyRows({ trainerId: userId, clientId, rows, options });
+
+    const counts = { create: 0, complete: 0, useExisting: 0, none: 0, ambiguous: 0, log: 0, skip: 0 };
+    let incomeTotal = 0;
+    for (const r of plan.rows) {
+      if (r.calendarAction === "CREATE") counts.create += 1;
+      else if (r.calendarAction === "COMPLETE") counts.complete += 1;
+      else if (r.calendarAction === "USE_EXISTING") counts.useExisting += 1;
+      else if (r.calendarAction === "AMBIGUOUS") counts.ambiguous += 1;
+      else counts.none += 1;
+      if (r.incomeAction === "LOG") {
+        counts.log += 1;
+        incomeTotal += Number(r.price || 0);
+      } else {
+        counts.skip += 1;
+      }
+    }
+
+    return res.json({
+      tz: plan.tz,
+      usualTime: plan.usualTime,
+      usualSample: plan.usualSample,
+      today: plan.today,
+      rows: plan.rows,
+      summary: { ...counts, incomeTotal: Number(incomeTotal.toFixed(2)) },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Apply a reviewed plan. Every row is RE-validated against fresh DB state — anything that
+// changed since preview becomes a reported conflict, never a silent wrong write. All
+// calendar + income mutations are recorded in one ReconcileBatch so a single undo reverts
+// both sides. `idempotencyKey` makes retries (double-click, network replay) apply once.
+const reconcile_commit = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can reconcile sessions." });
+    }
+    const { clientId, rows = [], options = {}, idempotencyKey } = req.body;
+    if (!clientId) return res.status(400).json({ error: "clientId is required." });
+    if (!idempotencyKey) return res.status(400).json({ error: "idempotencyKey is required." });
+    const relationship = await ensureRelationship(userId, clientId);
+    if (!relationship) return res.status(403).json({ error: "Unauthorized access." });
+
+    const replay = await ReconcileBatch.findOne({
+      trainerId: userId,
+      idempotencyKey: String(idempotencyKey),
+    }).lean();
+    if (replay) {
+      return res.json({ ok: true, replayed: true, batchId: replay._id, summary: replay.summary });
+    }
+
+    // Fresh classification is the truth the client's chosen actions must agree with.
+    const fresh = await classifyRows({ trainerId: userId, clientId, rows, options });
+    const freshByDate = new Map(fresh.rows.map((r) => [r.date, r]));
+    const tz = fresh.tz;
+
+    let label = String(options.description || "").trim() || "Training session";
+    let currency = "USD";
+    let durationMinutes = 60;
+    const sessionTypeId = options.sessionTypeId || null;
+    if (sessionTypeId) {
+      const st = await SessionType.findOne({ _id: sessionTypeId, trainerId: userId }).lean();
+      if (!st) return res.status(400).json({ error: "Session type not found." });
+      if (!options.description) label = st.name || label;
+      currency = st.currency || "USD";
+      durationMinutes = Number(st.durationMinutes) || 60;
+    }
+    const { billToName, billToEmail } = await resolveBillTo({ billToType: "CLIENT", clientId });
+    const invoiceBatchId = new mongoose.Types.ObjectId().toString();
+    const paymentMode = ["perSession", "batch", "unpaid"].includes(options.paymentMode)
+      ? options.paymentMode
+      : "perSession";
+
+    const applied = [];
+    const conflicts = [];
+    const createdEventIds = [];
+    const completedEvents = [];
+    const invoiceIds = [];
+    const incomeRows = [];
+    let error = "";
+
+    const defaultCalendar = (f) =>
+      f.calendarAction === "AMBIGUOUS" || f.calendarAction === "NONE" ? "SKIP" : f.calendarAction;
+    const defaultIncome = (f) => (f.incomeAction === "LOG" ? "LOG" : "SKIP");
+
+    try {
+      const seen = new Set();
+      for (const raw of rows) {
+        const date = dayjs(raw.date).format("YYYY-MM-DD");
+        if (seen.has(date)) {
+          conflicts.push({ date, reason: "DUPLICATE_ROW" });
+          continue;
+        }
+        seen.add(date);
+        const f = freshByDate.get(date);
+        if (!f) {
+          conflicts.push({ date, reason: "NOT_CLASSIFIED" });
+          continue;
+        }
+
+        const calendarAction = raw.calendarAction || defaultCalendar(f);
+        const incomeAction = raw.incomeAction || defaultIncome(f);
+        const chosenEventId = raw.eventId || f.eventId || null;
+
+        // Validate the chosen calendar action against fresh state.
+        const candidateIds = new Set((f.candidates || []).map((c) => String(c.eventId)));
+        let valid = false;
+        if (calendarAction === "SKIP") valid = true;
+        else if (calendarAction === "CREATE") valid = f.calendarAction === "CREATE";
+        else if (calendarAction === "COMPLETE") {
+          valid =
+            (f.calendarAction === "COMPLETE" && String(f.eventId) === String(chosenEventId)) ||
+            (f.calendarAction === "AMBIGUOUS" &&
+              candidateIds.has(String(chosenEventId)) &&
+              f.candidates.some(
+                (c) =>
+                  String(c.eventId) === String(chosenEventId) &&
+                  (c.status === "BOOKED" || c.status === "REQUESTED")
+              ));
+        } else if (calendarAction === "USE_EXISTING") {
+          valid =
+            (f.calendarAction === "USE_EXISTING" && String(f.eventId) === String(chosenEventId)) ||
+            (f.calendarAction === "AMBIGUOUS" &&
+              candidateIds.has(String(chosenEventId)) &&
+              f.candidates.some(
+                (c) => String(c.eventId) === String(chosenEventId) && c.status === "COMPLETED"
+              ));
+        }
+        if (!valid) {
+          conflicts.push({ date, reason: "CALENDAR_STATE_CHANGED", expected: f.calendarAction });
+          continue;
+        }
+
+        // Income: LOG allowed when fresh says LOG, or as a deliberate override of the
+        // credits-paid skip. Already-logged / already-invoiced can never be overridden.
+        if (incomeAction === "LOG" && !["LOG", "SKIP_CREDIT_CHARGED"].includes(f.incomeAction)) {
+          conflicts.push({ date, reason: "ALREADY_SETTLED", detail: f.incomeAction });
+          continue;
+        }
+
+        // Apply the calendar side.
+        let linkEventId = null;
+        if (calendarAction === "CREATE") {
+          const start = instantInTz(date, f.time, tz);
+          const ev = await ScheduleEvent.create({
+            trainerId: userId,
+            clientId,
+            startDateTime: start,
+            endDateTime: dayjs(start).add(durationMinutes, "minute").toDate(),
+            eventType: "APPOINTMENT",
+            status: "COMPLETED",
+            billingStatus: "NO_CHARGE",
+            billingLedgerEntryId: null,
+            sessionTypeId,
+            priceAmount: f.price > 0 ? f.price : null,
+            priceCurrency: currency,
+            availabilitySource: "MANUAL",
+            notes: "Imported via session reconcile.",
+          });
+          createdEventIds.push(ev._id);
+          linkEventId = ev._id;
+        } else if (calendarAction === "COMPLETE") {
+          const ev = await ScheduleEvent.findOne({ _id: chosenEventId, trainerId: userId, clientId });
+          if (!ev || ev.status === "CANCELLED" || ev.status === "COMPLETED") {
+            conflicts.push({ date, reason: "CALENDAR_STATE_CHANGED", expected: "COMPLETE" });
+            continue;
+          }
+          completedEvents.push({
+            eventId: ev._id,
+            prevStatus: ev.status,
+            prevBillingStatus: ev.billingStatus,
+          });
+          ev.status = "COMPLETED";
+          if (ev.billingStatus === "UNBILLED") ev.billingStatus = "NO_CHARGE";
+          await ev.save();
+          linkEventId = ev._id;
+        } else if (calendarAction === "USE_EXISTING") {
+          linkEventId = chosenEventId;
+        }
+
+        if (incomeAction === "LOG") {
+          incomeRows.push({
+            date,
+            price: f.price,
+            method: f.method || String(options.method || "").trim(),
+            paymentDate: f.paymentDate,
+            scheduleEventId: linkEventId,
+          });
+        }
+
+        applied.push({
+          date,
+          time: f.time,
+          price: f.price,
+          calendarAction,
+          incomeAction,
+          eventId: linkEventId,
+          warnings: f.warnings,
+        });
+      }
+
+      // Apply the income side.
+      incomeRows.sort((a, b) => (a.date < b.date ? -1 : 1));
+      const mkLine = (r) => ({
+        description: `${label} — ${dayjs(r.date).format("MMM D, YYYY")}`,
+        sessionDate: r.date,
+        scheduleEventId: r.scheduleEventId,
+        unitPrice: r.price,
+      });
+      const build = (args) =>
+        createBackfillInvoice({
+          userId,
+          clientId,
+          billToName,
+          billToEmail,
+          currency,
+          notes: options.notes,
+          batchId: invoiceBatchId,
+          tz,
+          ...args,
+        });
+      if (incomeRows.length) {
+        if (paymentMode === "perSession") {
+          for (const r of incomeRows) {
+            const paidOn = r.paymentDate || r.date;
+            const inv = await build({
+              lines: [mkLine(r)],
+              issuedAt: paidOn,
+              payment: { amount: r.price, paidAt: paidOn, method: r.method },
+            });
+            invoiceIds.push(inv._id);
+          }
+        } else if (paymentMode === "unpaid") {
+          const inv = await build({
+            lines: incomeRows.map(mkLine),
+            issuedAt: incomeRows[0].date,
+            payment: null,
+          });
+          invoiceIds.push(inv._id);
+        } else {
+          // batch: one invoice per payment date; rows without one fall back to a group
+          // paid on its earliest session date (blocks are prepaid at/near the start).
+          const optionsPaymentDate = options.paymentDate
+            ? dayjs(options.paymentDate).format("YYYY-MM-DD")
+            : "";
+          const groups = new Map();
+          for (const r of incomeRows) {
+            const key = r.paymentDate || optionsPaymentDate;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(r);
+          }
+          for (const [key, rs] of groups) {
+            const paidOn = key || rs[0].date;
+            const total = Number(rs.reduce((s, r) => s + r.price, 0).toFixed(2));
+            const inv = await build({
+              lines: rs.map(mkLine),
+              issuedAt: paidOn,
+              payment: {
+                amount: total,
+                paidAt: paidOn,
+                method: rs.find((r) => r.method)?.method || String(options.method || "").trim(),
+              },
+            });
+            invoiceIds.push(inv._id);
+          }
+        }
+      }
+    } catch (e) {
+      // Keep everything applied so far in the batch record below — undo can revert it.
+      error = e?.message || String(e);
+    }
+
+    const incomeTotal = Number(incomeRows.reduce((s, r) => s + r.price, 0).toFixed(2));
+    const summary = {
+      rowsApplied: applied.length,
+      conflicts,
+      created: createdEventIds.length,
+      completed: completedEvents.length,
+      invoiceCount: invoiceIds.length,
+      incomeTotal,
+    };
+    const batch = await ReconcileBatch.create({
+      trainerId: userId,
+      clientId,
+      idempotencyKey: String(idempotencyKey),
+      timezone: tz,
+      options,
+      rows: applied,
+      createdEventIds,
+      completedEvents,
+      invoiceIds,
+      invoiceBatchId,
+      summary,
+      error,
+    });
+
+    if (error) {
+      return res.status(500).json({ error, partial: true, batchId: batch._id, summary });
+    }
+    return res.json({ ok: true, batchId: batch._id, summary });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Revert an entire committed run: delete its invoices, restore completed appointments'
+// prior statuses, delete the appointments it created (except any that has since gained a
+// workout — deleting those would orphan real training data; they're reported instead).
+const reconcile_undo = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can reconcile sessions." });
+    }
+    const { batchId } = req.body;
+    if (!batchId || !isValidObjectId(batchId)) {
+      return res.status(400).json({ error: "batchId is required." });
+    }
+
+    const batch = await ReconcileBatch.findOne({ _id: batchId, trainerId: userId });
+    if (!batch) return res.status(404).json({ error: "Batch not found." });
+    if (batch.status === "UNDONE") return res.json({ ok: true, alreadyUndone: true });
+
+    const invoicesDeleted = await Invoice.deleteMany({
+      _id: { $in: batch.invoiceIds },
+      trainerId: userId,
+      source: "BACKFILL",
+    });
+
+    let statusesRestored = 0;
+    for (const c of batch.completedEvents) {
+      const r = await ScheduleEvent.updateOne(
+        { _id: c.eventId, trainerId: userId },
+        { $set: { status: c.prevStatus, billingStatus: c.prevBillingStatus } }
+      );
+      statusesRestored += r.modifiedCount || 0;
+    }
+
+    const createdNow = await ScheduleEvent.find({
+      _id: { $in: batch.createdEventIds },
+      trainerId: userId,
+    })
+      .select("workoutId")
+      .lean();
+    const keptEventIds = createdNow.filter((e) => e.workoutId).map((e) => e._id);
+    const deletableIds = createdNow.filter((e) => !e.workoutId).map((e) => e._id);
+    const eventsDeleted = deletableIds.length
+      ? await ScheduleEvent.deleteMany({ _id: { $in: deletableIds }, trainerId: userId })
+      : { deletedCount: 0 };
+
+    batch.status = "UNDONE";
+    batch.undoneAt = new Date();
+    await batch.save();
+
+    return res.json({
+      ok: true,
+      invoicesDeleted: invoicesDeleted.deletedCount || 0,
+      statusesRestored,
+      eventsDeleted: eventsDeleted.deletedCount || 0,
+      keptEventIds,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   create_invoice,
   bulk_log_sessions,
   check_logged_dates,
   undo_logged_sessions,
+  reconcile_preview,
+  reconcile_commit,
+  reconcile_undo,
   request_invoice,
   list_invoices,
   get_invoice,
