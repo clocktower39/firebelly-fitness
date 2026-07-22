@@ -32,6 +32,7 @@ import { billingApi } from "../../api/billingApi";
 import { scheduleApi } from "../../api/scheduleApi";
 import { requestClients } from "../../Redux/actions";
 import { toMatrix, detectRoles, buildRows, COLUMN_ROLES } from "../../utils/sessionImportParse";
+import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
 
 // Import → Reconcile → Commit: paste a client's session sheet, review the server's
 // classified plan against the calendar + invoices, apply it in one undoable batch.
@@ -520,7 +521,7 @@ export default function ImportSessions() {
                         <MenuItem value="">(none)</MenuItem>
                         {sessionTypes.map((s) => (
                           <MenuItem key={s._id} value={s._id}>
-                            {s.name} — ${s.defaultPrice}
+                            {sessionTypeLabel(s)} — ${s.defaultPrice}
                           </MenuItem>
                         ))}
                       </TextField>

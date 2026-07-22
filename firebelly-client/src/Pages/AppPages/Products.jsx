@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { billingApi } from "../../api/billingApi";
-import { scheduleApi } from "../../api/scheduleApi";
 import {
+  Box,
   Button,
   Card,
   CardContent,
@@ -23,6 +23,9 @@ import {
 } from "@mui/material";
 import { useSelector } from "react-redux";
 import { formatPrice } from "../../utils/currency";
+import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
+import useSessionTypes from "../../features/schedule/hooks/useSessionTypes";
+import SessionTypeDialogs, { SessionTypeList } from "../../features/schedule/components/SessionTypeDialogs";
 
 const TYPE_LABEL = {
   SESSION: "Session",
@@ -49,18 +52,16 @@ const defaultForm = {
 export default function Products() {
   const user = useSelector((state) => state.user);
   const [products, setProducts] = useState([]);
-  const [sessionTypes, setSessionTypes] = useState([]);
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState("");
   const [status, setStatus] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const sessionTypeLookup = useMemo(() => {
-    const map = new Map();
-    sessionTypes.forEach((type) => map.set(type._id, type));
-    return map;
-  }, [sessionTypes]);
+  // Session types live here too now — same hook + dialogs as the scheduler, so the
+  // Products page is the one full catalog (sessions AND packages/products).
+  const st = useSessionTypes({ isTrainer: user.isTrainer });
+  const { sessionTypes, sessionTypeLookup } = st;
 
   const loadProducts = async () => {
     try {
@@ -72,20 +73,9 @@ export default function Products() {
     }
   };
 
-  const loadSessionTypes = async () => {
-    try {
-      const data = await scheduleApi.getSessionTypes();
-      if (data?.error) throw new Error(data.error);
-      setSessionTypes(data.sessionTypes || []);
-    } catch (err) {
-      setStatus(err.message || "Unable to load session types.");
-    }
-  };
-
   useEffect(() => {
     if (!user.isTrainer) return;
     loadProducts();
-    loadSessionTypes();
   }, [user.isTrainer]);
 
   if (!user.isTrainer) {
@@ -198,6 +188,39 @@ export default function Products() {
     <Grid container spacing={2}>
       <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h4">Products</Typography>
+      </Grid>
+
+      {/* The session catalog — the same types the scheduler books and packages sell. */}
+      <Grid container size={12}>
+        <Card variant="outlined" sx={{ width: "100%" }}>
+          <CardContent>
+            <Stack spacing={1.5}>
+              <Box>
+                <Typography variant="h6">Training sessions</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  What clients book and buy credits for — bookings, packages, and invoices all
+                  pull from this catalog.
+                </Typography>
+              </Box>
+              <SessionTypeList
+                sessionTypes={sessionTypes}
+                sessionTypesStatus={st.sessionTypesStatus}
+                formatPrice={formatPrice}
+                handleEditSessionType={st.handleEditSessionType}
+                handleDeleteSessionType={st.handleDeleteSessionType}
+                handleArchiveSessionType={st.handleArchiveSessionType}
+                handleUnarchiveSessionType={st.handleUnarchiveSessionType}
+                openRepriceDialog={st.openRepriceDialog}
+                resetSessionTypeForm={st.resetSessionTypeForm}
+                setOpenSessionTypeFormDialog={st.setOpenSessionTypeFormDialog}
+              />
+            </Stack>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+        <Typography variant="h6">Packages &amp; other products</Typography>
         <Button variant="contained" onClick={startAdd}>
           Add product
         </Button>
@@ -249,11 +272,13 @@ export default function Products() {
                       }
                     >
                       <MenuItem value="">Select session type</MenuItem>
-                      {sessionTypes.map((type) => (
-                        <MenuItem key={type._id} value={type._id}>
-                          {type.name}
-                        </MenuItem>
-                      ))}
+                      {sessionTypes
+                        .filter((type) => !type.archivedAt)
+                        .map((type) => (
+                          <MenuItem key={type._id} value={type._id}>
+                            {sessionTypeLabel(type)}
+                          </MenuItem>
+                        ))}
                     </Select>
                   </FormControl>
                   <TextField
@@ -270,7 +295,7 @@ export default function Products() {
               )}
               {form.itemType === "SESSION" && sessionTypes.length === 0 && (
                 <Typography variant="caption" color="text.secondary">
-                  No session types found. Create session types in Schedule → Session Types.
+                  No session types yet — add one in the Training sessions section above.
                 </Typography>
               )}
               <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
@@ -421,7 +446,9 @@ export default function Products() {
                         {formatPrice(product.price, product.currency)}
                         {product.itemType === "SESSION"
                           ? ` · ${product.creditsPerUnit || 0} credits${
-                              product.sessionTypeId?.name ? ` · ${product.sessionTypeId.name}` : ""
+                              product.sessionTypeId?.name
+                                ? ` · ${sessionTypeLabel(product.sessionTypeId)}`
+                                : ""
                             }`
                           : ""}
                       </Typography>
@@ -451,6 +478,33 @@ export default function Products() {
           </Stack>
         )}
       </Grid>
+
+      {/* Form / reprice / confirm dialogs shared with the scheduler; the list dialog is
+          unused here because the list renders inline above. */}
+      <SessionTypeDialogs
+        openSessionTypesDialog={false}
+        setOpenSessionTypesDialog={() => {}}
+        sessionTypesStatus={st.sessionTypesStatus}
+        sessionTypes={sessionTypes}
+        formatPrice={formatPrice}
+        handleEditSessionType={st.handleEditSessionType}
+        handleDeleteSessionType={st.handleDeleteSessionType}
+        handleArchiveSessionType={st.handleArchiveSessionType}
+        handleUnarchiveSessionType={st.handleUnarchiveSessionType}
+        repriceTarget={st.repriceTarget}
+        repriceForm={st.repriceForm}
+        setRepriceForm={st.setRepriceForm}
+        openRepriceDialog={st.openRepriceDialog}
+        closeRepriceDialog={st.closeRepriceDialog}
+        handleReprice={st.handleReprice}
+        resetSessionTypeForm={st.resetSessionTypeForm}
+        setOpenSessionTypeFormDialog={st.setOpenSessionTypeFormDialog}
+        openSessionTypeFormDialog={st.openSessionTypeFormDialog}
+        editingSessionTypeId={st.editingSessionTypeId}
+        sessionTypeForm={st.sessionTypeForm}
+        setSessionTypeForm={st.setSessionTypeForm}
+        handleSaveSessionType={st.handleSaveSessionType}
+      />
     </Grid>
   );
 }

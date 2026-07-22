@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Box,
   Button,
   Card,
   CardActions,
@@ -21,38 +22,26 @@ import {
   Typography,
 } from "@mui/material";
 
-export default function SessionTypeDialogs({
-  openSessionTypesDialog,
-  setOpenSessionTypesDialog,
-  sessionTypesStatus,
+// Inline-capable session type catalog: the cards + the archive/delete confirm gate.
+// Rendered inside the scheduler's "Session Types" dialog AND directly on the Products
+// page, so the one management surface serves both.
+export function SessionTypeList({
   sessionTypes,
+  sessionTypesStatus,
   formatPrice,
   handleEditSessionType,
   handleDeleteSessionType,
   handleArchiveSessionType,
   handleUnarchiveSessionType,
-  repriceTarget,
-  repriceForm,
-  setRepriceForm,
   openRepriceDialog,
-  closeRepriceDialog,
-  handleReprice,
   resetSessionTypeForm,
   setOpenSessionTypeFormDialog,
-  openSessionTypeFormDialog,
-  editingSessionTypeId,
-  sessionTypeForm,
-  setSessionTypeForm,
-  handleSaveSessionType,
 }) {
   // Confirmation gate for destructive actions: { action: "archive" | "delete", type }.
   const [confirmAction, setConfirmAction] = React.useState(null);
 
   const activeTypes = sessionTypes.filter((t) => !t.archivedAt);
   const archivedTypes = sessionTypes.filter((t) => t.archivedAt);
-  // Once a type has bookings/purchases the server freezes its rate/duration/credits,
-  // so disable those fields when editing such a type (rate changes go via "Change price").
-  const rateLocked = Boolean(editingSessionTypeId && sessionTypeForm.hasHistory);
 
   const priceLabel = (type) =>
     type.defaultPrice === null || type.defaultPrice === undefined
@@ -126,6 +115,119 @@ export default function SessionTypeDialogs({
 
   return (
     <>
+      <Stack spacing={2}>
+        {sessionTypesStatus && (
+          <Typography variant="caption" color="error">
+            {sessionTypesStatus}
+          </Typography>
+        )}
+        {sessionTypes.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No session types yet.
+          </Typography>
+        ) : (
+          <>
+            <Stack spacing={1}>{activeTypes.map((type) => renderCard(type))}</Stack>
+            {archivedTypes.length > 0 && (
+              <>
+                <Typography variant="overline" color="text.secondary">
+                  Archived — grandfathered clients only
+                </Typography>
+                <Stack spacing={1}>
+                  {archivedTypes.map((type) => renderCard(type, { archived: true }))}
+                </Stack>
+              </>
+            )}
+          </>
+        )}
+        <Divider />
+        <Button
+          variant="contained"
+          onClick={() => {
+            resetSessionTypeForm();
+            setOpenSessionTypeFormDialog(true);
+          }}
+        >
+          New session type
+        </Button>
+      </Stack>
+
+      <Dialog
+        open={Boolean(confirmAction)}
+        onClose={() => setConfirmAction(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {confirmAction?.action === "delete" ? "Delete session type?" : "Archive session type?"}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {confirmAction?.action === "delete" ? (
+              <>
+                Permanently delete <strong>{confirmAction?.type?.name}</strong>? This can&apos;t be
+                undone. (Types with bookings or purchases can&apos;t be deleted — archive them
+                instead.)
+              </>
+            ) : (
+              <>
+                Archive <strong>{confirmAction?.type?.name}</strong>? It will be hidden from sale,
+                but stays available to grandfathered clients and you can reactivate it anytime.
+              </>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmAction(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color={confirmAction?.action === "delete" ? "error" : "warning"}
+            onClick={() => {
+              const { action, type } = confirmAction || {};
+              if (!type) return;
+              if (action === "delete") handleDeleteSessionType(type._id);
+              else handleArchiveSessionType(type._id);
+              setConfirmAction(null);
+            }}
+          >
+            {confirmAction?.action === "delete" ? "Delete" : "Archive"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
+export default function SessionTypeDialogs({
+  openSessionTypesDialog,
+  setOpenSessionTypesDialog,
+  sessionTypesStatus,
+  sessionTypes,
+  formatPrice,
+  handleEditSessionType,
+  handleDeleteSessionType,
+  handleArchiveSessionType,
+  handleUnarchiveSessionType,
+  repriceTarget,
+  repriceForm,
+  setRepriceForm,
+  openRepriceDialog,
+  closeRepriceDialog,
+  handleReprice,
+  resetSessionTypeForm,
+  setOpenSessionTypeFormDialog,
+  openSessionTypeFormDialog,
+  editingSessionTypeId,
+  sessionTypeForm,
+  setSessionTypeForm,
+  handleSaveSessionType,
+}) {
+  // Once a type has bookings/purchases the server freezes its rate/duration/credits,
+  // so disable those fields when editing such a type (rate changes go via "Change price").
+  const rateLocked = Boolean(editingSessionTypeId && sessionTypeForm.hasHistory);
+
+  return (
+    <>
       <Dialog
         open={openSessionTypesDialog}
         onClose={() => setOpenSessionTypesDialog(false)}
@@ -134,42 +236,20 @@ export default function SessionTypeDialogs({
       >
         <DialogTitle>Session Types</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            {sessionTypesStatus && (
-              <Typography variant="caption" color="error">
-                {sessionTypesStatus}
-              </Typography>
-            )}
-            {sessionTypes.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No session types yet.
-              </Typography>
-            ) : (
-              <>
-                <Stack spacing={1}>{activeTypes.map((type) => renderCard(type))}</Stack>
-                {archivedTypes.length > 0 && (
-                  <>
-                    <Typography variant="overline" color="text.secondary">
-                      Archived — grandfathered clients only
-                    </Typography>
-                    <Stack spacing={1}>
-                      {archivedTypes.map((type) => renderCard(type, { archived: true }))}
-                    </Stack>
-                  </>
-                )}
-              </>
-            )}
-            <Divider />
-            <Button
-              variant="contained"
-              onClick={() => {
-                resetSessionTypeForm();
-                setOpenSessionTypeFormDialog(true);
-              }}
-            >
-              New session type
-            </Button>
-          </Stack>
+          <Box sx={{ mt: 1 }}>
+            <SessionTypeList
+              sessionTypes={sessionTypes}
+              sessionTypesStatus={sessionTypesStatus}
+              formatPrice={formatPrice}
+              handleEditSessionType={handleEditSessionType}
+              handleDeleteSessionType={handleDeleteSessionType}
+              handleArchiveSessionType={handleArchiveSessionType}
+              handleUnarchiveSessionType={handleUnarchiveSessionType}
+              openRepriceDialog={openRepriceDialog}
+              resetSessionTypeForm={resetSessionTypeForm}
+              setOpenSessionTypeFormDialog={setOpenSessionTypeFormDialog}
+            />
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenSessionTypesDialog(false)}>Close</Button>
@@ -369,49 +449,6 @@ export default function SessionTypeDialogs({
           <Button onClick={closeRepriceDialog}>Cancel</Button>
           <Button variant="contained" onClick={handleReprice}>
             Save new price
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(confirmAction)}
-        onClose={() => setConfirmAction(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          {confirmAction?.action === "delete" ? "Delete session type?" : "Archive session type?"}
-        </DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {confirmAction?.action === "delete" ? (
-              <>
-                Permanently delete <strong>{confirmAction?.type?.name}</strong>? This can&apos;t be
-                undone. (Types with bookings or purchases can&apos;t be deleted — archive them
-                instead.)
-              </>
-            ) : (
-              <>
-                Archive <strong>{confirmAction?.type?.name}</strong>? It will be hidden from sale,
-                but stays available to grandfathered clients and you can reactivate it anytime.
-              </>
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmAction(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color={confirmAction?.action === "delete" ? "error" : "warning"}
-            onClick={() => {
-              const { action, type } = confirmAction || {};
-              if (!type) return;
-              if (action === "delete") handleDeleteSessionType(type._id);
-              else handleArchiveSessionType(type._id);
-              setConfirmAction(null);
-            }}
-          >
-            {confirmAction?.action === "delete" ? "Delete" : "Archive"}
           </Button>
         </DialogActions>
       </Dialog>

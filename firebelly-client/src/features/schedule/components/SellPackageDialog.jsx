@@ -19,6 +19,7 @@ import {
 import { scheduleApi } from "../api/scheduleApi";
 import { billingApi } from "../../../api/billingApi";
 import { formatPrice } from "../../../utils/currency";
+import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
 
 // Level 1 "sell a package": trainer records a sale -> creates a PAID invoice with a
 // SESSION line item, which lands credits on the client's ledger balance.
@@ -140,7 +141,7 @@ export default function SellPackageDialog({ open, onClose, clients, trainerId, o
             >
               {types.map((t) => (
                 <MenuItem key={t._id} value={t._id}>
-                  {t.name}
+                  {sessionTypeLabel(t)}
                   {t.archivedAt ? " (grandfathered)" : ""}
                 </MenuItem>
               ))}

@@ -38,6 +38,7 @@ import { alpha } from "@mui/material/styles";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
 import { formatPrice } from "../../utils/currency";
+import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
 
 const STATUS_CHIP = {
   DRAFT: { label: "Draft", color: "default" },
@@ -884,7 +885,7 @@ export default function Invoices() {
                               <MenuItem value="">Select session type</MenuItem>
                               {sessionTypes.map((type) => (
                                 <MenuItem key={type._id} value={type._id}>
-                                  {type.name}
+                                  {sessionTypeLabel(type)}
                                 </MenuItem>
                               ))}
                             </Select>

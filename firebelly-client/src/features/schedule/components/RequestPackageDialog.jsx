@@ -17,6 +17,7 @@ import {
 import { scheduleApi } from "../api/scheduleApi";
 import { billingApi } from "../../../api/billingApi";
 import { formatPrice } from "../../../utils/currency";
+import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
 
 // Level 1.5: a client requests a session package from their trainer. This creates a
 // SENT invoice the trainer then confirms (marks paid) to release the credits.
@@ -111,7 +112,7 @@ export default function RequestPackageDialog({ open, onClose, trainerId, clientI
               >
                 {types.map((t) => (
                   <MenuItem key={t._id} value={t._id}>
-                    {t.name}
+                    {sessionTypeLabel(t)}
                     {t.defaultPrice != null
                       ? ` · ${formatPrice(t.defaultPrice, t.currency)} each`
                       : ""}

@@ -22,6 +22,7 @@ import {
 import dayjs from "dayjs";
 import { billingApi } from "../api/billingApi";
 import { scheduleApi } from "../api/scheduleApi";
+import { sessionTypeLabel } from "../utils/sessionTypeLabel";
 
 const WEEKDAYS = [
   { label: "Sun", v: 0 },
@@ -251,7 +252,7 @@ export default function LogSessionsDialog({ open, onClose, clientId, clientName,
                 <MenuItem value="">Custom (no type)</MenuItem>
                 {sessionTypes.map((s) => (
                   <MenuItem key={s._id} value={s._id}>
-                    {s.name} — ${s.defaultPrice}
+                    {sessionTypeLabel(s)} — ${s.defaultPrice}
                   </MenuItem>
                 ))}
               </TextField>
