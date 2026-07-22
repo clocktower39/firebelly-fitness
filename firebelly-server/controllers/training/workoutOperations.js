@@ -362,6 +362,31 @@ const get_training_range_end = async (req, res, next) => {
   }
 };
 
+// Selective bulk scope: narrow a range query by workout type and/or an explicit id list
+// (the checklist the client previewed). Ids only ever narrow — they intersect with the
+// user+range constraints, so a stray id can't reach outside the range or another account.
+// NOTE: ~88% of trainings predate the workoutType field (missing = "Strength", the schema
+// default applied on read) — a Strength filter must also match docs without the field.
+const applyTypeAndIdFilters = (workoutQuery, filters = {}) => {
+  if (filters?.workoutTypes?.length) {
+    const types = filters.workoutTypes.map(String);
+    if (types.includes("Strength")) {
+      workoutQuery.$and = [
+        ...(workoutQuery.$and || []),
+        { $or: [{ workoutType: { $in: types } }, { workoutType: { $exists: false } }] },
+      ];
+    } else {
+      workoutQuery.workoutType = { $in: types };
+    }
+  }
+  if (filters?.workoutIds?.length) {
+    workoutQuery._id = {
+      $in: filters.workoutIds.filter((id) => mongoose.Types.ObjectId.isValid(id)),
+    };
+  }
+  return workoutQuery;
+};
+
 const bulk_move_copy_workouts = async (req, res, next) => {
   try {
     const {
@@ -449,6 +474,8 @@ const bulk_move_copy_workouts = async (req, res, next) => {
     if (filters?.includeTemplates === false) {
       workoutQuery.isTemplate = { $ne: true };
     }
+
+    applyTypeAndIdFilters(workoutQuery, filters);
 
     const workoutsInRange = await Training.find(workoutQuery);
 
@@ -743,6 +770,8 @@ const get_workouts_by_range = async (req, res, next) => {
       workoutQuery.isTemplate = { $ne: true };
     }
 
+    applyTypeAndIdFilters(workoutQuery, filters);
+
     const workouts = await Training.find(workoutQuery)
       .populate({
         path: "training.exercise",
@@ -955,6 +984,7 @@ const bulk_delete_workouts = async (req, res, next) => {
     // Protect logged history and program templates by default; caller must opt in to include them.
     if (filters?.includeCompleted !== true) workoutQuery.complete = { $ne: true };
     if (filters?.includeTemplates !== true) workoutQuery.isTemplate = { $ne: true };
+    applyTypeAndIdFilters(workoutQuery, filters);
 
     // Stash the full docs before deleting so undo can re-insert them verbatim (ids preserved).
     const deletedDocs = await Training.find(workoutQuery).lean();

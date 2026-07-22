@@ -11,7 +11,9 @@ import {
   Grid,
   IconButton,
   MenuItem,
+  Chip,
   Modal,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -106,6 +108,10 @@ export function ModalAction(props) {
     const [includeCompleted, setIncludeCompleted] = useState(false);
     const [previewWorkouts, setPreviewWorkouts] = useState([]);
     const [previewLoading, setPreviewLoading] = useState(false);
+    // Selective bulk scope: which workout TYPES are in (null = all), plus per-workout
+    // checkbox exceptions keyed by id ("all Strength except Thursday's deload").
+    const [selectedTypes, setSelectedTypes] = useState(null);
+    const [checkOverrides, setCheckOverrides] = useState({});
     const [deleteResult, setDeleteResult] = useState(null);
     const [copyOption, setCopyOption] = useState(null);
     const [newAccount, setNewAccount] = useState({
@@ -129,6 +135,46 @@ export function ModalAction(props) {
       lastBulkOperation &&
       training?.user?._id &&
       String(lastBulkOperation.userId) === String(training.user._id);
+
+    // --- Selective bulk scope: type chips + per-workout checkboxes over the preview ---
+    // Legacy docs predate workoutType; mongoose defaults them to "Strength" on read, but
+    // guard anyway so a missing field can never crash the checklist.
+    const WORKOUT_TYPE_ORDER = ["Strength", "Cardio", "Sports", "Yoga", "Pilates"];
+    const typeOf = (w) => w.workoutType || "Strength";
+    const typesPresent = WORKOUT_TYPE_ORDER.filter((t) =>
+      previewWorkouts.some((w) => typeOf(w) === t)
+    );
+    const typeOn = (t) => !selectedTypes || selectedTypes.includes(t);
+    // Protected items stay visible but disabled, WITH the reason — never silently skipped.
+    const bulkIneligibleReason = (w) => {
+      if (w.complete && !includeCompleted) return "completed — turn on “Include completed”";
+      if (w.isTemplate && actionType === "delete") return "template — protected from bulk delete";
+      return null;
+    };
+    const isBulkChecked = (w) => {
+      if (bulkIneligibleReason(w)) return false;
+      const override = checkOverrides[w._id];
+      if (override !== undefined) return override;
+      return typeOn(typeOf(w));
+    };
+    const checkedWorkouts = previewWorkouts.filter(isBulkChecked);
+    const checkedIds = checkedWorkouts.map((w) => w._id);
+    const toggleTypeChip = (t) => {
+      setSelectedTypes((prev) => {
+        const current = prev ?? typesPresent;
+        return current.includes(t) ? current.filter((x) => x !== t) : [...current, t];
+      });
+      // The chip becomes authoritative for its type again — drop per-workout exceptions.
+      setCheckOverrides((prev) => {
+        const next = { ...prev };
+        previewWorkouts.forEach((w) => {
+          if (typeOf(w) === t) delete next[w._id];
+        });
+        return next;
+      });
+    };
+    const toggleWorkoutCheck = (w) =>
+      setCheckOverrides((prev) => ({ ...prev, [w._id]: !isBulkChecked(w) }));
 
     const handleTitleChange = (e) => setNewTitle(e.target.value);
     const handleMoveModeChange = (e) => setMoveMode(e.target.value);
@@ -175,6 +221,7 @@ export function ModalAction(props) {
           targetQueue,
           filters: {
             includeCompleted,
+            workoutIds: checkedIds,
           },
         })
       ).then((res) => {
@@ -254,6 +301,7 @@ export function ModalAction(props) {
           targetQueue,
           filters: {
             includeCompleted,
+            workoutIds: checkedIds,
           },
         })
       ).then((res) => {
@@ -293,7 +341,7 @@ export function ModalAction(props) {
           rangeStart,
           rangeEnd,
           userId: training?.user?._id,
-          filters: { includeCompleted },
+          filters: { includeCompleted, workoutIds: checkedIds },
         })
       ).then((res) => {
         if (res?.error !== undefined) {
@@ -384,6 +432,8 @@ export function ModalAction(props) {
       setPreviewWorkouts([]);
       setPreviewLoading(false);
       setDeleteResult(null);
+      setSelectedTypes(null);
+      setCheckOverrides({});
     }, [actionType, modalOpen]);
 
     useEffect(() => {
@@ -409,9 +459,13 @@ export function ModalAction(props) {
     useEffect(() => {
       if (moveMode !== "range" || !rangeStart || !rangeEnd) return;
       setPreviewLoading(true);
+      // Fetch EVERYTHING in range (completed + templates included) — eligibility is
+      // decided client-side so protected items render disabled-with-reason instead of
+      // silently disappearing from the preview.
       dispatch(
         requestWorkoutsByRange(rangeStart, rangeEnd, training?.user?._id, {
-          includeCompleted,
+          includeCompleted: true,
+          includeTemplates: true,
         })
       ).then((data) => {
         if (data?.error) {
@@ -422,16 +476,11 @@ export function ModalAction(props) {
         }
         const workouts = data?.workouts || [];
         setPreviewWorkouts(workouts);
+        setSelectedTypes(null);
+        setCheckOverrides({});
         setPreviewLoading(false);
       });
-    }, [
-      dispatch,
-      moveMode,
-      rangeStart,
-      rangeEnd,
-      training?.user?._id,
-      includeCompleted,
-    ]);
+    }, [dispatch, moveMode, rangeStart, rangeEnd, training?.user?._id]);
 
     if (!training?._id) {
       return (
@@ -443,6 +492,103 @@ export function ModalAction(props) {
       );
     }
   
+    // Grouped-by-day checklist with type-filter chips — shared by the three range panels.
+    const renderBulkChecklist = (verb) => {
+      if (previewLoading) {
+        return (
+          <Grid container size={12} sx={{ justifyContent: "center" }}>
+            <Typography variant="caption" color="text.secondary">
+              Loading preview...
+            </Typography>
+          </Grid>
+        );
+      }
+      if (!previewWorkouts.length) {
+        return (
+          <Grid container size={12} sx={{ justifyContent: "center" }}>
+            <Typography variant="caption" color="text.secondary">
+              No workouts in this range.
+            </Typography>
+          </Grid>
+        );
+      }
+      const sorted = previewWorkouts
+        .slice()
+        .sort((a, b) => dayjs.utc(a.date).valueOf() - dayjs.utc(b.date).valueOf());
+      const byDay = [];
+      sorted.forEach((w) => {
+        const key = dayjs.utc(w.date).format("YYYY-MM-DD");
+        const last = byDay[byDay.length - 1];
+        if (last && last.key === key) last.workouts.push(w);
+        else byDay.push({ key, workouts: [w] });
+      });
+      const typeCount = (t) => previewWorkouts.filter((w) => typeOf(w) === t).length;
+      return (
+        <>
+          {typesPresent.length > 1 && (
+            <Grid container size={12} sx={{ justifyContent: "center", gap: 0.5, flexWrap: "wrap" }}>
+              {typesPresent.map((t) => (
+                <Chip
+                  key={t}
+                  size="small"
+                  label={`${t} (${typeCount(t)})`}
+                  color={typeOn(t) ? "primary" : "default"}
+                  variant={typeOn(t) ? "filled" : "outlined"}
+                  onClick={() => toggleTypeChip(t)}
+                />
+              ))}
+            </Grid>
+          )}
+          <Grid container size={12} sx={{ justifyContent: "center" }}>
+            <Typography variant="caption" color="text.secondary">
+              {checkedIds.length} of {previewWorkouts.length} workout
+              {previewWorkouts.length === 1 ? "" : "s"} selected
+            </Typography>
+          </Grid>
+          <Box sx={{ maxHeight: 220, overflowY: "auto", width: "100%", pr: 0.5 }}>
+            {byDay.map(({ key, workouts }) => (
+              <Box key={key} sx={{ mb: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
+                  {dayjs.utc(key).format("ddd, MMM D")}
+                  {verb !== "Delete" &&
+                    (targetQueue
+                      ? " → Queue"
+                      : ` → ${dayjs.utc(key).add(previewDeltaDays, "day").format("MMM D")}`)}
+                </Typography>
+                {workouts.map((w) => {
+                  const reason = bulkIneligibleReason(w);
+                  return (
+                    <Stack
+                      key={w._id}
+                      direction="row"
+                      spacing={0.5}
+                      sx={{ alignItems: "center", pl: 0.5 }}
+                    >
+                      <Checkbox
+                        size="small"
+                        sx={{ p: 0.5 }}
+                        checked={isBulkChecked(w)}
+                        disabled={Boolean(reason)}
+                        onChange={() => toggleWorkoutCheck(w)}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{ color: reason ? "text.disabled" : "text.primary", minWidth: 0 }}
+                        noWrap
+                      >
+                        {w.title || "Untitled"} · {typeOf(w)}
+                        {reason ? ` — ${reason}` : ""}
+                      </Typography>
+                    </Stack>
+                  );
+                })}
+              </Box>
+            ))}
+          </Box>
+        </>
+      );
+    };
+
     switch (actionType) {
       case "move":
         return (
@@ -522,43 +668,20 @@ export function ModalAction(props) {
                       Range end auto-fills to the latest workout on/after the start date.
                     </Typography>
                   </Grid>
-                  <Grid container size={12} sx={{ justifyContent: "center" }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {previewLoading
-                        ? "Loading preview..."
-                        : `Preview: ${previewWorkouts.length} workout(s)`}
-                    </Typography>
-                  </Grid>
-                  {!previewLoading && previewWorkouts.length > 0 && (
-                    <Box sx={{ maxHeight: 140, overflowY: "auto", width: "100%" }}>
-                      {previewWorkouts
-                        .slice()
-                        .sort((a, b) => dayjs.utc(a.date).valueOf() - dayjs.utc(b.date).valueOf())
-                        .slice(0, 8)
-                        .map((workout) => (
-                          <Typography variant="caption" key={workout._id} display="block">
-                            {dayjs.utc(workout.date).format("MMM D")} →{" "}
-                            {targetQueue
-                              ? "Queue"
-                              : dayjs.utc(workout.date).add(previewDeltaDays, "day").format("MMM D")}{" "}
-                            - {workout.title || "Untitled"}
-                          </Typography>
-                        ))}
-                      {previewWorkouts.length > 8 && (
-                        <Typography variant="caption" display="block">
-                          +{previewWorkouts.length - 8} more
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
+                  {renderBulkChecklist("Move")}
                 </Grid>
                 <Grid container sx={{ justifyContent: "center" }}>
                   <Button
                     variant="contained"
                     onClick={handleMoveRange}
-                    disabled={!rangeStart || !rangeEnd || (!targetQueue && !rangeTargetDate)}
+                    disabled={
+                      !rangeStart ||
+                      !rangeEnd ||
+                      (!targetQueue && !rangeTargetDate) ||
+                      checkedIds.length === 0
+                    }
                   >
-                    Move Range
+                    Move {checkedIds.length} workout{checkedIds.length === 1 ? "" : "s"}
                   </Button>
                 </Grid>
                 {canUndoBulk && (
@@ -697,35 +820,7 @@ export function ModalAction(props) {
                     Range end auto-fills to the latest workout on/after the start date.
                     </Typography>
                   </Grid>
-                <Grid container size={12} sx={{ justifyContent: "center" }}>
-                  <Typography variant="caption" color="text.secondary">
-                    {previewLoading
-                      ? "Loading preview..."
-                      : `Preview: ${previewWorkouts.length} workout(s)`}
-                  </Typography>
-                </Grid>
-                {!previewLoading && previewWorkouts.length > 0 && (
-                  <Box sx={{ maxHeight: 140, overflowY: "auto", width: "100%" }}>
-                    {previewWorkouts
-                      .slice()
-                      .sort((a, b) => dayjs.utc(a.date).valueOf() - dayjs.utc(b.date).valueOf())
-                      .slice(0, 8)
-                      .map((workout) => (
-                        <Typography variant="caption" key={workout._id} display="block">
-                          {dayjs.utc(workout.date).format("MMM D")} →{" "}
-                          {targetQueue
-                            ? "Queue"
-                            : dayjs.utc(workout.date).add(previewDeltaDays, "day").format("MMM D")}{" "}
-                          - {workout.title || "Untitled"}
-                        </Typography>
-                      ))}
-                    {previewWorkouts.length > 8 && (
-                      <Typography variant="caption" display="block">
-                        +{previewWorkouts.length - 8} more
-                      </Typography>
-                    )}
-                  </Box>
-                )}
+                {renderBulkChecklist("Copy")}
               </Grid>
             )}
 
@@ -787,10 +882,11 @@ export function ModalAction(props) {
                       !copyOption ||
                       !rangeStart ||
                       !rangeEnd ||
-                      (!targetQueue && !rangeTargetDate)
+                      (!targetQueue && !rangeTargetDate) ||
+                      checkedIds.length === 0
                     }
                   >
-                    Copy Range
+                    Copy {checkedIds.length} workout{checkedIds.length === 1 ? "" : "s"}
                   </Button>
                 )}
               </Grid>
@@ -903,40 +999,16 @@ export function ModalAction(props) {
                       after. Range end auto-fills to the latest workout on/after the start date.
                     </Typography>
                   </Grid>
-                  <Grid container size={12} sx={{ justifyContent: "center" }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {previewLoading
-                        ? "Loading preview..."
-                        : `Preview: ${previewWorkouts.length} workout(s) will be deleted`}
-                    </Typography>
-                  </Grid>
-                  {!previewLoading && previewWorkouts.length > 0 && (
-                    <Box sx={{ maxHeight: 140, overflowY: "auto", width: "100%" }}>
-                      {previewWorkouts
-                        .slice()
-                        .sort((a, b) => dayjs.utc(a.date).valueOf() - dayjs.utc(b.date).valueOf())
-                        .slice(0, 8)
-                        .map((workout) => (
-                          <Typography variant="caption" key={workout._id} display="block">
-                            {dayjs.utc(workout.date).format("MMM D")} - {workout.title || "Untitled"}
-                          </Typography>
-                        ))}
-                      {previewWorkouts.length > 8 && (
-                        <Typography variant="caption" display="block">
-                          +{previewWorkouts.length - 8} more
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
+                  {renderBulkChecklist("Delete")}
                 </Grid>
                 <Grid container sx={{ justifyContent: "center" }}>
                   <Button
                     variant="contained"
                     color="error"
                     onClick={handleDeleteRange}
-                    disabled={!rangeStart || !rangeEnd}
+                    disabled={!rangeStart || !rangeEnd || checkedIds.length === 0}
                   >
-                    Delete Range
+                    Delete {checkedIds.length} workout{checkedIds.length === 1 ? "" : "s"}
                   </Button>
                 </Grid>
                 {canUndoBulk && (
