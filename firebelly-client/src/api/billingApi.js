@@ -60,6 +60,14 @@ export const billingApi = {
       body: { batchId },
     }),
 
+  // Completed sessions in a range with no money story yet (no linked invoice, not credit-
+  // charged, no backfill covering the date) — grouped per client. The weekly sweep.
+  unbilledSessions: ({ from, to } = {}) =>
+    apiFetch("/invoices/unbilledSessions", {
+      method: "POST",
+      body: { from, to },
+    }),
+
   updateInvoiceStatus: ({ invoiceId, status }) =>
     apiFetch("/invoices/status", {
       method: "POST",

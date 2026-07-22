@@ -227,6 +227,7 @@ router.post("/invoices", validate(createInvoiceValidate, {}, {}), verifyAccessTo
 router.post("/invoices/logSessions", validate(logSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.bulk_log_sessions);
 router.post("/invoices/logSessions/check", validate(checkLoggedDatesValidate, {}, {}), verifyAccessToken, invoiceController.check_logged_dates);
 router.post("/invoices/logSessions/undo", validate(undoLoggedSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.undo_logged_sessions);
+router.post("/invoices/unbilledSessions", validate(invoiceReportValidate, {}, {}), verifyAccessToken, invoiceController.unbilled_sessions);
 router.post("/invoices/reconcile/preview", validate(reconcilePreviewValidate, {}, {}), verifyAccessToken, invoiceController.reconcile_preview);
 router.post("/invoices/reconcile/commit", validate(reconcileCommitValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_commit);
 router.post("/invoices/reconcile/undo", validate(reconcileUndoValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_undo);

@@ -127,10 +127,28 @@ export default function ImportSessions() {
       .catch(() => setSessionTypes([]));
   }, [dispatch]);
 
-  // Deep-link: /import-sessions?client=<id>
+  // Deep-link: /import-sessions?client=<id>. Optional &dates=YYYY-MM-DD,... (from the
+  // Session History "not yet billed" sweep) pre-fills the rows — no pasting needed.
   useEffect(() => {
     const c = searchParams.get("client");
     if (c) setClientId(c);
+    const datesParam = searchParams.get("dates");
+    if (datesParam) {
+      const dates = [
+        ...new Set(
+          datesParam
+            .split(",")
+            .map((d) => d.trim())
+            .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && dayjs(d).isValid())
+        ),
+      ].sort();
+      if (dates.length) {
+        setPasteText(dates.join("\n"));
+        setMatrix(dates.map((d) => [d]));
+        setRoles(["date"]);
+        setRemovedDates(new Set());
+      }
+    }
   }, [searchParams]);
 
   // Selecting a session type fills its default price — never over a hand-typed one.

@@ -59,6 +59,7 @@ export default function SessionHistory() {
   const [sessionTypes, setSessionTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [unbilled, setUnbilled] = useState(null); // all-clients sweep (no client selected)
 
   const highlightEventId = searchParams.get("event");
 
@@ -145,6 +146,40 @@ export default function SessionHistory() {
         if (!active) return;
         setError(e.message || "Couldn't load sessions.");
         setEvents([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [clientId, range.startISO, range.endISO]);
+
+  // No client selected → the all-clients sweep: completed sessions with no money story yet.
+  useEffect(() => {
+    if (clientId) {
+      setUnbilled(null);
+      return undefined;
+    }
+    let active = true;
+    setLoading(true);
+    setError("");
+    billingApi
+      .unbilledSessions({ from: range.startISO.slice(0, 10), to: range.endISO.slice(0, 10) })
+      .then((d) => {
+        if (!active) return;
+        if (d?.error) {
+          setError(d.error);
+          setUnbilled(null);
+          return;
+        }
+        setUnbilled(d);
+      })
+      .catch((e) => {
+        if (active) {
+          setError(e.message || "Couldn't load unbilled sessions.");
+          setUnbilled(null);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -322,11 +357,89 @@ export default function SessionHistory() {
         </Card>
       </Grid>
 
-      {/* Summary + list */}
+      {/* No client selected: the all-clients "completed but not yet billed" sweep */}
+      {!clientId && (
+        <Grid size={12}>
+          {loading ? (
+            <Stack alignItems="center" sx={{ py: 4 }}>
+              <CircularProgress />
+            </Stack>
+          ) : (
+            <Card variant="outlined">
+              <CardContent>
+                <Stack spacing={1.5}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                    <Typography variant="h6">Not yet billed</Typography>
+                    {unbilled && unbilled.totals.sessions > 0 && (
+                      <>
+                        <Chip
+                          size="small"
+                          color="warning"
+                          label={`${unbilled.totals.sessions} completed session${unbilled.totals.sessions === 1 ? "" : "s"}`}
+                        />
+                        {unbilled.totals.value > 0 && (
+                          <Chip size="small" variant="outlined" label={`≈ $${unbilled.totals.value.toFixed(2)}`} />
+                        )}
+                      </>
+                    )}
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary">
+                    Completed sessions in this range with no invoice, no prepaid-credit charge, and no
+                    logged income — pick a client above for their full history instead.
+                  </Typography>
+                  <Divider />
+                  {!unbilled || unbilled.groups.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                      All caught up — every completed session in this range is accounted for. 🎉
+                    </Typography>
+                  ) : (
+                    <Stack divider={<Divider flexItem />} spacing={0}>
+                      {unbilled.groups.map((g) => (
+                        <Stack
+                          key={g.clientId}
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1}
+                          sx={{ py: 1.25, alignItems: { sm: "center" }, justifyContent: "space-between" }}
+                        >
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {g.clientName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {g.count} session{g.count === 1 ? "" : "s"}
+                              {g.value > 0 ? ` · ≈ $${g.value.toFixed(2)}` : ""} ·{" "}
+                              {g.dates.slice(0, 4).map((d) => dayjs(d).format("MMM D")).join(", ")}
+                              {g.dates.length > 4 ? ` +${g.dates.length - 4} more` : ""}
+                            </Typography>
+                          </Box>
+                          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                            <Button size="small" onClick={() => setClientId(g.clientId)}>
+                              View sessions
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              component={RouterLink}
+                              to={`/import-sessions?client=${g.clientId}&dates=${g.dates.join(",")}`}
+                            >
+                              Log these
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+        </Grid>
+      )}
+
+      {/* Summary + list (a client is selected) */}
+      {clientId && (
       <Grid size={12}>
-        {!clientId ? (
-          <Alert severity="info">Pick a client to see their sessions.</Alert>
-        ) : loading ? (
+        {loading ? (
           <Stack alignItems="center" sx={{ py: 4 }}>
             <CircularProgress />
           </Stack>
@@ -446,6 +559,7 @@ export default function SessionHistory() {
           </Card>
         )}
       </Grid>
+      )}
     </Grid>
   );
 }

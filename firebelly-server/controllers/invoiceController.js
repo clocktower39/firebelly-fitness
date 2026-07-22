@@ -1600,6 +1600,124 @@ const undo_logged_sessions = async (req, res, next) => {
   }
 };
 
+// Which COMPLETED sessions in a range have no money story yet? A session counts as settled
+// when (a) any non-void invoice claims it via the scheduleEventId link, (b) it was paid with
+// prepaid credits (billingStatus CHARGED), or (c) a BACKFILL line covers its calendar date
+// for that client (catches unlinked backfill lines, e.g. ambiguous dates). Everything else
+// completed is unbilled — the weekly sweep that keeps the books from drifting again.
+const unbilled_sessions = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    if (!res.locals.user?.isTrainer) {
+      return res.status(403).json({ error: "Only trainers can run reports." });
+    }
+    const { from, to } = req.body;
+    const trainer = await User.findById(userId).select("timezone").lean();
+    const tz = trainer?.timezone || "UTC";
+    const start = from ? tzDayStart(from, tz) : new Date(0);
+    const end = to ? tzDayEnd(to, tz) : new Date();
+
+    const events = await ScheduleEvent.find({
+      trainerId: userId,
+      eventType: "APPOINTMENT",
+      status: "COMPLETED",
+      clientId: { $ne: null },
+      startDateTime: { $gte: start, $lte: end },
+    })
+      .select("clientId startDateTime priceAmount priceCurrency sessionTypeId billingStatus")
+      .sort({ startDateTime: 1 })
+      .lean();
+    if (!events.length) {
+      return res.json({ tz, groups: [], totals: { sessions: 0, value: 0 } });
+    }
+
+    const dayKey = (dt) => {
+      try {
+        return new Date(dt).toLocaleDateString("en-CA", { timeZone: tz });
+      } catch (e) {
+        return dayjs(dt).format("YYYY-MM-DD");
+      }
+    };
+
+    const eventIds = events.map((e) => e._id);
+    const linkedSet = new Set();
+    const linkedInvoices = await Invoice.find(
+      { trainerId: userId, "lineItems.scheduleEventId": { $in: eventIds }, status: { $ne: "VOID" } },
+      { "lineItems.scheduleEventId": 1 }
+    ).lean();
+    for (const inv of linkedInvoices) {
+      for (const li of inv.lineItems || []) {
+        if (li.scheduleEventId) linkedSet.add(String(li.scheduleEventId));
+      }
+    }
+
+    const clientIds = [...new Set(events.map((e) => String(e.clientId)))];
+    const backfills = await Invoice.find(
+      { trainerId: userId, clientId: { $in: clientIds }, source: "BACKFILL", status: { $ne: "VOID" } },
+      { clientId: 1, "lineItems.sessionDate": 1 }
+    ).lean();
+    const coveredByClient = new Map();
+    for (const inv of backfills) {
+      const key = String(inv.clientId);
+      if (!coveredByClient.has(key)) coveredByClient.set(key, new Set());
+      for (const li of inv.lineItems || []) {
+        if (li.sessionDate) coveredByClient.get(key).add(dayjs(li.sessionDate).format("YYYY-MM-DD"));
+      }
+    }
+
+    const unbilled = events.filter(
+      (e) =>
+        e.billingStatus !== "CHARGED" &&
+        !linkedSet.has(String(e._id)) &&
+        !coveredByClient.get(String(e.clientId))?.has(dayKey(e.startDateTime))
+    );
+
+    const clients = await User.find({ _id: { $in: clientIds } })
+      .select("firstName lastName")
+      .lean();
+    const nameOf = new Map(
+      clients.map((c) => [String(c._id), `${c.firstName || ""} ${c.lastName || ""}`.trim()])
+    );
+
+    const byClient = new Map();
+    for (const e of unbilled) {
+      const key = String(e.clientId);
+      if (!byClient.has(key)) {
+        byClient.set(key, { clientId: key, clientName: nameOf.get(key) || "Client", sessions: [] });
+      }
+      byClient.get(key).sessions.push({
+        eventId: e._id,
+        date: dayKey(e.startDateTime),
+        startDateTime: e.startDateTime,
+        priceAmount: e.priceAmount,
+        priceCurrency: e.priceCurrency || "USD",
+        sessionTypeId: e.sessionTypeId,
+      });
+    }
+    const groups = [...byClient.values()]
+      .map((g) => ({
+        ...g,
+        count: g.sessions.length,
+        dates: [...new Set(g.sessions.map((s) => s.date))].sort(),
+        value: Number(
+          g.sessions.reduce((s, x) => s + (Number.isFinite(Number(x.priceAmount)) ? Number(x.priceAmount) : 0), 0).toFixed(2)
+        ),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return res.json({
+      tz,
+      groups,
+      totals: {
+        sessions: unbilled.length,
+        value: Number(groups.reduce((s, g) => s + g.value, 0).toFixed(2)),
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // ---------------------------------------------------------------------------------------
 // Import → Reconcile → Commit: the self-serve bridge between "a session happened" (rows
 // pasted from a spreadsheet) and BOTH systems — the calendar (create missing / complete
@@ -1994,6 +2112,7 @@ module.exports = {
   bulk_log_sessions,
   check_logged_dates,
   undo_logged_sessions,
+  unbilled_sessions,
   reconcile_preview,
   reconcile_commit,
   reconcile_undo,
