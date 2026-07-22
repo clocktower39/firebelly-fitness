@@ -194,8 +194,16 @@ export default function Schedule() {
   const [shareWeekStartDate, setShareWeekStartDate] = useState("");
   const [shareEvents, setShareEvents] = useState([]);
   const [openTimeSettings, setOpenTimeSettings] = useState(false);
-  const [calendarStartHour, setCalendarStartHour] = useState(WEEK_START_HOUR);
-  const [calendarEndHour, setCalendarEndHour] = useState(WEEK_END_HOUR);
+  // Calendar hour bounds persist like the other scheduler preferences below (zoom, view
+  // mode): whatever the user saves in the hours dialog is their default until changed again.
+  const [calendarStartHour, setCalendarStartHour] = usePersistentSchedulePreference(
+    "schedule.calendarStartHour",
+    WEEK_START_HOUR
+  );
+  const [calendarEndHour, setCalendarEndHour] = usePersistentSchedulePreference(
+    "schedule.calendarEndHour",
+    WEEK_END_HOUR
+  );
   const [draftStartHour, setDraftStartHour] = useState(WEEK_START_HOUR);
   const [draftEndHour, setDraftEndHour] = useState(WEEK_END_HOUR);
   const [calendarScale, setCalendarScale] = usePersistentSchedulePreference(
