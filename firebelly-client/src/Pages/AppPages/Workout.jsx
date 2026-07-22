@@ -634,6 +634,25 @@ export default function Workout({ socket }) {
     });
   }, [dispatch, params._id]);
 
+  // Save-bar docking: the bar floats (sticky) at the viewport bottom while there's content
+  // below, then settles into its natural end-of-page slot when you scroll all the way down.
+  // The sentinel sits just below that slot, so it's only visible once the page is at the
+  // bottom — that's the moment the floating elevation melts away ("swallowed" by the page).
+  const [saveBarDocked, setSaveBarDocked] = useState(false);
+  const saveBarObserver = useRef(null);
+  const saveBarSentinelRef = useCallback((node) => {
+    if (saveBarObserver.current) {
+      saveBarObserver.current.disconnect();
+      saveBarObserver.current = null;
+    }
+    if (node && typeof IntersectionObserver !== "undefined") {
+      saveBarObserver.current = new IntersectionObserver(([entry]) =>
+        setSaveBarDocked(entry.isIntersecting)
+      );
+      saveBarObserver.current.observe(node);
+    }
+  }, []);
+
   // Pre-fetch the next workout (for the "Next workout" button) + reset to the first step
   // whenever we move to a different workout.
   useEffect(() => {
@@ -686,7 +705,9 @@ export default function Workout({ socket }) {
                   justifyContent: "flex-start",
                   minHeight: "100%",
                   paddingTop: "15px",
-                  paddingBottom: "84px",
+                  // No fixed-bar compensation needed: the save bar is sticky and occupies
+                  // real space in the flow right below this content.
+                  paddingBottom: "8px",
                 }}
               >
                 <WorkoutHeader
@@ -784,18 +805,37 @@ export default function Workout({ socket }) {
               </Grid>
               <Box
                 sx={{
-                  position: "fixed",
-                  left: 0,
-                  right: 0,
+                  // Sticky shell (invisible): at full scroll the strip settles below the
+                  // content so the bottom border is fully visible.
+                  position: "sticky",
                   bottom: 0,
+                  width: "100%",
                   zIndex: (theme) => theme.zIndex.appBar,
-                  backgroundColor: "background.default",
-                  boxShadow: "0 -4px 12px -6px rgba(0,0,0,0.35)",
                   px: 2,
                   py: 1,
                 }}
               >
-                <Box sx={{ maxWidth: 900, mx: "auto", display: "flex", gap: 1 }}>
+                <Box
+                  sx={{
+                    maxWidth: 900,
+                    mx: "auto",
+                    display: "flex",
+                    gap: 1,
+                    // Frosted-glass strip while floating: dark translucent tint + backdrop
+                    // blur, rounded to the same theme radius as the buttons. On dock, the
+                    // glass fades to nothing — padding stays constant so nothing shifts.
+                    p: 0.75,
+                    borderRadius: 1,
+                    backgroundColor: saveBarDocked ? "transparent" : "rgba(0, 0, 0, 0.35)",
+                    backdropFilter: saveBarDocked ? "none" : "blur(8px)",
+                    WebkitBackdropFilter: saveBarDocked ? "none" : "blur(8px)",
+                    boxShadow: saveBarDocked ? "none" : "0 6px 16px rgba(0, 0, 0, 0.35)",
+                    border: "1px solid",
+                    borderColor: saveBarDocked ? "transparent" : "rgba(255, 255, 255, 0.12)",
+                    transition:
+                      "background-color 300ms ease, box-shadow 300ms ease, border-color 300ms ease, backdrop-filter 300ms ease",
+                  }}
+                >
                   <Button
                     variant="contained"
                     onClick={save}
@@ -818,6 +858,8 @@ export default function Workout({ socket }) {
                   )}
                 </Box>
               </Box>
+              {/* Dock sentinel: only visible once the page is scrolled to the very bottom. */}
+              <Box ref={saveBarSentinelRef} aria-hidden sx={{ height: "1px" }} />
 
               {nextWorkout && activeStep >= localTraining.length && (
                 <Grid container size={12} sx={{ paddingBottom: "5px" }}>
