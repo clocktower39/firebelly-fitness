@@ -1,10 +1,11 @@
 import { apiFetch } from "./client";
 
 export const scheduleApi = {
-  getRange: (payload) =>
+  getRange: (payload, accessToken = null) =>
     apiFetch("/schedule/range", {
       method: "POST",
       body: payload,
+      accessToken,
     }),
 
   // Get (or rotate) the caller's secret iCalendar subscribe-feed token.

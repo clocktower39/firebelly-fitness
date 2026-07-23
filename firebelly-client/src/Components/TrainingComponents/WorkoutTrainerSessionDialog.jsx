@@ -12,8 +12,11 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
+  Radio,
+  RadioGroup,
   Select,
   Stack,
   TextField,
@@ -63,6 +66,12 @@ export default function WorkoutTrainerSessionDialog({
   const [eventLoading, setEventLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [existingEvent, setExistingEvent] = useState(null);
+  // The client's OTHER appointments on the workout's day — offered as attach targets so
+  // marking a workout as a session plugs into the already-booked slot (e.g. 4:30pm)
+  // instead of inventing a duplicate at the default time.
+  const [dayEvents, setDayEvents] = useState([]);
+  const [dayEventsLoading, setDayEventsLoading] = useState(false);
+  const [attachChoice, setAttachChoice] = useState("new");
   const [startTime, setStartTime] = useState("09:00");
   const [durationMinutes, setDurationMinutes] = useState("60");
   const [sessionTypeId, setSessionTypeId] = useState("");
@@ -82,6 +91,8 @@ export default function WorkoutTrainerSessionDialog({
     setEventStatus("");
     setSessionTypesStatus("");
     setExistingEvent(null);
+    setDayEvents([]);
+    setAttachChoice("new");
     setSelectedWorkoutId(initialWorkoutId || workouts[0]?._id || "");
   }, [initialWorkoutId, open, workouts]);
 
@@ -154,6 +165,64 @@ export default function WorkoutTrainerSessionDialog({
   }, [open, selectedWorkout?._id, trainerAccessToken]);
 
   useEffect(() => {
+    if (
+      !open ||
+      !selectedWorkout?._id ||
+      !trainerAccessToken ||
+      eventLoading ||
+      existingEvent?._id
+    ) {
+      setDayEvents([]);
+      return undefined;
+    }
+    const clientId = getWorkoutUserId(selectedWorkout);
+    const dateStr = selectedWorkout?.date
+      ? dayjs.utc(selectedWorkout.date).format("YYYY-MM-DD")
+      : null;
+    if (!clientId || !dateStr) {
+      setDayEvents([]);
+      return undefined;
+    }
+    let active = true;
+    setDayEventsLoading(true);
+    scheduleApi
+      .getRange(
+        {
+          clientId,
+          startDate: dayjs.utc(dateStr).subtract(1, "day").toISOString(),
+          endDate: dayjs.utc(dateStr).add(2, "day").toISOString(),
+          includeAvailability: false,
+        },
+        trainerAccessToken
+      )
+      .then((data) => {
+        if (!active) return;
+        const events = (data?.events || [])
+          .filter(
+            (ev) =>
+              ev.eventType === "APPOINTMENT" &&
+              String(ev.clientId) === String(clientId) &&
+              ev.status !== "CANCELLED" &&
+              dayjs(ev.startDateTime).format("YYYY-MM-DD") === dateStr
+          )
+          .sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
+        setDayEvents(events);
+        // Default to attaching to the first open slot — creating a new one is the fallback.
+        const firstFree = events.find((ev) => !ev.workoutId);
+        setAttachChoice(firstFree ? firstFree._id : "new");
+      })
+      .catch(() => {
+        if (active) setDayEvents([]);
+      })
+      .finally(() => {
+        if (active) setDayEventsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, selectedWorkout, trainerAccessToken, eventLoading, existingEvent?._id]);
+
+  useEffect(() => {
     if (!open || !selectedWorkout) return;
 
     if (existingEvent?._id) {
@@ -181,8 +250,41 @@ export default function WorkoutTrainerSessionDialog({
     }
   };
 
+  const attachTarget =
+    !existingEvent?._id && attachChoice !== "new"
+      ? dayEvents.find((ev) => ev._id === attachChoice) || null
+      : null;
+
   const handleSave = async () => {
     if (!selectedWorkout?._id || !trainerAccessToken) return;
+
+    // Attach to an existing appointment: the scheduler keeps its booked time — we only
+    // link the workout (and complete the session if the workout is already done).
+    if (attachTarget) {
+      setSaving(true);
+      setEventStatus("");
+      const result = await dispatch(
+        updateScheduleEvent(
+          attachTarget._id,
+          {
+            workoutId: selectedWorkout._id,
+            ...(selectedWorkout.complete ? { status: "COMPLETED" } : {}),
+          },
+          trainerAccessToken
+        )
+      );
+      setSaving(false);
+      if (result?.error) {
+        setEventStatus(result.error);
+        return;
+      }
+      if (result?.event) {
+        setExistingEvent(result.event);
+        onSaved && onSaved(result.event, selectedWorkout);
+        onClose();
+      }
+      return;
+    }
 
     const clientId = getWorkoutUserId(selectedWorkout);
     const workoutDate = selectedWorkout?.date
@@ -281,12 +383,65 @@ export default function WorkoutTrainerSessionDialog({
               </Select>
             </FormControl>
           )}
-          {selectedWorkout && (
-            <Alert severity="info" variant="outlined">
-              This will {existingEvent ? "update" : "create"} a booked appointment in the scheduler for{" "}
-              <strong>{getWorkoutDateLabel(selectedWorkout)}</strong>.
+          {!existingEvent && dayEvents.length > 0 && (
+            <Alert severity="warning" variant="outlined">
+              {typeof selectedWorkout?.user === "object" && selectedWorkout.user.firstName
+                ? selectedWorkout.user.firstName
+                : "This client"}{" "}
+              already has {dayEvents.length === 1 ? "a session" : `${dayEvents.length} sessions`} on
+              this day. Attach this workout to it instead of creating a duplicate:
             </Alert>
           )}
+          {!existingEvent && dayEvents.length > 0 && (
+            <FormControl>
+              <RadioGroup
+                value={attachChoice}
+                onChange={(event) => setAttachChoice(event.target.value)}
+              >
+                {dayEvents.map((ev) => {
+                  const taken = Boolean(ev.workoutId);
+                  const stId =
+                    typeof ev.sessionTypeId === "object" ? ev.sessionTypeId?._id : ev.sessionTypeId;
+                  const typeName = sessionTypes.find((t) => String(t._id) === String(stId))?.name;
+                  return (
+                    <FormControlLabel
+                      key={ev._id}
+                      value={ev._id}
+                      control={<Radio size="small" />}
+                      disabled={taken}
+                      label={`${dayjs(ev.startDateTime).format("h:mm A")} – ${dayjs(
+                        ev.endDateTime
+                      ).format("h:mm A")}${typeName ? ` · ${typeName}` : ""} · ${
+                        ev.status === "COMPLETED" ? "Completed" : "Booked"
+                      }${taken ? " — another workout is attached" : ""}`}
+                    />
+                  );
+                })}
+                <FormControlLabel
+                  value="new"
+                  control={<Radio size="small" />}
+                  label="Create a new session at a different time"
+                />
+              </RadioGroup>
+            </FormControl>
+          )}
+          {selectedWorkout && (
+            <Alert severity="info" variant="outlined">
+              {attachTarget ? (
+                <>
+                  This workout will be plugged into the existing{" "}
+                  <strong>{dayjs(attachTarget.startDateTime).format("h:mm A")}</strong> session — the
+                  scheduler keeps its booked time.
+                </>
+              ) : (
+                <>
+                  This will {existingEvent ? "update" : "create"} a booked appointment in the
+                  scheduler for <strong>{getWorkoutDateLabel(selectedWorkout)}</strong>.
+                </>
+              )}
+            </Alert>
+          )}
+          {!attachTarget && (
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <TextField
               label="Workout Date"
@@ -304,6 +459,8 @@ export default function WorkoutTrainerSessionDialog({
               disabled={!canManageTrainerSessions || eventLoading}
             />
           </Stack>
+          )}
+          {!attachTarget && (
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <FormControl fullWidth>
               <InputLabel id="trainer-session-type-select-label">Session Type</InputLabel>
@@ -334,6 +491,7 @@ export default function WorkoutTrainerSessionDialog({
               disabled={!canManageTrainerSessions || eventLoading}
             />
           </Stack>
+          )}
           {existingEvent && (
             <Typography variant="caption" color="text.secondary">
               Scheduler time: {dayjs(existingEvent.startDateTime).format("h:mm A")} -{" "}
@@ -354,9 +512,19 @@ export default function WorkoutTrainerSessionDialog({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={!selectedWorkout?._id || saving || eventLoading || !canManageTrainerSessions}
+          disabled={
+            !selectedWorkout?._id ||
+            saving ||
+            eventLoading ||
+            dayEventsLoading ||
+            !canManageTrainerSessions
+          }
         >
-          {existingEvent ? "Update Session" : "Save Session"}
+          {attachTarget
+            ? `Attach to ${dayjs(attachTarget.startDateTime).format("h:mm A")} session`
+            : existingEvent
+              ? "Update Session"
+              : "Save Session"}
         </Button>
       </DialogActions>
     </Dialog>
