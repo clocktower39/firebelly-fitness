@@ -99,6 +99,8 @@ export default function Invoices() {
   const [createOpen, setCreateOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("ALL");
   const [clientFilter, setClientFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
   const [rowMenuInvoice, setRowMenuInvoice] = useState(null);
   const [detailInvoice, setDetailInvoice] = useState(null);
@@ -517,12 +519,30 @@ export default function Invoices() {
     return { outstanding, overdue, collectedYTD };
   })();
 
-  const filteredInvoices = invoiceList.filter((inv) => {
-    if (clientFilter && String(inv.clientId) !== String(clientFilter)) return false;
-    if (historyFilter === "ALL") return true;
-    if (historyFilter === "REQUESTS") return isRequest(inv);
-    return inv.status === historyFilter;
-  });
+  const filteredInvoices = invoiceList
+    .filter((inv) => {
+      if (clientFilter && String(inv.clientId) !== String(clientFilter)) return false;
+      if (historyFilter === "REQUESTS") {
+        if (!isRequest(inv)) return false;
+      } else if (historyFilter !== "ALL" && inv.status !== historyFilter) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const hay = [inv.invoiceNumber, inv.billToName, inv.status, String(inv.total ?? "")]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "oldest") return new Date(a.issuedAt) - new Date(b.issuedAt);
+      if (sortBy === "amountHigh") return (b.total || 0) - (a.total || 0);
+      if (sortBy === "amountLow") return (a.total || 0) - (b.total || 0);
+      if (sortBy === "balance") return (b.balanceDue || 0) - (a.balanceDue || 0);
+      return new Date(b.issuedAt) - new Date(a.issuedAt); // newest first
+    });
 
   const handleDownloadPdf = async (invoice) => {
     try {
@@ -663,8 +683,31 @@ export default function Invoices() {
             <Stack
               direction={{ xs: "column", sm: "row" }}
               spacing={1.5}
-              sx={{ alignItems: { sm: "center" } }}
+              useFlexGap
+              sx={{ alignItems: { sm: "center" }, flexWrap: "wrap" }}
             >
+              <TextField
+                size="small"
+                label="Search"
+                placeholder="Number, client, amount…"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                sx={{ minWidth: 190, flexGrow: 1 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Sort</InputLabel>
+                <Select
+                  label="Sort"
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value)}
+                >
+                  <MenuItem value="newest">Newest first</MenuItem>
+                  <MenuItem value="oldest">Oldest first</MenuItem>
+                  <MenuItem value="amountHigh">Amount: high to low</MenuItem>
+                  <MenuItem value="amountLow">Amount: low to high</MenuItem>
+                  <MenuItem value="balance">Balance due first</MenuItem>
+                </Select>
+              </FormControl>
               <FormControl size="small" sx={{ minWidth: 170 }}>
                 <InputLabel>Show</InputLabel>
                 <Select
@@ -800,7 +843,9 @@ export default function Invoices() {
                 </Stack>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                   <TextField
-                    label="Invoice # (optional)"
+                    label="Invoice #"
+                    placeholder="Auto-generated"
+                    helperText="Leave blank — a number like INV-20260723-A1B2C is assigned automatically"
                     value={invoiceNumber}
                     onChange={(event) => setInvoiceNumber(event.target.value)}
                     fullWidth
