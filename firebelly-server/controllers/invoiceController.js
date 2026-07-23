@@ -1315,6 +1315,31 @@ const send_reminder = async (req, res, next) => {
   }
 };
 
+// Hard double-billing guard: refuse to save an invoice claiming an appointment that any
+// other non-void invoice already claims via lineItems.scheduleEventId. This is the write-
+// time backstop behind the advisory checks (dialog dup-warning, reconcile re-validation).
+// A physical partial-unique index can NOT enforce this: invoices mixing linked + unlinked
+// lines (e.g. a block with prepaid future sessions) collide on the null index keys —
+// verified empirically against MongoDB. createBackfillInvoice is the only path that writes
+// links (the standard create_invoice Joi schema doesn't accept scheduleEventId), so this
+// one call site covers every writer.
+const assertEventsUnclaimed = async ({ trainerId, lines }) => {
+  const ids = (lines || []).map((l) => l.scheduleEventId).filter(Boolean);
+  if (!ids.length) return;
+  const clash = await Invoice.findOne({
+    trainerId,
+    status: { $ne: "VOID" },
+    "lineItems.scheduleEventId": { $in: ids },
+  })
+    .select("invoiceNumber")
+    .lean();
+  if (clash) {
+    throw new Error(
+      `A session in this batch is already billed on invoice ${clash.invoiceNumber} — it can't be billed twice.`
+    );
+  }
+};
+
 // Build + save ONE income-only BACKFILL invoice from dated line specs. Shared by
 // bulk_log_sessions (Log Sessions dialog) and reconcile_commit (Import→Reconcile→Commit):
 // same guardrails (source:BACKFILL + batch id, CUSTOM lines that never touch the credit
@@ -1334,6 +1359,7 @@ const createBackfillInvoice = async ({
   issuedAt,
   payment,
 }) => {
+  await assertEventsUnclaimed({ trainerId: userId, lines });
   const lineItems = normalizeLineItems(
     lines.map((l) => ({
       itemType: "CUSTOM", // income only — never touches the session-credit ledger
