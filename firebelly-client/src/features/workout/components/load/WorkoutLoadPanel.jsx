@@ -2,12 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Box, Chip, Grid, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import {
+  EmojiEvents as EmojiEventsIcon,
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
   TrendingUp as TrendingUpIcon,
 } from "@mui/icons-material";
 import { workoutApi } from "../../../../api/workoutApi";
-import { computeTrainingLoad, computeWorkoutLoad, formatVolume } from "../../utils/trainingLoad";
+import {
+  computeTrainingLoad,
+  computeWorkoutLoad,
+  detectSetRecords,
+  formatVolume,
+} from "../../utils/trainingLoad";
+import { formatWeightWithUnit } from "../../../../utils/weightUnits";
 
 const isoDay = (value) => String(value instanceof Date ? value.toISOString() : value || "").slice(0, 10);
 
@@ -23,8 +30,23 @@ const formatDay = (value) => {
 export default function WorkoutLoadPanel({ localTraining, workoutDoc, workoutUser, weightUnit }) {
   const currentUser = useSelector((state) => state.user);
   const [previous, setPrevious] = useState(null);
+  const [records, setRecords] = useState(null);
 
   const load = useMemo(() => computeTrainingLoad(localTraining), [localTraining]);
+
+  // Stable key of the exercises in the workout, so the records fetch reruns only when the
+  // exercise set changes — not on every logged rep.
+  const exerciseIdsKey = useMemo(() => {
+    const ids = new Set();
+    (localTraining || []).forEach((circuit) =>
+      (Array.isArray(circuit) ? circuit : []).forEach((entry) => {
+        if (!entry || entry.isWarmup) return;
+        const id = String(entry.exercise?._id || entry.exercise || "");
+        if (id) ids.add(id);
+      })
+    );
+    return [...ids].sort().join(",");
+  }, [localTraining]);
 
   const workoutId = workoutDoc?._id;
   const workoutDate = isoDay(workoutDoc?.date);
@@ -77,6 +99,36 @@ export default function WorkoutLoadPanel({ localTraining, workoutDoc, workoutUse
       cancelled = true;
     };
   }, [workoutId, workoutDate]);
+
+  // Historical bests for PR badges — bests are from strictly before this workout's date,
+  // so reopening an old workout still shows the records it set at the time.
+  const ownerId = workoutUser?._id ? String(workoutUser._id) : null;
+  useEffect(() => {
+    setRecords(null);
+    if (!workoutId || !workoutDate || !exerciseIdsKey || workoutDoc?.isTemplate) return undefined;
+
+    let cancelled = false;
+    workoutApi
+      .getExerciseRecords({
+        user: ownerId || undefined,
+        exerciseIds: exerciseIdsKey.split(","),
+        beforeDate: workoutDate,
+        excludeWorkoutId: workoutId,
+      })
+      .then((res) => {
+        if (!cancelled && res && !res.error) setRecords(res.records || {});
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workoutId, workoutDate, exerciseIdsKey, ownerId, workoutDoc?.isTemplate]);
+
+  const prs = useMemo(
+    () => (records ? detectSetRecords(localTraining, records) : []),
+    [localTraining, records]
+  );
 
   const hasAnything = load.volume > 0 || load.hardSets > 0 || load.planned.volume > 0 || load.planned.hardSets > 0;
   if (!hasAnything) return null;
@@ -137,6 +189,43 @@ export default function WorkoutLoadPanel({ localTraining, workoutDoc, workoutUse
           <Typography variant="caption" color="text.secondary">
             {setsPlanLine}
           </Typography>
+        </Grid>
+      )}
+      {prs.length > 0 && (
+        <Grid container size={12} sx={{ gap: 0.75, alignItems: "center" }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", width: "100%" }}>
+            <EmojiEventsIcon fontSize="small" sx={{ color: "#f59e0b" }} />
+            <Typography variant="body2">
+              New record{prs.length === 1 ? "" : "s"}!
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: "6px" }}>
+            {prs.map((pr) => {
+              const labels = {
+                weight: `${pr.title} · ${formatWeightWithUnit(pr.value, weightUnit)}`,
+                e1rm: `${pr.title} · est 1RM ${formatWeightWithUnit(pr.value, weightUnit, 0)}`,
+                reps: `${pr.title} · ${pr.value} reps`,
+                duration: `${pr.title} · ${pr.value}s`,
+              };
+              const prevLabels = {
+                weight: `Heaviest set yet — previous best ${formatWeightWithUnit(pr.prev, weightUnit)}.`,
+                e1rm: `Best estimated 1RM yet — previous ${formatWeightWithUnit(pr.prev, weightUnit, 0)}.`,
+                reps: `Most reps in a set — previous best ${pr.prev}.`,
+                duration: `Longest hold — previous best ${pr.prev}s.`,
+              };
+              return (
+                <Tooltip key={`${pr.exerciseId}-${pr.type}`} title={prevLabels[pr.type]}>
+                  <Chip
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    icon={<EmojiEventsIcon />}
+                    label={labels[pr.type]}
+                  />
+                </Tooltip>
+              );
+            })}
+          </Stack>
         </Grid>
       )}
       {delta && (

@@ -201,6 +201,64 @@ export const summarizeTrainingLoad = (workouts, { now = new Date(), weeks = 12 }
   };
 };
 
+// PR-badge detection: compare this workout's logged sets against historical bests from
+// /exerciseRecords. A badge requires prior history in that dimension — a first-ever
+// exercise sets no "records" (deliberate: everything being a PR on day one is noise).
+export const detectSetRecords = (training = [], recordsByExercise = {}) => {
+  const bestHere = new Map();
+  (training || []).forEach((circuit) =>
+    (Array.isArray(circuit) ? circuit : []).forEach((entry) => {
+      if (!entry || entry.isWarmup) return;
+      const exerciseId = String(entry.exercise?._id || entry.exercise || "");
+      if (!exerciseId || !recordsByExercise[exerciseId]) return;
+      const agg = bestHere.get(exerciseId) || {
+        exerciseId,
+        title: entry.exercise?.exerciseTitle || "Exercise",
+        maxWeight: 0,
+        maxEstOneRepMax: 0,
+        maxRepsUnweighted: 0,
+        maxSeconds: 0,
+      };
+      const reps = Array.isArray(entry.achieved?.reps) ? entry.achieved.reps : [];
+      const weights = Array.isArray(entry.achieved?.weight) ? entry.achieved.weight : [];
+      const seconds = Array.isArray(entry.achieved?.seconds) ? entry.achieved.seconds : [];
+      const setCount = Math.max(reps.length, seconds.length);
+      for (let i = 0; i < setCount; i += 1) {
+        const r = num(reps[i]);
+        const w = num(weights[i]);
+        const s = num(seconds[i]);
+        if (r > 0 && w > 0) {
+          agg.maxWeight = Math.max(agg.maxWeight, w);
+          agg.maxEstOneRepMax = Math.max(agg.maxEstOneRepMax, w * (1 + r / 30)); // Epley
+        }
+        if (r > 0 && w === 0) agg.maxRepsUnweighted = Math.max(agg.maxRepsUnweighted, r);
+        if (s > 0) agg.maxSeconds = Math.max(agg.maxSeconds, s);
+      }
+      bestHere.set(exerciseId, agg);
+    })
+  );
+
+  const prs = [];
+  bestHere.forEach((agg) => {
+    const rec = recordsByExercise[agg.exerciseId] || {};
+    const base = { exerciseId: agg.exerciseId, title: agg.title };
+    if (rec.maxWeight > 0 && agg.maxWeight > rec.maxWeight) {
+      prs.push({ ...base, type: "weight", value: agg.maxWeight, prev: rec.maxWeight });
+    }
+    // +0.5 lb guard so float noise from the Epley product never mints a "record".
+    if (rec.maxEstOneRepMax > 0 && agg.maxEstOneRepMax > rec.maxEstOneRepMax + 0.5) {
+      prs.push({ ...base, type: "e1rm", value: agg.maxEstOneRepMax, prev: rec.maxEstOneRepMax });
+    }
+    if (rec.maxRepsUnweighted > 0 && agg.maxRepsUnweighted > rec.maxRepsUnweighted) {
+      prs.push({ ...base, type: "reps", value: agg.maxRepsUnweighted, prev: rec.maxRepsUnweighted });
+    }
+    if (rec.maxSeconds > 0 && agg.maxSeconds > rec.maxSeconds) {
+      prs.push({ ...base, type: "duration", value: agg.maxSeconds, prev: rec.maxSeconds });
+    }
+  });
+  return prs;
+};
+
 // "12,450 lb" in the viewer's unit, from stored lbs.
 export const formatVolume = (volumeLbs, unit = "lbs") => {
   const converted = Number(fromStoredLbs(volumeLbs, unit)) || 0;

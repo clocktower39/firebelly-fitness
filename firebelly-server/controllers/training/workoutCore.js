@@ -672,6 +672,83 @@ const get_exercise_progress_summary = async (req, res, next) => {
   }
 };
 
+// Historical per-exercise bests for PR-badge detection: heaviest set weight, best estimated
+// 1RM (Epley, matching programGenerator), most reps in an unweighted set, longest hold.
+// Scoped to workouts strictly BEFORE `beforeDate` and excluding `excludeWorkoutId`, so the
+// workout being edited never competes with itself and an old workout still shows the records
+// it set at the time. Warm-ups excluded. Body { user } targets self or a client
+// (relationship-gated), matching get_exercise_progress_summary.
+const get_exercise_records = async (req, res, next) => {
+  try {
+    const { user, exerciseIds, beforeDate, excludeWorkoutId } = req.body || {};
+    const targetUserId = (typeof user === "object" ? user?._id : user) || res.locals.user._id;
+    if (!mongoose.Types.ObjectId.isValid(String(targetUserId))) {
+      return res.status(400).json({ error: "A valid user is required." });
+    }
+    const relationship = await checkClientRelationship(res.locals.user._id, targetUserId);
+    const canView = String(res.locals.user._id) === String(targetUserId) || relationship?.accepted;
+    if (!canView) return res.status(403).json({ error: "Restricted" });
+
+    const ids = (Array.isArray(exerciseIds) ? exerciseIds : [])
+      .map((id) => String(id))
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (!ids.length) return res.json({ records: {} });
+
+    const query = {
+      user: targetUserId,
+      isTemplate: { $ne: true },
+      training: {
+        $elemMatch: {
+          $elemMatch: { exercise: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) } },
+        },
+      },
+    };
+    if (beforeDate) query.date = { $lt: new Date(beforeDate) };
+    if (excludeWorkoutId && mongoose.Types.ObjectId.isValid(String(excludeWorkoutId))) {
+      query._id = { $ne: excludeWorkoutId };
+    }
+
+    const workouts = await Training.find(query).select("date training").lean();
+    const wanted = new Set(ids);
+    const records = {};
+    workouts.forEach((workout) => {
+      workout.training?.forEach((circuit) => {
+        circuit?.forEach((item) => {
+          if (!item || item.isWarmup) return;
+          const exerciseId = String(item.exercise?._id || item.exercise || "");
+          if (!wanted.has(exerciseId)) return;
+          const rec =
+            records[exerciseId] ||
+            (records[exerciseId] = {
+              maxWeight: 0,
+              maxEstOneRepMax: 0,
+              maxRepsUnweighted: 0,
+              maxSeconds: 0,
+            });
+          const reps = Array.isArray(item.achieved?.reps) ? item.achieved.reps : [];
+          const weights = Array.isArray(item.achieved?.weight) ? item.achieved.weight : [];
+          const seconds = Array.isArray(item.achieved?.seconds) ? item.achieved.seconds : [];
+          const setCount = Math.max(reps.length, seconds.length);
+          for (let i = 0; i < setCount; i += 1) {
+            const r = Number(reps[i]) || 0;
+            const w = Number(weights[i]) || 0;
+            const s = Number(seconds[i]) || 0;
+            if (r > 0 && w > 0) {
+              rec.maxWeight = Math.max(rec.maxWeight, w);
+              rec.maxEstOneRepMax = Math.max(rec.maxEstOneRepMax, w * (1 + r / 30)); // Epley
+            }
+            if (r > 0 && w === 0) rec.maxRepsUnweighted = Math.max(rec.maxRepsUnweighted, r);
+            if (s > 0) rec.maxSeconds = Math.max(rec.maxSeconds, s);
+          }
+        });
+      });
+    });
+    return res.json({ records });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // Preferred default sport for a NEW Sports workout: the user's MOST-USED favorite sport. Ties break
 // by the order the sports sit in the user's favorites (first favorite wins). If they have favorites
 // but haven't logged any yet, the first favorite; if no favorites, their most-used sport overall;
@@ -732,5 +809,6 @@ module.exports = {
   get_exercise_list,
   get_exercise_history,
   get_exercise_progress_summary,
+  get_exercise_records,
   get_sports_default,
 };

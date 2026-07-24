@@ -25,6 +25,13 @@ export const workoutApi = {
       body: { rangeStart, rangeEnd, client, filters },
     }),
 
+  // Historical per-exercise bests for PR-badge detection (see get_exercise_records).
+  getExerciseRecords: ({ user, exerciseIds, beforeDate, excludeWorkoutId }) =>
+    apiFetch("/exerciseRecords", {
+      method: "POST",
+      body: { user, exerciseIds, beforeDate, excludeWorkoutId },
+    }),
+
   getWorkoutsByMonth: ({ date, client }) =>
     apiFetch("/workoutMonth", {
       method: "POST",
