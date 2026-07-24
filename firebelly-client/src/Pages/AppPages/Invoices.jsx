@@ -292,6 +292,17 @@ export default function Invoices() {
           const sessionType = sessionTypeLookup.get(value);
           if (sessionType) {
             next.sessionCredits = String(sessionType.creditsRequired || 1);
+            // Pre-fill description/price from the catalog, but never clobber
+            // something the trainer typed themselves.
+            const prevType = sessionTypeLookup.get(item.sessionTypeId);
+            const desc = String(item.description || "").trim();
+            if (!desc || desc === prevType?.name) {
+              next.description = sessionType.name;
+            }
+            const price = Number(item.unitPrice);
+            if (!price || price === Number(prevType?.defaultPrice)) {
+              next.unitPrice = String(sessionType.defaultPrice ?? "");
+            }
           }
         }
         return next;
@@ -321,20 +332,28 @@ export default function Invoices() {
   };
 
   const handleCreateInvoice = async () => {
-    if (!targetId) return;
-    const normalizedLineItems = lineItems
-      .map((item) => ({
-        description: String(item.description || "").trim(),
+    if (!targetId) {
+      setError(billToType === "CLIENT" ? "Choose a client to bill." : "Choose a group to bill.");
+      return;
+    }
+    const normalizedLineItems = lineItems.map((item) => {
+      const sessionType =
+        item.itemType === "SESSION" ? sessionTypeLookup.get(item.sessionTypeId) : null;
+      return {
+        // Session rows fall back to the session type's name so a blank
+        // description never blocks (or silently drops) the row.
+        description: String(item.description || "").trim() || sessionType?.name || "",
         quantity: Math.max(1, Number(item.quantity) || 1),
         unitPrice: Number(item.unitPrice) || 0,
         sessionCredits: item.itemType === "SESSION" ? Number(item.sessionCredits) || 0 : 0,
         itemType: item.itemType || "CUSTOM",
         sessionTypeId: item.itemType === "SESSION" ? item.sessionTypeId || null : null,
-      }))
-      .filter((item) => item.description);
+      };
+    });
 
-    if (normalizedLineItems.length === 0) {
-      setError("Add at least one line item with a description.");
+    const missingDescription = normalizedLineItems.findIndex((item) => !item.description);
+    if (missingDescription !== -1) {
+      setError(`Line item ${missingDescription + 1} needs a description.`);
       return;
     }
 
@@ -423,6 +442,7 @@ export default function Invoices() {
   // Open the detail dialog and prime the payment form (amount defaults to the balance).
   const openDetail = (invoice) => {
     setDetailInvoice(invoice);
+    setError("");
     setRefundMode(false);
     setRefundReason("");
     setPayMethod("Cash");
@@ -568,6 +588,7 @@ export default function Invoices() {
     setEmailInvoice(invoice);
     setEmailRecipient(invoice.billToEmail || "");
     setEmailMessage("");
+    setError("");
     setEmailDialogOpen(true);
   };
 
@@ -1051,6 +1072,7 @@ export default function Invoices() {
                   </CardContent>
                 </Card>
 
+                {error && <Alert severity="error">{error}</Alert>}
               </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -1538,6 +1560,7 @@ export default function Invoices() {
                     Terms: {detailInvoice.terms}
                   </Typography>
                 )}
+                {error && <Alert severity="error">{error}</Alert>}
               </Stack>
             </DialogContent>
             <DialogActions>
@@ -1578,6 +1601,7 @@ export default function Invoices() {
               multiline
               minRows={3}
             />
+            {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
