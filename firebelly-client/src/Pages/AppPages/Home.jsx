@@ -8,6 +8,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 import Loading from "../../Components/Loading";
 import DailyCheckinCard from "../../Components/DailyCheckinCard";
 import CardioSummaryCard from "../../features/workout/components/cardio/CardioSummaryCard";
+import LoadSummaryCard from "../../features/workout/components/load/LoadSummaryCard";
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
@@ -287,6 +288,7 @@ function Home() {
       />
     ) : null,
     cardio: <CardioSummaryCard client={client} />,
+    load: <LoadSummaryCard client={client} />,
     coverage:
       user.isTrainer && !client ? (
         <WeeklyClientWorkoutTracker

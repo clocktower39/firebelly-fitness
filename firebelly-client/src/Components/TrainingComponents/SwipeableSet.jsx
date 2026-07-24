@@ -38,6 +38,7 @@ import {
 import SwipeableViewsModule from "react-swipeable-views";
 import Exercise from "./Exercise";
 import CircuitFeedback from "./CircuitFeedback";
+import WorkoutLoadPanel from "../../features/workout/components/load/WorkoutLoadPanel";
 import { warmupTemplateApi } from "../../api/warmupTemplateApi";
 import { ExerciseListAutocomplete } from "../../features/workout/components/AddExercisesDialog";
 import dayjs from "dayjs";
@@ -75,6 +76,7 @@ function SwipeableSet(props) {
     weightUnit,
     onToggleWeightUnit,
     allowFeedback,
+    workoutDoc,
   } = props;
 
   const [heightToggle, setHeightToggle] = useState(true);
@@ -316,6 +318,12 @@ function SwipeableSet(props) {
         ))}
         <Box sx={{ padding: "25px 0" }}>
           <Grid size={12}>
+            <WorkoutLoadPanel
+              localTraining={localTraining}
+              workoutDoc={workoutDoc}
+              workoutUser={workoutUser}
+              weightUnit={weightUnit}
+            />
             <Grid container size={12}>
               <Grid container size={12} sx={{ justifyContent: "center" }}>
                 <FormGroup>

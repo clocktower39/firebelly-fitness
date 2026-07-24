@@ -778,6 +778,7 @@ export default function Workout({ socket }) {
                     workoutCompleteStatus={workoutCompleteStatus}
                     workoutFeedback={workoutFeedback}
                     workoutUser={training.user}
+                    workoutDoc={training}
                   />
                 )}
                 {isActivityLog && workoutCompleteStatus && (

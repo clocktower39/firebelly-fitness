@@ -72,6 +72,7 @@ import {
 } from "recharts";
 import queryString from "query-string";
 import CardioDashboard from "../../features/workout/components/cardio/CardioDashboard";
+import LoadDashboard from "../../features/workout/components/load/LoadDashboard";
 import {
   WEIGHT_UNIT_OPTIONS,
   displayWeightUnit,
@@ -2610,6 +2611,8 @@ export default function Progress(props) {
       setActiveTab(1);
     } else if (tab === "cardio") {
       setActiveTab(2);
+    } else if (tab === "load") {
+      setActiveTab(3);
     } else if (tab === "exercise") {
       setActiveTab(0);
     }
@@ -2635,6 +2638,7 @@ export default function Progress(props) {
             <Tab label="Exercise Progress" />
             <Tab label="Body Metrics" />
             <Tab label="Cardio" />
+            <Tab label="Training Load" />
           </Tabs>
         </Grid>
 
@@ -2669,6 +2673,12 @@ export default function Progress(props) {
         {activeTab === 2 && (
           <Grid container size={{ xs: 12, sm: 10 }}>
             <CardioDashboard client={client} />
+          </Grid>
+        )}
+
+        {activeTab === 3 && (
+          <Grid container size={{ xs: 12, sm: 10 }}>
+            <LoadDashboard client={client} />
           </Grid>
         )}
       </Grid>
