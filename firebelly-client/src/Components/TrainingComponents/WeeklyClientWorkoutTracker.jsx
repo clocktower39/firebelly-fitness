@@ -16,14 +16,17 @@ import {
   Stack,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import {
   CheckBox as CheckBoxIcon,
   CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
+  EventAvailable as EventAvailableIcon,
 } from "@mui/icons-material";
 import { enterClientAccount, requestClients, requestWorkoutsByDatesIfNeeded } from "../../Redux/actions";
 import { accountApi } from "../../api/accountApi";
+import { scheduleApi } from "../../api/scheduleApi";
 import {
   getRelationshipEngagementStatus,
   isRelationshipActivelyCoached,
@@ -96,14 +99,54 @@ export default function WeeklyClientWorkoutTracker({
     () => Array.from({ length: 7 }, (_, index) => weekStart.add(index, "day")),
     [weekStart]
   );
+
+  // Booked/completed appointments for the visible week, keyed "clientId|YYYY-MM-DD"
+  // (local dates). Lets the checklist surface clients who have a session on a day
+  // that isn't one of their preferred workout days.
+  const [sessionsByClientDay, setSessionsByClientDay] = useState({});
+  useEffect(() => {
+    if (!user?.isTrainer) return undefined;
+
+    let active = true;
+    scheduleApi
+      .getRange({
+        startDate: weekStart.startOf("day").toISOString(),
+        endDate: weekStart.add(7, "day").startOf("day").toISOString(),
+      })
+      .then((data) => {
+        if (!active) return;
+        const map = {};
+        (Array.isArray(data?.events) ? data.events : []).forEach((event) => {
+          if (event.eventType !== "APPOINTMENT" || !event.clientId) return;
+          if (event.status !== "BOOKED" && event.status !== "COMPLETED") return;
+          const key = `${event.clientId}|${dayjs(event.startDateTime).format("YYYY-MM-DD")}`;
+          (map[key] = map[key] || []).push(event);
+        });
+        Object.values(map).forEach((list) =>
+          list.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime))
+        );
+        setSessionsByClientDay(map);
+      })
+      .catch(() => {
+        if (active) setSessionsByClientDay({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.isTrainer, weekStart]);
+
   const clientsToLoad = useMemo(() => {
     if (mode !== "day") return acceptedClients;
 
     const selectedWeekday = displayDate.day();
-    return acceptedClients.filter((client) =>
-      (client.preferredWorkoutDays || []).map(Number).includes(selectedWeekday)
+    const selectedKey = displayDate.format("YYYY-MM-DD");
+    return acceptedClients.filter(
+      (client) =>
+        (client.preferredWorkoutDays || []).map(Number).includes(selectedWeekday) ||
+        (sessionsByClientDay[`${client._id}|${selectedKey}`] || []).length > 0
     );
-  }, [acceptedClients, displayDate, mode]);
+  }, [acceptedClients, displayDate, mode, sessionsByClientDay]);
   const dateKeysToLoad = useMemo(
     () =>
       mode === "day"
@@ -155,11 +198,20 @@ export default function WeeklyClientWorkoutTracker({
     () =>
       weekDays.map((day) => {
         const weekday = day.day();
+        const dateKey = day.format("YYYY-MM-DD");
         const scheduledClients = acceptedClients.filter((client) =>
           (client.preferredWorkoutDays || []).map(Number).includes(weekday)
         );
+        // Clients with a session booked this date whose preferences don't cover this
+        // weekday — they still belong on the checklist, flagged with an indicator.
+        const scheduledIds = new Set(scheduledClients.map((client) => String(client._id)));
+        const sessionOnlyClients = acceptedClients.filter(
+          (client) =>
+            !scheduledIds.has(String(client._id)) &&
+            (sessionsByClientDay[`${client._id}|${dateKey}`] || []).length > 0
+        );
 
-        const entries = scheduledClients
+        const entries = [...scheduledClients, ...sessionOnlyClients]
           .map((client) => {
             const workouts =
               (Array.isArray(workoutsByAccount?.[client._id]?.workouts)
@@ -174,6 +226,8 @@ export default function WeeklyClientWorkoutTracker({
               workouts,
               workoutCount: workouts.length,
               hasWorkout: workouts.length > 0,
+              sessions: sessionsByClientDay[`${client._id}|${dateKey}`] || [],
+              sessionOnly: !scheduledIds.has(String(client._id)),
             };
           })
           .sort(
@@ -194,7 +248,7 @@ export default function WeeklyClientWorkoutTracker({
           entries: visibleEntries,
         };
       }),
-    [acceptedClients, showMode, weekDays, workoutsByAccount]
+    [acceptedClients, sessionsByClientDay, showMode, weekDays, workoutsByAccount]
   );
 
   const totals = useMemo(() => {
@@ -227,8 +281,8 @@ export default function WeeklyClientWorkoutTracker({
   const resolvedDescription =
     description ||
     (mode === "day"
-      ? `Clients expected on ${displayDate.format("dddd, MMM D")}.`
-      : "Based on each active client's preferred workout days for the selected week.");
+      ? `Clients expected on ${displayDate.format("dddd, MMM D")} — preferred days plus booked sessions.`
+      : "Based on each active client's preferred workout days, plus anyone with a session booked that day.");
 
   const handleOpenClientAccount = async (clientId, day) => {
     const targetDate = day.format("YYYYMMDD");
@@ -337,6 +391,29 @@ export default function WeeklyClientWorkoutTracker({
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexShrink: 0 }}>
+            {entry.sessionOnly && (
+              <Tooltip
+                title={`Has a session booked ${
+                  entry.sessions[0]
+                    ? `at ${dayjs(entry.sessions[0].startDateTime).format("h:mm A")} `
+                    : ""
+                }— not one of their usual workout days.`}
+              >
+                <Chip
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  icon={<EventAvailableIcon />}
+                  label={
+                    entry.sessions[0]
+                      ? `Booked ${dayjs(entry.sessions[0].startDateTime).format("h:mm A")}${
+                          entry.sessions.length > 1 ? ` +${entry.sessions.length - 1}` : ""
+                        }`
+                      : "Session booked"
+                  }
+                />
+              </Tooltip>
+            )}
             {entry.hasWorkout && (
               <Button
                 size="small"
