@@ -16,6 +16,10 @@ const lineItem = Joi.object({
   productId: objectId.allow(null).optional(),
   itemType: itemType.optional(),
   sessionTypeId: objectId.allow(null).optional(),
+  // Book-time billing: a line may claim the calendar appointment it bills.
+  // create_invoice verifies ownership + runs the double-billing guard.
+  scheduleEventId: objectId.allow(null).optional(),
+  sessionDate: Joi.date().allow(null).optional(),
   description: Joi.string().trim().min(1).max(500).optional(),
   quantity: Joi.number().min(1).optional(),
   unitPrice: Joi.number().min(0).optional(),
@@ -228,6 +232,7 @@ router.post("/invoices/logSessions", validate(logSessionsValidate, {}, {}), veri
 router.post("/invoices/logSessions/check", validate(checkLoggedDatesValidate, {}, {}), verifyAccessToken, invoiceController.check_logged_dates);
 router.post("/invoices/logSessions/undo", validate(undoLoggedSessionsValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.undo_logged_sessions);
 router.post("/invoices/unbilledSessions", validate(invoiceReportValidate, {}, {}), verifyAccessToken, invoiceController.unbilled_sessions);
+router.post("/invoices/forEvent", validate({ body: Joi.object({ scheduleEventId: objectId.required() }) }, {}, {}), verifyAccessToken, invoiceController.invoice_for_event);
 router.post("/invoices/reconcile/preview", validate(reconcilePreviewValidate, {}, {}), verifyAccessToken, invoiceController.reconcile_preview);
 router.post("/invoices/reconcile/commit", validate(reconcileCommitValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_commit);
 router.post("/invoices/reconcile/undo", validate(reconcileUndoValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_undo);

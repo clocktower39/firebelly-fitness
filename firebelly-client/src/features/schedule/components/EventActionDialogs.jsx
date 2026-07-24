@@ -5,6 +5,7 @@ import {
   Avatar,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Collapse,
   Dialog,
@@ -57,8 +58,51 @@ const creditSuffix = (type, creditsByType = {}) => {
   const c = creditsByType[type._id];
   if (!c || !c.purchased) return "";
   const n = Math.max(c.remaining, 0);
+  // Bookings-in-waiting haven't debited credits yet — show what's truly free to book.
+  if ((c.booked || 0) > 0) return ` — ${Math.max(c.unbooked, 0)} unbooked of ${n}`;
   return ` — ${n} left`;
 };
+
+// Book-time billing prompt: prepaid credits don't cover this booking — offer to create
+// a SENT invoice for the uncovered sessions (pre-checked, but bookable without one).
+function InvoiceShortfallPrompt({ shortfall, checked, onChange }) {
+  if (!shortfall) return null;
+  const sessions =
+    shortfall.uncoveredSessions === 1 ? "1 session" : `${shortfall.uncoveredSessions} sessions`;
+  const notCovered = `${sessions} in this booking ${
+    shortfall.uncoveredSessions === 1 ? "isn't" : "aren't"
+  } covered.`;
+  let headline;
+  if (shortfall.remaining <= 0) {
+    headline = `No prepaid ${shortfall.typeName} credits left.`;
+  } else if (shortfall.booked > 0) {
+    headline = `${shortfall.remaining} prepaid ${shortfall.typeName} credit${
+      shortfall.remaining === 1 ? "" : "s"
+    } left, but ${shortfall.booked} session${
+      shortfall.booked === 1 ? " is" : "s are"
+    } already booked — only ${shortfall.unbooked} unbooked. ${notCovered}`;
+  } else {
+    headline = `Only ${shortfall.remaining} prepaid ${shortfall.typeName} credit${
+      shortfall.remaining === 1 ? "" : "s"
+    } left — ${notCovered}`;
+  }
+  return (
+    <Alert severity={checked ? "info" : "warning"} sx={{ py: 0.5 }}>
+      {headline}
+      <FormControlLabel
+        sx={{ display: "flex", mt: 0.5 }}
+        control={
+          <Checkbox
+            size="small"
+            checked={checked}
+            onChange={(event) => onChange(event.target.checked)}
+          />
+        }
+        label={`Create an invoice — $${shortfall.amount.toFixed(2)} due for ${sessions}`}
+      />
+    </Alert>
+  );
+}
 
 export default function EventActionDialogs({
   openSelectionDialog,
@@ -92,7 +136,7 @@ export default function EventActionDialogs({
   quickBookRecurUntil,
   setQuickBookRecurUntil,
   bookingConflictLabels = [],
-  quickBookRemainingCredits = null,
+  quickBookBalance = null,
   sessionTypes,
   handleQuickBookClient,
   handleQuickBookCreateWorkout,
@@ -210,6 +254,12 @@ export default function EventActionDialogs({
   trainerBookSessionTypeId,
   trainerBookCreditsByType,
   setTrainerBookSessionTypeId,
+  quickBookInvoiceShortfall = null,
+  quickBookCreateInvoice = false,
+  setQuickBookCreateInvoice,
+  trainerBookInvoiceShortfall = null,
+  trainerBookCreateInvoice = false,
+  setTrainerBookCreateInvoice,
   trainerBookCustomName,
   setTrainerBookCustomName,
   trainerBookCustomEmail,
@@ -278,20 +328,35 @@ export default function EventActionDialogs({
       </FormControl>
 
       {/* Prepaid balance for the chosen client (informational — credits draw down
-          when the session is marked complete, not at booking). */}
-      {quickBookClientId && quickBookRemainingCredits !== null && (
-        quickBookRemainingCredits > 0 ? (
-          <Typography variant="caption" color="text.secondary">
-            {quickBookRemainingCredits} prepaid session
-            {quickBookRemainingCredits === 1 ? "" : "s"} remaining
-            {quickBookSessionTypeId ? " for this type" : ""}
-          </Typography>
-        ) : (
-          <Alert severity="info" sx={{ py: 0.5 }}>
-            No prepaid sessions remaining
-            {quickBookSessionTypeId ? " for this type" : ""} — this client will owe for
-            this session.
-          </Alert>
+          when the session is marked complete, not at booking). When the booking isn't
+          covered, the balance line becomes the create-invoice prompt instead. */}
+      {quickBookInvoiceShortfall ? (
+        <InvoiceShortfallPrompt
+          shortfall={quickBookInvoiceShortfall}
+          checked={quickBookCreateInvoice}
+          onChange={setQuickBookCreateInvoice}
+        />
+      ) : (
+        quickBookClientId && quickBookBalance !== null && (
+          quickBookBalance.remaining > 0 ? (
+            <Typography variant="caption" color="text.secondary">
+              {quickBookBalance.remaining} prepaid session
+              {quickBookBalance.remaining === 1 ? "" : "s"} remaining
+              {quickBookSessionTypeId ? " for this type" : ""}
+              {quickBookBalance.booked > 0
+                ? ` · ${quickBookBalance.booked} already booked · ${Math.max(
+                  quickBookBalance.unbooked,
+                  0
+                )} unbooked`
+                : ""}
+            </Typography>
+          ) : (
+            <Alert severity="info" sx={{ py: 0.5 }}>
+              No prepaid sessions remaining
+              {quickBookSessionTypeId ? " for this type" : ""} — this client will owe for
+              this session.
+            </Alert>
+          )
         )
       )}
 
@@ -1290,6 +1355,11 @@ export default function EventActionDialogs({
                 ))}
               </Select>
             </FormControl>
+            <InvoiceShortfallPrompt
+              shortfall={trainerBookInvoiceShortfall}
+              checked={trainerBookCreateInvoice}
+              onChange={setTrainerBookCreateInvoice}
+            />
             {!trainerBookClientId && (
               <Stack spacing={1}>
                 <TextField

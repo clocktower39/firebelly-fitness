@@ -2,10 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  Alert,
   Button,
   Card,
   CardContent,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   Grid,
+  Snackbar,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
@@ -58,6 +66,36 @@ import {
 
 dayjs.extend(utc);
 
+// Book-time billing: how many of the sessions being booked aren't covered by prepaid
+// credits, and what an invoice for the uncovered ones would total. Coverage is measured
+// against UNBOOKED credits (remaining minus already-booked-not-completed sessions) so
+// booking a 12th session against 11 credits with 11 already booked still prompts.
+// Returns null when everything is covered (or there's no session type to price against).
+const buildInvoiceShortfall = ({ sessionType, balance, occurrenceCount, unitPriceOverride }) => {
+  if (!sessionType || !balance) return null;
+  const creditsRequired = Number(sessionType.creditsRequired) || 1;
+  const needed = creditsRequired * occurrenceCount;
+  const bookable = Math.max(0, Number(balance.unbooked) || 0);
+  const shortfallCredits = Math.max(0, needed - bookable);
+  if (shortfallCredits <= 0) return null;
+  const uncoveredSessions = Math.min(occurrenceCount, Math.ceil(shortfallCredits / creditsRequired));
+  const unitPrice =
+    unitPriceOverride !== null && unitPriceOverride !== undefined && unitPriceOverride !== ""
+      ? Number(unitPriceOverride) || 0
+      : Number(sessionType.defaultPrice) || 0;
+  return {
+    creditsRequired,
+    remaining: Math.max(0, Number(balance.remaining) || 0),
+    booked: Math.max(0, Number(balance.booked) || 0),
+    unbooked: bookable,
+    uncoveredSessions,
+    unitPrice,
+    amount: uncoveredSessions * unitPrice,
+    currency: sessionType.currency || "USD",
+    typeName: sessionType.name,
+  };
+};
+
 // Generate a MongoDB-compatible ObjectId hex string (client-side) so recurring
 // bookings created in one batch share a recurrenceGroupId (a series).
 const generateObjectId = () => {
@@ -93,14 +131,17 @@ import {
 import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
 
 
-// billing summary → { [sessionTypeId]: { remaining, purchased } } for the booking dialogs'
-// session type pickers: purchased types float to the top with their remaining count.
+// billing summary → { [sessionTypeId]: { remaining, booked, unbooked, purchased } } for
+// the booking dialogs' session type pickers: purchased types float to the top. "unbooked"
+// = remaining credits minus what future/pending BOOKED sessions will consume on completion.
 const summaryToCreditsByType = (summary) => {
   const map = {};
   (summary?.bySessionType || []).forEach((entry) => {
     if (!entry.sessionTypeId) return;
     map[entry.sessionTypeId] = {
       remaining: entry.remainingSessions ?? 0,
+      booked: entry.bookedSessions ?? 0,
+      unbooked: entry.unbookedSessions ?? entry.remainingSessions ?? 0,
       purchased: (entry.credits || 0) > 0 || (entry.entryCount || 0) > 0,
     };
   });
@@ -181,6 +222,11 @@ export default function Schedule() {
   const [quickBookRecurUntil, setQuickBookRecurUntil] = useState("");
   const [quickBookClientSummary, setQuickBookClientSummary] = useState(null);
   const [trainerBookClientSummary, setTrainerBookClientSummary] = useState(null);
+  const [quickBookCreateInvoice, setQuickBookCreateInvoice] = useState(false);
+  const [trainerBookCreateInvoice, setTrainerBookCreateInvoice] = useState(false);
+  // {event, billingStatus, invoice, voidInvoice} — cancel paused on the void question.
+  const [cancelVoidPrompt, setCancelVoidPrompt] = useState(null);
+  const [billingNotice, setBillingNotice] = useState(null); // {severity, message}
   const [openSelectionDialog, setOpenSelectionDialog] = useState(false);
   const [openSellPackageDialog, setOpenSellPackageDialog] = useState(false);
   const [openClientAccessDialog, setOpenClientAccessDialog] = useState(false);
@@ -722,15 +768,53 @@ export default function Schedule() {
 
   // Quick status change from the event popover, no full edit form. An explicit
   // billingStatus lets us distinguish "no-show (charge)" from "cancel (no charge)".
-  const handleQuickStatus = async (event, status, billingStatus) => {
-    if (!event?._id || !status) return;
-    if (status === event.status && billingStatus === undefined) return;
+  const executeQuickStatus = async (event, status, billingStatus) => {
     const updates = { status };
     if (billingStatus !== undefined) updates.billingStatus = billingStatus;
     await dispatch(updateScheduleEvent(event._id, updates));
     setOpenEventActionDialog(false);
     refreshSchedule();
     refreshBillingSummary();
+  };
+
+  const handleQuickStatus = async (event, status, billingStatus) => {
+    if (!event?._id || !status) return;
+    if (status === event.status && billingStatus === undefined) return;
+    // Cancelling a session that a booking-time invoice bills: pause and offer a
+    // one-click void. Default = void on a no-charge cancel, keep on a late-cancel charge.
+    if (status === "CANCELLED" && event.eventType === "APPOINTMENT") {
+      try {
+        const data = await billingApi.invoiceForEvent({ scheduleEventId: event._id });
+        const invoice = data?.invoice;
+        if (invoice && Number(invoice.balanceDue) > 0) {
+          setCancelVoidPrompt({
+            event,
+            billingStatus,
+            invoice,
+            voidInvoice: billingStatus !== "CHARGED",
+          });
+          return;
+        }
+      } catch {
+        // Lookup is best-effort — fall through to a normal cancel.
+      }
+    }
+    await executeQuickStatus(event, status, billingStatus);
+  };
+
+  const confirmCancelVoidPrompt = async () => {
+    if (!cancelVoidPrompt) return;
+    const { event, billingStatus, invoice, voidInvoice } = cancelVoidPrompt;
+    setCancelVoidPrompt(null);
+    if (voidInvoice) {
+      const data = await billingApi.updateInvoiceStatus({ invoiceId: invoice._id, status: "VOID" });
+      if (data?.error) {
+        setBillingNotice({ severity: "error", message: `Couldn't void the invoice: ${data.error}` });
+      } else {
+        setBillingNotice({ severity: "success", message: `Invoice ${invoice.invoiceNumber} voided.` });
+      }
+    }
+    await executeQuickStatus(event, "CANCELLED", billingStatus);
   };
 
   const openTrainerBookForEvent = (event) => {
@@ -988,10 +1072,55 @@ export default function Schedule() {
     ...(recurrenceGroupId ? { recurrenceGroupId } : {}),
   });
 
+  // Book-time billing: one SENT invoice (not emailed) covering the uncovered sessions,
+  // each line claiming its appointment. Booking always stands — an invoice failure is
+  // surfaced but never rolls back the calendar.
+  const createBookingInvoice = async ({ clientId, sessionTypeId, shortfall, eventIds }) => {
+    if (!shortfall || !eventIds.length) return;
+    const sessionType = sessionTypes.find((type) => type._id === sessionTypeId);
+    try {
+      const data = await billingApi.createInvoice({
+        billToType: "CLIENT",
+        clientId,
+        groupId: null,
+        billToEmail: null,
+        invoiceNumber: null,
+        status: "SENT",
+        currency: shortfall.currency,
+        dueAt: null,
+        tax: 0,
+        discount: 0,
+        notes: "",
+        terms: "",
+        lineItems: eventIds.map((eventId) => ({
+          itemType: "SESSION",
+          sessionTypeId,
+          description: sessionType?.name || "Training session",
+          quantity: 1,
+          unitPrice: shortfall.unitPrice,
+          sessionCredits: shortfall.creditsRequired,
+          scheduleEventId: eventId,
+        })),
+      });
+      if (data?.error) {
+        setBillingNotice({ severity: "error", message: `Booked, but the invoice failed: ${data.error}` });
+      } else {
+        setBillingNotice({
+          severity: "success",
+          message: `Invoice ${data?.invoice?.invoiceNumber || ""} created — $${shortfall.amount.toFixed(2)} due.`,
+        });
+        refreshBillingSummary();
+      }
+    } catch (err) {
+      setBillingNotice({ severity: "error", message: `Booked, but the invoice failed: ${err.message}` });
+    }
+  };
+
   const handleQuickBookClient = async () => {
     if (!isTrainerView || !selectionRangeAdjusted || !quickBookClientId) return;
     const occurrences = buildBookingOccurrences();
     const groupId = occurrences.length > 1 ? generateObjectId() : null;
+    const createdEventIds = [];
     for (const occ of occurrences) {
       const payload = {
         startDateTime: occ.start.toISOString(),
@@ -1005,7 +1134,17 @@ export default function Schedule() {
       if (quickBookWorkoutId && occurrences.length === 1) {
         payload.workoutId = quickBookWorkoutId;
       }
-      await dispatch(createScheduleEvent(payload));
+      const data = await dispatch(createScheduleEvent(payload));
+      if (data?.event?._id) createdEventIds.push(data.event._id);
+    }
+    if (quickBookCreateInvoice && quickBookInvoiceShortfall) {
+      // Credits cover the earliest occurrences; invoice the trailing uncovered ones.
+      await createBookingInvoice({
+        clientId: quickBookClientId,
+        sessionTypeId: quickBookSessionTypeId,
+        shortfall: quickBookInvoiceShortfall,
+        eventIds: createdEventIds.slice(-quickBookInvoiceShortfall.uncoveredSessions),
+      });
     }
     setDragSelection(null);
     setOpenSelectionDialog(false);
@@ -1181,7 +1320,7 @@ export default function Schedule() {
     const hasCustomName = Boolean(trainerBookCustomName.trim());
     if (!trainerBookClientId && !hasCustomName) return;
 
-    await dispatch(
+    const data = await dispatch(
       trainerBookAvailability({
         availabilityEventId: eventActionTarget._id,
         clientId: trainerBookClientId || null,
@@ -1193,6 +1332,14 @@ export default function Schedule() {
         sessionTypeId: trainerBookSessionTypeId || null,
       })
     );
+    if (trainerBookCreateInvoice && trainerBookInvoiceShortfall && data?.event?._id) {
+      await createBookingInvoice({
+        clientId: trainerBookClientId,
+        sessionTypeId: trainerBookSessionTypeId,
+        shortfall: trainerBookInvoiceShortfall,
+        eventIds: [data.event._id],
+      });
+    }
     setOpenTrainerBookDialog(false);
     setEventActionTarget(null);
     refreshSchedule();
@@ -1452,17 +1599,84 @@ export default function Schedule() {
     [trainerBookClientSummary]
   );
 
-  // Remaining prepaid sessions for the chosen client + session type (overall if no type).
-  const quickBookRemainingCredits = useMemo(() => {
+  // Prepaid balance for the chosen client + session type (overall if no type):
+  // remaining (credit balance), booked (BOOKED-not-completed sessions), unbooked
+  // (remaining minus what those bookings will consume).
+  const quickBookBalance = useMemo(() => {
     if (!quickBookClientSummary) return null;
     if (quickBookSessionTypeId) {
       const entry = (quickBookClientSummary.bySessionType || []).find(
         (e) => e.sessionTypeId === quickBookSessionTypeId
       );
-      return entry ? entry.remainingSessions : 0;
+      return {
+        remaining: entry ? entry.remainingSessions : 0,
+        booked: entry ? entry.bookedSessions ?? 0 : 0,
+        unbooked: entry ? entry.unbookedSessions ?? entry.remainingSessions : 0,
+      };
     }
-    return quickBookClientSummary.remainingSessions ?? null;
+    return {
+      remaining: quickBookClientSummary.remainingSessions ?? 0,
+      booked: quickBookClientSummary.bookedSessions ?? 0,
+      unbooked:
+        quickBookClientSummary.unbookedSessions ?? quickBookClientSummary.remainingSessions ?? 0,
+    };
   }, [quickBookClientSummary, quickBookSessionTypeId]);
+
+  // Mirrors buildBookingOccurrences (weekly repeat capped at 26) so the invoice
+  // prompt can price a recurring booking before submit.
+  const quickBookOccurrenceCount = useMemo(() => {
+    if (!selectionRangeAdjusted || !quickBookRecurring || !quickBookRecurUntil) return 1;
+    const until = dayjs(quickBookRecurUntil).endOf("day");
+    let count = 0;
+    for (let i = 0; i < 26; i++) {
+      if (selectionRangeAdjusted.start.add(i * 7, "day").isAfter(until)) break;
+      count += 1;
+    }
+    return Math.max(1, count);
+  }, [selectionRangeAdjusted, quickBookRecurring, quickBookRecurUntil]);
+
+  const quickBookInvoiceShortfall = useMemo(() => {
+    if (!quickBookClientId || !quickBookSessionTypeId || !quickBookBalance) return null;
+    return buildInvoiceShortfall({
+      sessionType: sessionTypes.find((type) => type._id === quickBookSessionTypeId),
+      balance: quickBookBalance,
+      occurrenceCount: quickBookOccurrenceCount,
+      unitPriceOverride: quickBookPrice,
+    });
+  }, [
+    quickBookClientId,
+    quickBookSessionTypeId,
+    quickBookBalance,
+    quickBookOccurrenceCount,
+    quickBookPrice,
+    sessionTypes,
+  ]);
+
+  const trainerBookInvoiceShortfall = useMemo(() => {
+    if (!trainerBookClientId || !trainerBookSessionTypeId || !trainerBookClientSummary) return null;
+    const entry = (trainerBookClientSummary.bySessionType || []).find(
+      (e) => e.sessionTypeId === trainerBookSessionTypeId
+    );
+    return buildInvoiceShortfall({
+      sessionType: sessionTypes.find((type) => type._id === trainerBookSessionTypeId),
+      balance: {
+        remaining: entry ? entry.remainingSessions : 0,
+        booked: entry ? entry.bookedSessions ?? 0 : 0,
+        unbooked: entry ? entry.unbookedSessions ?? entry.remainingSessions : 0,
+      },
+      occurrenceCount: 1,
+      unitPriceOverride: null,
+    });
+  }, [trainerBookClientId, trainerBookSessionTypeId, trainerBookClientSummary, sessionTypes]);
+
+  // Default the "create invoice" checkbox on whenever a shortfall appears (per user
+  // choice: prompt with invoice pre-selected, but bookable without one).
+  useEffect(() => {
+    setQuickBookCreateInvoice(Boolean(quickBookInvoiceShortfall));
+  }, [quickBookInvoiceShortfall]);
+  useEffect(() => {
+    setTrainerBookCreateInvoice(Boolean(trainerBookInvoiceShortfall));
+  }, [trainerBookInvoiceShortfall]);
 
   const getRowClientLabel = useCallback(
     (event) => {
@@ -1862,9 +2076,15 @@ export default function Schedule() {
         setQuickBookRecurUntil={setQuickBookRecurUntil}
         sessionTypes={sessionTypes}
         bookingConflictLabels={bookingConflictLabels}
-        quickBookRemainingCredits={quickBookRemainingCredits}
+        quickBookBalance={quickBookBalance}
         quickBookCreditsByType={quickBookCreditsByType}
         trainerBookCreditsByType={trainerBookCreditsByType}
+        quickBookInvoiceShortfall={quickBookInvoiceShortfall}
+        quickBookCreateInvoice={quickBookCreateInvoice}
+        setQuickBookCreateInvoice={setQuickBookCreateInvoice}
+        trainerBookInvoiceShortfall={trainerBookInvoiceShortfall}
+        trainerBookCreateInvoice={trainerBookCreateInvoice}
+        setTrainerBookCreateInvoice={setTrainerBookCreateInvoice}
         handleQuickBookClient={handleQuickBookClient}
         handleQuickBookCreateWorkout={handleQuickBookCreateWorkout}
         quickBookCustomName={quickBookCustomName}
@@ -2147,6 +2367,63 @@ export default function Schedule() {
       />
 
       <CalendarSubscribeDialog open={openSubscribe} onClose={() => setOpenSubscribe(false)} />
+
+      {/* Cancel paused on the void question: this session is billed on an unpaid invoice. */}
+      <Dialog
+        open={Boolean(cancelVoidPrompt)}
+        onClose={() => setCancelVoidPrompt(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Cancel session</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1} sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              This session is billed on invoice {cancelVoidPrompt?.invoice?.invoiceNumber} with $
+              {Number(cancelVoidPrompt?.invoice?.balanceDue || 0).toFixed(2)} still due.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={Boolean(cancelVoidPrompt?.voidInvoice)}
+                  onChange={(event) =>
+                    setCancelVoidPrompt((prev) =>
+                      prev ? { ...prev, voidInvoice: event.target.checked } : prev
+                    )
+                  }
+                />
+              }
+              label="Void the invoice too (client owes nothing)"
+            />
+            {cancelVoidPrompt?.billingStatus === "CHARGED" && (
+              <Typography variant="caption" color="text.secondary">
+                This is a charged cancellation — leave unchecked to keep the balance due.
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setCancelVoidPrompt(null)}>Keep session</Button>
+          <Button variant="contained" color="error" onClick={confirmCancelVoidPrompt}>
+            Cancel session
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={Boolean(billingNotice)}
+        autoHideDuration={6000}
+        onClose={() => setBillingNotice(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity={billingNotice?.severity || "info"}
+          onClose={() => setBillingNotice(null)}
+          sx={{ width: "100%" }}
+        >
+          {billingNotice?.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

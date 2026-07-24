@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const BillingLedgerEntry = require("../models/billingLedgerEntry");
 const Relationship = require("../models/relationship");
 const GroupMembership = require("../models/groupMembership");
+const ScheduleEvent = require("../models/scheduleEvent");
+const SessionType = require("../models/sessionType");
 
 const ACTIVE_STATUS = "ACTIVE";
 const TRAINER_ROLES = new Set(["TRAINER", "COACH", "ADMIN"]);
@@ -135,18 +137,63 @@ const get_summary = async (req, res, next) => {
       },
     ]);
 
-    const bySessionType = byTypeAgg.map((entry) => ({
-      sessionTypeId: entry._id || null,
-      remainingSessions: entry.balance,
-      credits: entry.credits,
-      debits: Math.abs(entry.debits),
-      lastEntryAt: entry.lastEntryAt,
-      entryCount: entry.entryCount,
-      dueForPayment: entry.balance <= 0,
-    }));
+    // Booked-but-not-completed appointments haven't debited the ledger yet, but each
+    // will consume its type's credits on completion. Surface them so the scheduler can
+    // show truly-unbooked availability (remaining minus what's already spoken for).
+    const bookedByType = new Map();
+    let bookedSessionsTotal = 0;
+    let bookedCreditsTotal = 0;
+    if (clientId) {
+      const bookedAgg = await ScheduleEvent.aggregate([
+        {
+          $match: {
+            trainerId: new mongoose.Types.ObjectId(String(trainerId)),
+            clientId: new mongoose.Types.ObjectId(String(clientId)),
+            eventType: "APPOINTMENT",
+            status: "BOOKED",
+          },
+        },
+        { $group: { _id: "$sessionTypeId", count: { $sum: 1 } } },
+      ]);
+      const typeIds = bookedAgg.map((entry) => entry._id).filter(Boolean);
+      const types = typeIds.length
+        ? await SessionType.find({ _id: { $in: typeIds } }).select("creditsRequired").lean()
+        : [];
+      const creditsPerType = new Map(
+        types.map((type) => [
+          String(type._id),
+          Number(type.creditsRequired) > 0 ? Number(type.creditsRequired) : 1,
+        ])
+      );
+      for (const entry of bookedAgg) {
+        const key = entry._id ? String(entry._id) : null;
+        const creditsEach = key ? creditsPerType.get(key) || 1 : 1;
+        bookedByType.set(key, { count: entry.count, credits: entry.count * creditsEach });
+        bookedSessionsTotal += entry.count;
+        bookedCreditsTotal += entry.count * creditsEach;
+      }
+    }
+
+    const bySessionType = byTypeAgg.map((entry) => {
+      const key = entry._id ? String(entry._id) : null;
+      const booked = bookedByType.get(key) || { count: 0, credits: 0 };
+      return {
+        sessionTypeId: entry._id || null,
+        remainingSessions: entry.balance,
+        bookedSessions: booked.count,
+        unbookedSessions: entry.balance - booked.credits,
+        credits: entry.credits,
+        debits: Math.abs(entry.debits),
+        lastEntryAt: entry.lastEntryAt,
+        entryCount: entry.entryCount,
+        dueForPayment: entry.balance <= 0,
+      };
+    });
 
     return res.json({
       remainingSessions: summary.balance,
+      bookedSessions: bookedSessionsTotal,
+      unbookedSessions: summary.balance - bookedCreditsTotal,
       credits: summary.credits,
       debits: Math.abs(summary.debits),
       lastEntryAt: summary.lastEntryAt,

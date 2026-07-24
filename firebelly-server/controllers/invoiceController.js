@@ -419,6 +419,32 @@ const create_invoice = async (req, res, next) => {
       });
     }
 
+    // Book-time billing: lines may claim a calendar appointment. Each claimed event
+    // must be this trainer's, match the billed client, and not already be billed.
+    const linkedIds = normalizedLineItems.map((item) => item.scheduleEventId).filter(Boolean);
+    if (linkedIds.length) {
+      const linkedEvents = await ScheduleEvent.find({ _id: { $in: linkedIds }, trainerId: userId })
+        .select("clientId startDateTime")
+        .lean();
+      const linkedById = new Map(linkedEvents.map((event) => [String(event._id), event]));
+      for (const item of normalizedLineItems) {
+        if (!item.scheduleEventId) continue;
+        const event = linkedById.get(String(item.scheduleEventId));
+        if (!event) {
+          return res.status(400).json({ error: "Linked session not found on your calendar." });
+        }
+        if (billToType === "CLIENT" && event.clientId && String(event.clientId) !== String(clientId)) {
+          return res.status(400).json({ error: "A linked session belongs to a different client." });
+        }
+        if (!item.sessionDate && event.startDateTime) item.sessionDate = event.startDateTime;
+      }
+      try {
+        await assertEventsUnclaimed({ trainerId: userId, lines: normalizedLineItems });
+      } catch (guardError) {
+        return res.status(409).json({ error: guardError.message });
+      }
+    }
+
     // Grandfathering guard: a client can only be sold session types they're
     // eligible for (active, previously purchased, or explicitly entitled).
     if (billToType === "CLIENT") {
@@ -1320,9 +1346,8 @@ const send_reminder = async (req, res, next) => {
 // time backstop behind the advisory checks (dialog dup-warning, reconcile re-validation).
 // A physical partial-unique index can NOT enforce this: invoices mixing linked + unlinked
 // lines (e.g. a block with prepaid future sessions) collide on the null index keys —
-// verified empirically against MongoDB. createBackfillInvoice is the only path that writes
-// links (the standard create_invoice Joi schema doesn't accept scheduleEventId), so this
-// one call site covers every writer.
+// verified empirically against MongoDB. Every path that writes links must call this:
+// createBackfillInvoice (backfill + reconcile) and create_invoice (book-time billing).
 const assertEventsUnclaimed = async ({ trainerId, lines }) => {
   const ids = (lines || []).map((l) => l.scheduleEventId).filter(Boolean);
   if (!ids.length) return;
@@ -2133,8 +2158,28 @@ const reconcile_undo = async (req, res, next) => {
   }
 };
 
+// Which non-void invoice (if any) claims this appointment? Used by the scheduler's
+// cancel flow to offer a one-click void of a booking-time invoice.
+const invoice_for_event = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const { scheduleEventId } = req.body;
+    const invoice = await Invoice.findOne({
+      trainerId: userId,
+      status: { $ne: "VOID" },
+      "lineItems.scheduleEventId": scheduleEventId,
+    })
+      .select("invoiceNumber status total balanceDue amountPaid currency")
+      .lean();
+    return res.json({ invoice: invoice || null });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   create_invoice,
+  invoice_for_event,
   bulk_log_sessions,
   check_logged_dates,
   undo_logged_sessions,

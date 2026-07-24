@@ -19,6 +19,13 @@ export const billingApi = {
       body: payload,
     }),
 
+  // Which non-void invoice (if any) claims this appointment — for the cancel-void prompt.
+  invoiceForEvent: ({ scheduleEventId }) =>
+    apiFetch("/invoices/forEvent", {
+      method: "POST",
+      body: { scheduleEventId },
+    }),
+
   // Bulk-record past sessions for a client as income (backdating). See server bulk_log_sessions.
   logSessions: (payload) =>
     apiFetch("/invoices/logSessions", {
