@@ -776,7 +776,8 @@ const get_workouts_by_range = async (req, res, next) => {
       .populate({
         path: "training.exercise",
         model: "Exercise",
-        select: "_id exerciseTitle",
+        // muscleGroups feeds the sets-per-muscle-group rollup in the Training Load view.
+        select: "_id exerciseTitle muscleGroups",
       })
       .populate({
         path: "user workoutFeedback.comments.user workoutFeedback.comments.deletedBy training.feedback.comments.user training.feedback.comments.deletedBy",

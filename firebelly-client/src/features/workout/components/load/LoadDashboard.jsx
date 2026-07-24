@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -141,6 +142,47 @@ export default function LoadDashboard({ client = null }) {
           </ResponsiveContainer>
         </Box>
       </Grid>
+
+      {summary.muscles.length > 0 && (
+        <Grid container size={12} component={Paper} sx={{ padding: "15px" }}>
+          <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="subtitle1">Sets by muscle group</Typography>
+            <Typography variant="caption" color="text.secondary">
+              this week vs 4-week average
+            </Typography>
+          </Grid>
+          <Box sx={{ width: "100%", height: summary.muscles.length * 38 + 60 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={summary.muscles}
+                layout="vertical"
+                margin={{ top: 4, right: 16, left: 8, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} strokeOpacity={0.3} />
+                <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="muscle" tick={{ fontSize: 11 }} width={86} />
+                <Tooltip
+                  formatter={(value, name) => [
+                    `${value} set${value === 1 ? "" : "s"}`,
+                    name === "thisWeek" ? "This week" : "4-wk avg",
+                  ]}
+                />
+                <Legend
+                  formatter={(value) => (value === "thisWeek" ? "This week" : "4-wk avg")}
+                  wrapperStyle={{ fontSize: 11 }}
+                />
+                <Bar dataKey="thisWeek" fill="#f97316" radius={[0, 3, 3, 0]} barSize={12} />
+                <Bar dataKey="avg4" fill="#9ca3af" radius={[0, 3, 3, 0]} barSize={12} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            Hard sets credited to each exercise's primary muscles, warm-ups excluded. Big gaps
+            between muscles are the thing to look for — e.g. 20 quad sets against 4 hamstring
+            sets.
+          </Typography>
+        </Grid>
+      )}
 
       <Grid container size={12}>
         <Typography variant="caption" color="text.secondary">

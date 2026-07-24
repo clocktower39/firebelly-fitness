@@ -189,6 +189,54 @@ export const summarizeTrainingLoad = (workouts, { now = new Date(), weeks = 12 }
     null
   );
 
+  // Sets per muscle group per week (RP/Hevy's programming-audit unit): every hard set is
+  // credited to each of the exercise's PRIMARY muscles. The 4-week average divides by
+  // trailing ACTIVE weeks only, so a vacation week doesn't dilute it — but a trained week
+  // with zero hamstring sets rightly drags the hamstring average down.
+  const muscleWeekly = new Map();
+  records.forEach(({ date, load, workout }) => {
+    const weekMs = startOfWeek(date).getTime();
+    if (!index.has(weekMs)) return;
+    (workout.training || []).forEach((circuit) =>
+      (Array.isArray(circuit) ? circuit : []).forEach((entry) => {
+        if (!entry || entry.isWarmup) return;
+        const sets = load.usedPlanned
+          ? entryPlannedLoad(entry).hardSets
+          : entryAchievedLoad(entry).hardSets;
+        if (!sets) return;
+        const primaries = entry.exercise?.muscleGroups?.primary || [];
+        primaries.forEach((muscle) => {
+          if (!muscle) return;
+          const byWeek = muscleWeekly.get(muscle) || new Map();
+          byWeek.set(weekMs, (byWeek.get(weekMs) || 0) + sets);
+          muscleWeekly.set(muscle, byWeek);
+        });
+      })
+    );
+  });
+
+  const activeTrailing = weekly
+    .slice(0, -1)
+    .slice(-4)
+    .filter((week) => week.volume > 0 || week.hardSets > 0);
+  const thisWeekMs = thisWeekStart.getTime();
+  const lastWeekMs = lastWeek ? lastWeek.weekStart.getTime() : null;
+  const muscles = [...muscleWeekly.entries()]
+    .map(([muscle, byWeek]) => {
+      const avg4 = activeTrailing.length
+        ? activeTrailing.reduce((sum, week) => sum + (byWeek.get(week.weekStart.getTime()) || 0), 0) /
+          activeTrailing.length
+        : 0;
+      return {
+        muscle,
+        thisWeek: byWeek.get(thisWeekMs) || 0,
+        lastWeek: lastWeekMs ? byWeek.get(lastWeekMs) || 0 : 0,
+        avg4: Number(avg4.toFixed(1)),
+      };
+    })
+    .filter((m) => m.thisWeek > 0 || m.lastWeek > 0 || m.avg4 > 0)
+    .sort((a, b) => b.thisWeek - a.thisWeek || b.avg4 - a.avg4 || a.muscle.localeCompare(b.muscle));
+
   return {
     totalWorkouts: records.length,
     weekly,
@@ -198,6 +246,7 @@ export const summarizeTrainingLoad = (workouts, { now = new Date(), weeks = 12 }
     typicalWeeksUsed: trailing.length,
     bestWeek,
     pace,
+    muscles,
   };
 };
 
