@@ -9,6 +9,8 @@ export const DAILY_OVERVIEW_SECTIONS = [
   { key: "metrics", label: "Body Metrics" },
   { key: "load", label: "Training Load" },
   { key: "balance", label: "Sessions & Balance" },
+  { key: "attention", label: "Needs Attention", trainerOnly: true },
+  { key: "activity", label: "Recent Activity", trainerOnly: true },
   { key: "coverage", label: "Daily Coverage", trainerOnly: true },
 ];
 

@@ -11,6 +11,8 @@ import CardioSummaryCard from "../../features/workout/components/cardio/CardioSu
 import LoadSummaryCard from "../../features/workout/components/load/LoadSummaryCard";
 import ClientStandingCard from "../../Components/ClientStandingCard";
 import InstallAppNudge from "../../Components/InstallAppNudge";
+import NeedsAttentionCard from "../../Components/NeedsAttentionCard";
+import ActivityFeedCard from "../../Components/ActivityFeedCard";
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
@@ -292,6 +294,8 @@ function Home() {
     cardio: <CardioSummaryCard client={client} />,
     load: <LoadSummaryCard client={client} />,
     balance: <ClientStandingCard />,
+    attention: user.isTrainer && !client ? <NeedsAttentionCard /> : null,
+    activity: user.isTrainer && !client ? <ActivityFeedCard /> : null,
     coverage:
       user.isTrainer && !client ? (
         <WeeklyClientWorkoutTracker
