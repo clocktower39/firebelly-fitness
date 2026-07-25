@@ -302,7 +302,7 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       cardioDayIdx += 1;
       const t = await new Training({
         title: `Cardio — Day ${d + 1} (draft)`, user: trainerId, category: ["Cardio"], workoutType: "Cardio",
-        cardio: cardioTemplateData(g, assumptions), training: [[]], isTemplate: true,
+        cardio: cardioTemplateData(g, assumptions), training: [[]], isTemplate: true, isProgramDay: true,
       }).save();
       baseTemplates.push(t);
       continue;
@@ -313,7 +313,7 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       assumptions.push(`${type} day (day ${d + 1}) left as a placeholder for you to specify.`);
       const t = await new Training({
         title: `${type} — placeholder (coach to specify)`,
-        user: trainerId, category: [type], workoutType: type, training: [[]], isTemplate: true,
+        user: trainerId, category: [type], workoutType: type, training: [[]], isTemplate: true, isProgramDay: true,
       }).save();
       baseTemplates.push(t);
       continue;
@@ -364,6 +364,7 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
       user: trainerId, category: ["Strength"], workoutType: "Strength",
       training: sanitizeTrainingTechniques(hasContent ? circuits : [[]]),
       isTemplate: true,
+      isProgramDay: true,
     }).save();
     baseTemplates.push(t);
     strengthDayIdx += 1;
@@ -397,6 +398,7 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
         training: clonedTraining,
         cardio: clone(base.cardio), sports: clone(base.sports), yoga: clone(base.yoga), pilates: clone(base.pilates),
         isTemplate: true,
+        isProgramDay: true,
       }).save();
       program.weeks[w][d].workoutId = t._id;
     }
@@ -411,6 +413,14 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
   }
 
   await program.save();
+
+  // Link every generated day doc back to its program (isProgramDay was stamped at creation;
+  // the program id only exists now). Keeps the Template Workouts page clean and labeled.
+  const dayIds = program.weeks.flat().map((day) => day?.workoutId).filter(Boolean);
+  if (dayIds.length) {
+    await Training.updateMany({ _id: { $in: dayIds } }, { $set: { programId: program._id } });
+  }
+
   block.program = program._id;
   await block.save();
 

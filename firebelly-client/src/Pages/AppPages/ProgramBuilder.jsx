@@ -427,6 +427,8 @@ export default function ProgramBuilder() {
           category: [],
           training: [[]],
           isTemplate: true,
+          isProgramDay: true,
+          programId: program?._id || undefined,
         });
         if (data?.error) {
           throw new Error(data.error);
@@ -465,7 +467,8 @@ export default function ProgramBuilder() {
 
   const loadTemplates = useCallback(async () => {
     try {
-      const data = await workoutApi.getWorkoutTemplates();
+      // Program days included: importing a day from another program is a first-class move here.
+      const data = await workoutApi.getWorkoutTemplates({ includeProgramDays: true });
       if (data?.error) {
         throw new Error(data.error);
       }

@@ -124,6 +124,10 @@ const trainingSchema = new mongoose.Schema(
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     assignedAt: { type: Date, default: null },
     isTemplate: { type: Boolean, default: false },
+    // Distinguishes a program's week/day docs (isTemplate for storage purposes, but they
+    // belong to a program) from deliberate standalone templates the trainer built to reuse.
+    // The Template Workouts page shows only isProgramDay: false templates by default.
+    isProgramDay: { type: Boolean, default: false },
     complete: { type: Boolean, default: false },
     reminderSentAt: { type: Date, default: null }, // dedup: workout-day reminder
     overdueSentAt: { type: Date, default: null }, // dedup: overdue nudge

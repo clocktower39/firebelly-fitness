@@ -381,6 +381,7 @@ export function copyWorkoutById(
       newAccount,
       autoregulate: extra.autoregulate || undefined,
       scheme: extra.scheme || undefined,
+      asWorkout: extra.asWorkout || undefined,
     });
 
     if (data.error) {

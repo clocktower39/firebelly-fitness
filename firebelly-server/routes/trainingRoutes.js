@@ -19,6 +19,8 @@ const trainingFields = {
   workoutFeedback: Joi.object().unknown(true).optional(),
   queuePosition: Joi.number().optional(),
   isTemplate: Joi.boolean().optional(),
+  isProgramDay: Joi.boolean().optional(),
+  programId: objectId.allow(null).optional(),
   complete: Joi.boolean().optional(),
 };
 const createTrainingValidate = {

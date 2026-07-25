@@ -80,6 +80,8 @@ async function resyncProgramFromWeekOne(program, { dayIndexes = null } = {}) {
             title: (base.title || `Day ${d + 1}`).replace(/Day (\d+)/, `Week ${w + 1} Day $1`),
             user: base.user,
             isTemplate: true,
+            isProgramDay: true,
+            programId: program._id,
             ...content,
           }).save();
           laterSlot.workoutId = t._id;

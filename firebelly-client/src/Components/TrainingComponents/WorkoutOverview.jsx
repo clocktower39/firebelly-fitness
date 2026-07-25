@@ -45,7 +45,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { DragHandle as DragHandleIcon, Settings } from "@mui/icons-material";
-import { updateTraining, createTraining } from "../../Redux/actions";
+import { updateTraining, createTraining, copyWorkoutById } from "../../Redux/actions";
+import { workoutApi } from "../../api/workoutApi";
 import { WorkoutOptionModalView } from "../WorkoutOptionModal";
 import { normalizeSports, isCompetitiveSession } from "../../features/workout/utils/sportsUtils";
 import { normalizeYoga } from "../../features/workout/utils/yogaUtils";
@@ -679,8 +680,12 @@ export default function WorkoutOverview({
     setSelectedDate,
   } = workoutOptionModalViewProps;
   const dispatch = useDispatch();
-  const weightUnit = normalizeWeightUnit(useSelector((state) => state.user.workoutWeightUnit));
-  const workoutColors = useSelector((state) => state.user.workoutColors) || {};
+  const currentUser = useSelector((state) => state.user);
+  const weightUnit = normalizeWeightUnit(currentUser.workoutWeightUnit);
+  const workoutColors = currentUser.workoutColors || {};
+  // Trainers can start a new workout from one of their templates (hidden in delegated view-as
+  // sessions, matching the other template features).
+  const canUseTemplates = Boolean(currentUser?.isTrainer && !currentUser?.delegationMode);
   const [selectedWorkout, setSelectedWorkout] = useState({});
   const [viewModes, setViewModes] = useState(
     localWorkouts.reduce((acc, workout) => {
@@ -689,6 +694,8 @@ export default function WorkoutOverview({
     }, {})
   );
   const [newWorkoutType, setNewWorkoutType] = useState("Strength");
+  const [templateOptions, setTemplateOptions] = useState(null); // null = not loaded yet
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [activeExercise, setActiveExercise] = useState(null);
   const [activeCircuit, setActiveCircuit] = useState(null);
   const lastDragMoveRef = useRef("");
@@ -716,8 +723,16 @@ export default function WorkoutOverview({
     );
   };
 
-  const handleAddWorkout = () =>
-    dispatch(
+  const handleAddWorkout = () => {
+    if (selectedTemplateId) {
+      // Copy the template onto this calendar day as a plain workout.
+      return dispatch(
+        copyWorkoutById(selectedTemplateId, selectedDate, "copyGoalOnly", undefined, user._id, {
+          asWorkout: true,
+        })
+      );
+    }
+    return dispatch(
       createTraining({
         training: {
           date: selectedDate,
@@ -726,11 +741,22 @@ export default function WorkoutOverview({
         user,
       })
     );
+  };
 
   useEffect(() => {
     if (openCreateWorkoutDialog) {
       setNewWorkoutType("Strength");
+      setSelectedTemplateId("");
+      if (canUseTemplates && templateOptions === null) {
+        workoutApi
+          .getWorkoutTemplates({})
+          .then((data) => {
+            if (!data?.error) setTemplateOptions(Array.isArray(data.workouts) ? data.workouts : []);
+          })
+          .catch(() => {});
+      }
     }
+     
   }, [openCreateWorkoutDialog]);
 
   useEffect(() => {
@@ -1073,7 +1099,9 @@ export default function WorkoutOverview({
         <DialogTitle>{"Create a workout"}</DialogTitle>
         <DialogContent>
           <DialogContentText id="alert-dialog-slide-description">
-            Select a workout type to create. More options coming soon.
+            {canUseTemplates
+              ? "Pick a workout type, or start from one of your templates."
+              : "Select a workout type to create. More options coming soon."}
           </DialogContentText>
           <Box sx={{ marginTop: "12px" }}>
             <TextField
@@ -1081,6 +1109,7 @@ export default function WorkoutOverview({
               fullWidth
               label="Workout type"
               value={newWorkoutType}
+              disabled={Boolean(selectedTemplateId)}
               onChange={(event) => setNewWorkoutType(event.target.value)}
             >
               {WORKOUT_TYPES.map((type) => (
@@ -1097,6 +1126,26 @@ export default function WorkoutOverview({
               ))}
             </TextField>
           </Box>
+          {canUseTemplates && (templateOptions?.length || 0) > 0 && (
+            <Box sx={{ marginTop: "12px" }}>
+              <TextField
+                select
+                fullWidth
+                label="Start from template (optional)"
+                value={selectedTemplateId}
+                onChange={(event) => setSelectedTemplateId(event.target.value)}
+              >
+                <MenuItem value="">
+                  <Typography variant="body1">Blank workout</Typography>
+                </MenuItem>
+                {templateOptions.map((template) => (
+                  <MenuItem key={template._id} value={template._id}>
+                    {template.title || "Untitled template"}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseCreateWorkoutDialog}>Cancel</Button>

@@ -235,6 +235,29 @@ const copy_workout_by_id = async (req, res, next) => {
     copyData.workoutFeedback = { difficulty: 1, comments: [] };
     if (newTitle) copyData.title = newTitle;
 
+    // A copy inherits isTemplate/isProgramDay by default (the program builder relies on
+    // that for week copies). Two explicit overrides:
+    //   asWorkout  — "use this template for a client": the copy becomes a plain calendar
+    //                workout, never a template or program day.
+    //   asTemplate — "save a copy as a standalone template": stays a template but sheds
+    //                any program-day identity.
+    if (req.body.asWorkout) {
+      copyData.isTemplate = false;
+      copyData.isProgramDay = false;
+      copyData.programId = null;
+      copyData.programWeek = null;
+      copyData.programDay = null;
+      copyData.assignedBy = res.locals.user._id;
+      copyData.assignedAt = new Date();
+    } else if (req.body.asTemplate) {
+      copyData.isTemplate = true;
+      copyData.isProgramDay = false;
+      copyData.programId = null;
+      copyData.programWeek = null;
+      copyData.programDay = null;
+      delete copyData.date; // templates don't sit on a calendar
+    }
+
     // Feedback autoregulation reads achieved + feedback, so it must run before the option
     // switch (which clears them). When on, it fully owns goal/achieved handling.
     let autoregulationTally = null;

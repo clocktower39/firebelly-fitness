@@ -89,12 +89,16 @@ const workout_month_request = async (req, res, next) => {
 const workout_templates_request = async (req, res, next) => {
   try {
     const user = res.locals.user;
-    const { includeShared } = req.body;
+    const { includeShared, includeProgramDays } = req.body;
 
-    // Get user's own templates
+    // Deliberate standalone templates only, by default. Program week/day docs are also
+    // isTemplate for storage purposes but belong to their program — they'd flood this
+    // list (hundreds of "Program • Week X Day Y" docs), so they only come back when the
+    // caller asks (includeProgramDays), labeled with their program's title.
     const ownWorkouts = await Training.find({
       user: user._id,
       isTemplate: true,
+      isProgramDay: { $ne: true },
     })
       .populate({
         path: "training.exercise",
@@ -109,7 +113,37 @@ const workout_templates_request = async (req, res, next) => {
       .lean();
 
     // Mark own workouts
-    const ownWithFlag = ownWorkouts.map((w) => ({ ...w, isOwn: true }));
+    let ownWithFlag = ownWorkouts.map((w) => ({ ...w, isOwn: true }));
+
+    if (includeProgramDays) {
+      const Program = require("../../models/program");
+      const programDays = await Training.find({
+        user: user._id,
+        isTemplate: true,
+        isProgramDay: true,
+      })
+        .select("title category training updatedAt createdAt programId")
+        .populate({
+          path: "training.exercise",
+          model: "Exercise",
+          select: "_id exerciseTitle",
+        })
+        .lean();
+      const programIds = [...new Set(programDays.map((w) => String(w.programId)).filter((id) => id !== "null"))];
+      const programs = programIds.length
+        ? await Program.find({ _id: { $in: programIds } }).select("title").lean()
+        : [];
+      const titleById = new Map(programs.map((p) => [String(p._id), p.title || "Untitled program"]));
+      ownWithFlag = [
+        ...ownWithFlag,
+        ...programDays.map((w) => ({
+          ...w,
+          isOwn: true,
+          programDay: true,
+          programTitle: titleById.get(String(w.programId)) || "Unlinked draft",
+        })),
+      ];
+    }
 
     if (!includeShared) {
       return res.json({ workouts: ownWithFlag, user });
@@ -131,10 +165,12 @@ const workout_templates_request = async (req, res, next) => {
       return res.json({ workouts: ownWithFlag, user });
     }
 
-    // Get shared templates from connected trainers
+    // Get shared templates from connected trainers (their deliberate templates only —
+    // another trainer's program days are never relevant here)
     const sharedWorkouts = await Training.find({
       user: { $in: connectedTrainerIds },
       isTemplate: true,
+      isProgramDay: { $ne: true },
     })
       .populate({
         path: "training.exercise",
