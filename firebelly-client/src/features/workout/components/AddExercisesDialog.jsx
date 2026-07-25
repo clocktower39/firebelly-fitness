@@ -99,7 +99,7 @@ export const ExerciseListAutocomplete = ({ exerciseList, selectedExercises, setS
   );
 };
 
-const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmedNewExercise, confirmedWarmups, activeStep, user, weightUnit: weightUnitOverride, warmup = false, }) => {
+const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmedNewExercise, confirmedWarmups, activeStep, user, weightUnit: weightUnitOverride, warmup = false, defaultSetCount = 4, }) => {
   const exerciseList = useSelector((state) => state.progress.exerciseList);
   const weightUnit = normalizeWeightUnit(weightUnitOverride || user.workoutWeightUnit);
 
@@ -138,9 +138,11 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
   }, [canUseTemplates, addExerciseOpen]);
 
   // Warm-ups are single-target compact rows, so default the Sets selector to 1 in warm-up mode.
+  // Otherwise inherit the target circuit's existing set count (defaultSetCount) so a new
+  // exercise matches its circuit-mates unless the trainer changes it.
   useEffect(() => {
-    if (addExerciseOpen) setSelectedExercisesSetCount(warmup ? 1 : 4);
-  }, [addExerciseOpen, warmup]);
+    if (addExerciseOpen) setSelectedExercisesSetCount(warmup ? 1 : defaultSetCount);
+  }, [addExerciseOpen, warmup, defaultSetCount]);
 
   const pickerList =
     warmup && !showAllExercises
@@ -179,7 +181,7 @@ const AddExercisesDialog = ({ addExerciseOpen, handleAddExerciseClose, confirmed
 
   const resetDialog = () => {
     setSelectedExercises([]);
-    setSelectedExercisesSetCount(warmup ? 1 : 4);
+    setSelectedExercisesSetCount(warmup ? 1 : defaultSetCount);
     setStagedCustomWarmups([]);
     setStagedTemplates([]);
     setCustomName("");

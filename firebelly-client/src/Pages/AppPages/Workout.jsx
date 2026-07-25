@@ -345,6 +345,17 @@ export default function Workout({ socket }) {
     handleAddExerciseOpen();
   };
 
+  // New exercises default to the set count already used in the circuit they're being added
+  // to (the add dialog targets the circuit page in view). Empty circuit → the usual 4.
+  const targetCircuitForAdd = localTraining[activeStep] || [];
+  const lastMainExercise = [...targetCircuitForAdd].reverse().find((entry) => entry && !entry.isWarmup);
+  const inheritedSetCount = Math.min(
+    20, // the dialog's Sets selector tops out at 20
+    Number(lastMainExercise?.goals?.sets) ||
+      (Array.isArray(lastMainExercise?.goals?.exactReps) ? lastMainExercise.goals.exactReps.length : 0) ||
+      4
+  );
+
   // Open the picker to add a movement-based warm-up (its exercises become a warm-up circuit).
   const newWarmup = () => {
     setAddingWarmup(true);
@@ -883,6 +894,7 @@ export default function Workout({ socket }) {
                 activeStep={activeStep}
                 weightUnit={activeWorkoutWeightUnit}
                 warmup={addingWarmup}
+                defaultSetCount={inheritedSetCount}
               />
               <WorkoutTrainerSessionDialog
                 open={openTrainerSessionDialog}
