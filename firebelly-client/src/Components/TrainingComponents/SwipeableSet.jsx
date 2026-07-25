@@ -33,6 +33,8 @@ import {
   KeyboardArrowRight,
   AddCircle,
   RemoveCircle,
+  CheckCircle,
+  RadioButtonUnchecked,
   Close as CloseIcon,
 } from "@mui/icons-material";
 import SwipeableViewsModule from "react-swipeable-views";
@@ -216,7 +218,9 @@ function SwipeableSet(props) {
           </Button>
         }
       />
-      {newWarmup && (
+      {/* Hidden on the completion page (the step after the last circuit) — no one warms up
+          after finishing. */}
+      {newWarmup && activeStep < localTraining.length && (
         <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
           <Tooltip title="Add movement-based warm-up exercises (won't progress week to week)">
             <Button size="small" startIcon={<AddCircle />} onClick={newWarmup}>
@@ -318,6 +322,25 @@ function SwipeableSet(props) {
         ))}
         <Box sx={{ padding: "25px 0" }}>
           <Grid size={12}>
+            {/* Completing is the page's primary action — it stays on top, above the stats. */}
+            <Grid container size={12} sx={{ justifyContent: "center", marginBottom: "6px" }}>
+              <Button
+                fullWidth
+                size="large"
+                color="success"
+                variant={workoutCompleteStatus ? "contained" : "outlined"}
+                startIcon={workoutCompleteStatus ? <CheckCircle /> : <RadioButtonUnchecked />}
+                onClick={handleWorkoutCompleteCheckbox}
+                sx={{ maxWidth: 420, fontWeight: 600 }}
+              >
+                {workoutCompleteStatus ? "Workout Complete" : "Mark Workout Complete"}
+              </Button>
+            </Grid>
+            <Grid container size={12} sx={{ justifyContent: "center", marginBottom: "15px" }}>
+              <Typography variant="caption" color="text.secondary">
+                {workoutCompleteStatus ? "Tap again to mark it incomplete." : " "}
+              </Typography>
+            </Grid>
             <WorkoutLoadPanel
               localTraining={localTraining}
               workoutDoc={workoutDoc}
@@ -325,19 +348,6 @@ function SwipeableSet(props) {
               weightUnit={weightUnit}
             />
             <Grid container size={12}>
-              <Grid container size={12} sx={{ justifyContent: "center" }}>
-                <FormGroup>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={workoutCompleteStatus}
-                        onClick={handleWorkoutCompleteCheckbox}
-                      />
-                    }
-                    label="Workout Complete"
-                  />
-                </FormGroup>
-              </Grid>
               <Grid container size={12} spacing={2} sx={{ justifyContent: "center" }}>
                 <Grid container size={12} sx={{ justifyContent: "center" }}>
                   <Typography variant="body1">Feedback:</Typography>
