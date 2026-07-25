@@ -17,6 +17,12 @@ const TRAINING_UPDATE_FIELDS = [
   "date",
   "workoutType",
   "cardio",
+  // Single-page activity logs — these MUST stay in the update whitelist or their data is
+  // silently dropped on every save (bug found 2026-07-25: sports/yoga/pilates were never
+  // added when those workout types shipped).
+  "sports",
+  "yoga",
+  "pilates",
   "category",
   "training",
   "workoutFeedback",
