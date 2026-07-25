@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
+  Chip,
   Button,
   Card,
   CardContent,
@@ -30,6 +31,7 @@ import SellPackageDialog from "./components/SellPackageDialog";
 import ClientAccessDialog from "./components/ClientAccessDialog";
 import RequestPackageDialog from "./components/RequestPackageDialog";
 import SessionEventsTable from "./components/SessionEventsTable";
+import AddToCalendarMenu from "./components/AddToCalendarMenu";
 import SessionTypeDialogs from "./components/SessionTypeDialogs";
 import SchedulePageHeader from "./components/SchedulePageHeader";
 import ScheduleTableFilterMenu from "./components/ScheduleTableFilterMenu";
@@ -593,6 +595,22 @@ export default function Schedule() {
   const handleCancelEvent = async (eventId) => {
     await dispatch(cancelScheduleEvent(eventId));
     refreshSchedule();
+  };
+
+  // Client tap-on-own-session dialog (calendar view): details + cancel + add-to-calendar.
+  const [clientEventTarget, setClientEventTarget] = useState(null);
+
+  // Client self-cancel: confirm with the cancellation policy spelled out. The server
+  // applies the policy either way (inside 24h the session credit is still used).
+  const [clientCancelTarget, setClientCancelTarget] = useState(null);
+  const clientCancelWithinWindow = clientCancelTarget
+    ? clientCancelTarget.status !== "REQUESTED" &&
+      dayjs(clientCancelTarget.startDateTime).diff(dayjs(), "hour") < 24
+    : false;
+  const confirmClientCancel = async () => {
+    const eventId = clientCancelTarget?._id;
+    setClientCancelTarget(null);
+    if (eventId) await handleCancelEvent(eventId);
   };
 
   const handleDeleteEvent = async (eventId) => {
@@ -1869,6 +1887,7 @@ export default function Schedule() {
             getSessionTypeLabel={getSessionTypeLabel}
             openActionForEvent={openActionForEvent}
             openRequestForEvent={openRequestForEvent}
+            onClientCancel={setClientCancelTarget}
           />
         ) : (
         <WeekCalendar
@@ -1881,6 +1900,7 @@ export default function Schedule() {
           weekRangeLabel={weekRangeLabel}
           isTrainerView={isTrainerView}
           isClientView={isClientView}
+          onClientEventClick={setClientEventTarget}
           shareLinkStatus={shareLinkStatus}
           calendarScale={calendarScale}
           setCalendarScale={setCalendarScale}
@@ -2020,6 +2040,7 @@ export default function Schedule() {
               selectedTrainerLabel={selectedTrainerLabel}
               openActionForEvent={openActionForEvent}
               openRequestForEvent={openRequestForEvent}
+              onClientCancel={setClientCancelTarget}
             />
             <UnassignedWorkoutsPanel
               isTrainerView={isTrainerView}
@@ -2406,6 +2427,104 @@ export default function Schedule() {
           <Button onClick={() => setCancelVoidPrompt(null)}>Keep session</Button>
           <Button variant="contained" color="error" onClick={confirmCancelVoidPrompt}>
             Cancel session
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Client's own session (from the calendar view): details + the actions a client has. */}
+      <Dialog
+        open={Boolean(clientEventTarget)}
+        onClose={() => setClientEventTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {clientEventTarget ? getSessionTypeLabel(clientEventTarget) || "Training session" : ""}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={1}>
+            <Typography variant="body1">
+              {clientEventTarget
+                ? dayjs(clientEventTarget.startDateTime).format("dddd, MMM D · h:mm A")
+                : ""}
+              {clientEventTarget?.endDateTime
+                ? ` – ${dayjs(clientEventTarget.endDateTime).format("h:mm A")}`
+                : ""}
+            </Typography>
+            {selectedTrainerLabel && (
+              <Typography variant="body2" color="text.secondary">
+                with {selectedTrainerLabel}
+              </Typography>
+            )}
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              <Chip
+                size="small"
+                label={clientEventTarget?.status === "REQUESTED" ? "Awaiting approval" : clientEventTarget?.status}
+                color={clientEventTarget?.status === "BOOKED" ? "success" : "default"}
+                variant="outlined"
+              />
+              {clientEventTarget && (
+                <AddToCalendarMenu
+                  event={{
+                    title: `Firebelly · ${getSessionTypeLabel(clientEventTarget) || "Training session"}`,
+                    start: clientEventTarget.startDateTime,
+                    end: clientEventTarget.endDateTime,
+                    details: selectedTrainerLabel ? `With ${selectedTrainerLabel}` : "",
+                  }}
+                />
+              )}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => navigate("/messages")}>Message trainer</Button>
+          {clientEventTarget &&
+            ["BOOKED", "REQUESTED"].includes(clientEventTarget.status) &&
+            dayjs(clientEventTarget.startDateTime).isAfter(dayjs()) && (
+              <Button
+                color="error"
+                onClick={() => {
+                  const target = clientEventTarget;
+                  setClientEventTarget(null);
+                  setClientCancelTarget(target);
+                }}
+              >
+                {clientEventTarget.status === "REQUESTED" ? "Withdraw request" : "Cancel session"}
+              </Button>
+            )}
+          <Button variant="contained" onClick={() => setClientEventTarget(null)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Client self-cancel confirm: states the 24-hour policy plainly. */}
+      <Dialog open={Boolean(clientCancelTarget)} onClose={() => setClientCancelTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Cancel this session?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1}>
+            <Typography variant="body2">
+              {clientCancelTarget
+                ? dayjs(clientCancelTarget.startDateTime).format("dddd, MMM D · h:mm A")
+                : ""}
+            </Typography>
+            {clientCancelWithinWindow ? (
+              <Alert severity="warning">
+                This session starts in under 24 hours, so per the cancellation policy it will
+                still use a session credit. Your trainer will be notified.
+              </Alert>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No charge — your session credit stays available and your trainer will be
+                notified. You can book a new time from the calendar.
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setClientCancelTarget(null)}>Keep session</Button>
+          <Button color="error" variant="contained" onClick={confirmClientCancel}>
+            {clientCancelWithinWindow ? "Cancel anyway" : "Cancel session"}
           </Button>
         </DialogActions>
       </Dialog>

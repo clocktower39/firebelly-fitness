@@ -9,6 +9,8 @@ import Loading from "../../Components/Loading";
 import DailyCheckinCard from "../../Components/DailyCheckinCard";
 import CardioSummaryCard from "../../features/workout/components/cardio/CardioSummaryCard";
 import LoadSummaryCard from "../../features/workout/components/load/LoadSummaryCard";
+import ClientStandingCard from "../../Components/ClientStandingCard";
+import InstallAppNudge from "../../Components/InstallAppNudge";
 import SelectedDate from "../../Components/SelectedDate";
 import WeeklyClientWorkoutTracker from "../../Components/TrainingComponents/WeeklyClientWorkoutTracker";
 import WorkoutOverview from "../../Components/TrainingComponents/WorkoutOverview";
@@ -289,6 +291,7 @@ function Home() {
     ) : null,
     cardio: <CardioSummaryCard client={client} />,
     load: <LoadSummaryCard client={client} />,
+    balance: <ClientStandingCard />,
     coverage:
       user.isTrainer && !client ? (
         <WeeklyClientWorkoutTracker
@@ -373,6 +376,7 @@ function Home() {
         </Grid>
       )}
       {orderedSections}
+      <InstallAppNudge />
       {openBlockWizard && (
         <Suspense fallback={null}>
           <TrainingBlockWizard open={openBlockWizard} onClose={() => setOpenBlockWizard(false)} />

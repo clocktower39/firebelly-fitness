@@ -22,6 +22,7 @@ export default function AgendaView({
   getSessionTypeLabel,
   openActionForEvent,
   openRequestForEvent,
+  onClientCancel,
 }) {
   const eventsByDay = weekDays.map((day) => ({
     day,
@@ -103,6 +104,15 @@ export default function AgendaView({
                               Request
                             </Button>
                           )}
+                          {isClientView &&
+                            onClientCancel &&
+                            event.eventType === "APPOINTMENT" &&
+                            event.status === "BOOKED" &&
+                            new Date(event.startDateTime) > new Date() && (
+                              <Button size="small" color="error" variant="outlined" onClick={() => onClientCancel(event)}>
+                                Cancel
+                              </Button>
+                            )}
                           <AddToCalendarMenu event={calEvent} />
                         </Stack>
                       </Box>

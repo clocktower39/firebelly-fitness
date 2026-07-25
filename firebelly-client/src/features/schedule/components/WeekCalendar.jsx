@@ -60,6 +60,7 @@ export default function WeekCalendar({
   getEventStyle,
   openActionForEvent,
   openRequestForEvent,
+  onClientEventClick,
   onRescheduleEvent,
   shareHideDetails,
   shareHighlightShown,
@@ -506,6 +507,14 @@ export default function WeekCalendar({
                                       event.status === "OPEN"
                                     ) {
                                       openRequestForEvent(event);
+                                      return;
+                                    }
+                                    if (
+                                      isClientView &&
+                                      event.eventType === "APPOINTMENT" &&
+                                      event.clientId
+                                    ) {
+                                      onClientEventClick?.(event);
                                     }
                                   }}
                                 >

@@ -88,6 +88,7 @@ export default function SessionEventsTable({
   selectedTrainerLabel,
   openActionForEvent,
   openRequestForEvent,
+  onClientCancel,
 }) {
   return (
     <Card>
@@ -261,6 +262,20 @@ export default function SessionEventsTable({
                               onClick={() => openRequestForEvent(event)}
                             >
                               Request
+                            </Button>
+                          )}
+                        {isClientView &&
+                          onClientCancel &&
+                          event.eventType === "APPOINTMENT" &&
+                          event.status === "BOOKED" &&
+                          new Date(event.startDateTime) > new Date() && (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                              onClick={() => onClientCancel(event)}
+                            >
+                              Cancel
                             </Button>
                           )}
                       </Stack>

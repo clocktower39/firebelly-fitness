@@ -8,6 +8,7 @@ export const DAILY_OVERVIEW_SECTIONS = [
   { key: "cardio", label: "Cardio Summary" },
   { key: "metrics", label: "Body Metrics" },
   { key: "load", label: "Training Load" },
+  { key: "balance", label: "Sessions & Balance" },
   { key: "coverage", label: "Daily Coverage", trainerOnly: true },
 ];
 

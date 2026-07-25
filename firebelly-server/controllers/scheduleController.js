@@ -477,6 +477,10 @@ const cancel_schedule_event = async (req, res, next) => {
     existing.cancelledBy = userId;
     if (billingStatus && String(existing.trainerId) === String(userId)) {
       existing.billingStatus = billingStatus;
+    } else if (wasRequested) {
+      // A pending request was never a confirmed booking — withdrawing/declining it
+      // never charges, regardless of how close to the requested time it happens.
+      existing.billingStatus = "NO_CHARGE";
     } else {
       existing.billingStatus = isWithinCancellationWindow(existing.startDateTime)
         ? "CHARGED"

@@ -353,7 +353,7 @@ function SwipeableSet(props) {
                   <Typography variant="body1">Feedback:</Typography>
                 </Grid>
                 <Grid container size={12} sx={{ padding: "30px 0" }}>
-                  <FeedbackWorkoutInput workoutFeedback={workoutFeedback} setWorkoutFeedback={setWorkoutFeedback} />
+                  <FeedbackWorkoutInput workoutFeedback={workoutFeedback} setWorkoutFeedback={setWorkoutFeedback} onResize={() => setHeightToggle((prev) => !prev)} />
                   {/* <TextField
                     label="Overall Feedback"
                     value={workoutFeedback}
@@ -456,7 +456,7 @@ function SwipeableSet(props) {
     </Box>
   );
 }
-const FeedbackWorkoutInput = ({ workoutFeedback, setWorkoutFeedback, }) => {
+const FeedbackWorkoutInput = ({ workoutFeedback, setWorkoutFeedback, onResize }) => {
   const user = useSelector((state) => state.user);
   const [feedbackDifficulty, setFeedbackDifficulty] = useState(Number(workoutFeedback.difficulty) || 1);
 
@@ -472,14 +472,9 @@ const FeedbackWorkoutInput = ({ workoutFeedback, setWorkoutFeedback, }) => {
   const [commentText, setCommentText] = useState("");
 
   const handleFeedbackKeyDown = (e) => {
-    // Check if any of Enter, Shift+Enter, Backspace, or Delete is pressed to resize
-    if (
-      (e.key === "Enter" && !e.shiftKey) || // Regular Enter
-      (e.key === "Enter" && e.shiftKey) || // Shift + Enter
-      e.key === "Backspace" || // Backspace
-      e.key === "Delete" // Delete
-    ) {
-      setHeightToggle((prev) => !prev);
+    // The comment box grows with content; nudge the swipeable view to re-measure height.
+    if (e.key === "Enter" || e.key === "Backspace" || e.key === "Delete") {
+      onResize?.();
     }
   };
 
@@ -631,142 +626,6 @@ const FeedbackWorkoutInput = ({ workoutFeedback, setWorkoutFeedback, }) => {
           }}
         />
 
-      </Grid>
-    </Grid>
-  );
-};
-
-const FeedbackExerciseInput = ({ exercise }) => {
-  const [feedbackDifficulty, setFeedbackDifficulty] = useState(exercise.feedback.difficulty);
-
-  const handleFeedbackDifficultyChange = (event) => {
-    setFeedbackDifficulty(Number(event.target.value));
-  };
-
-  return (
-    <Grid container size={12} key={exercise._id} component={Paper} spacing={1} sx={{ padding: '15px 7.5px', }}>
-      <Grid container size={12}>
-        <Typography>{exercise.exercise?.exerciseTitle || exercise.customName || "Exercise"}:</Typography>
-      </Grid>
-      <Grid container size={12} sx={{ padding: "0px 15px" }}>
-        <Typography sx={{ mb: 1 }}>Rate Difficulty:</Typography>
-        <RadioGroup
-          row
-          value={feedbackDifficulty}
-          onChange={handleFeedbackDifficultyChange}
-          sx={{
-            display: "flex",
-            flexDirection: { xs: "column", sm: "row" },
-            flexWrap: { xs: "nowrap", sm: "nowrap" },
-            justifyContent: "space-between",
-            width: "100%",
-          }}
-        >
-          <FormControlLabel
-            value={0}
-            control={
-              <Radio
-                checked={feedbackDifficulty === 0}
-                sx={{
-                  "&.Mui-checked": {
-                    color: "secondary.main",
-                  },
-                }}
-              />
-            }
-            label={
-              <Typography
-                sx={{
-                  color: feedbackDifficulty === 0 ? "secondary.main" : "text.primary",
-                }}
-              >
-                Too Easy
-              </Typography>
-            }
-          />
-          <FormControlLabel
-            value={1}
-            control={
-              <Radio
-                checked={feedbackDifficulty === 1}
-                sx={{
-                  "&.Mui-checked": {
-                    color: "primary.main",
-                  },
-                }}
-              />
-            }
-            label={
-              <Typography
-                sx={{
-                  color: feedbackDifficulty === 1 ? "primary.main" : "text.primary",
-                }}
-              >
-                Perfect
-              </Typography>
-            }
-          />
-          <FormControlLabel
-            value={2}
-            control={
-              <Radio
-                checked={feedbackDifficulty === 2}
-                sx={{
-                  "&.Mui-checked": {
-                    color: "#d32f2f",
-                  },
-                }}
-              />
-            }
-            label={
-              <Typography
-                sx={{
-                  color: feedbackDifficulty === 2 ? "#d32f2f" : "text.primary", // custom red
-                }}
-              >
-                Too Hard
-              </Typography>
-            }
-          />
-        </RadioGroup>
-      </Grid>
-      {exercise.feedback.comments.map(comment => {
-        return (
-          <Grid container sx={{ padding: '25px 0', }}>
-            <Grid container size={2} sx={{ justifyContent: 'center', }}>
-              <Avatar src={comment.user.profilePicture ? `${serverURL}/user/profilePicture/${comment.user.profilePicture}` : null} />
-            </Grid>
-            <Grid container size={8}>
-              <Typography variant="body2" display="inline">
-                {comment.user.firstName}{" "}{comment.user.lastName}
-              </Typography>
-              <Typography
-                variant="subtitle2"
-                display="inline"
-                sx={{
-                  opacity: ".33",
-                }}
-              >
-                {dayjs(comment.timestamp).format("MM/DD/YYYY h:mm:ss A")}
-              </Typography>
-              <Typography variant="body1" display="block">
-                {comment.text}
-              </Typography>
-            </Grid>
-          </Grid>
-        )
-      })}
-      <Grid container size={12} sx={{ padding: "0px 15px" }}>
-        <TextField label="Add comment..." fullWidth multiline
-          slotProps={{
-            input: {
-              endAdornment: (
-                <Button variant="contained" color="primary" onClick={(e) => handleMessageSubmit(e)}>
-                  Submit
-                </Button>
-              ),
-            }
-          }} />
       </Grid>
     </Grid>
   );
