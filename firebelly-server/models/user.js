@@ -50,6 +50,8 @@ const UserSchema = new mongoose.Schema({
     },
     themeMode: { type: String, required: true, default: 'light', },
     workoutWeightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
+    // App-wide text size (accessibility): scales the root font size on the client.
+    textScale: { type: String, enum: ['default', 'large', 'xlarge'], default: 'default' },
     defaultSessionLengthMinutes: { type: Number, default: 60, min: 5, max: 480 },
     favoriteSports: { type: [String], default: [] },
     favoriteYogaStyles: { type: [String], default: [] },

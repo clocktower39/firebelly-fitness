@@ -47,6 +47,7 @@ import Goals from "./Goals";
 import TrainingProfileView from "../../Components/AccountComponents/TrainingProfileView";
 import ClientTrainingBlocks from "../../Components/Goals/ClientTrainingBlocks";
 import LogSessionsDialog from "../../Components/LogSessionsDialog";
+import EmptyState from "../../Components/EmptyState";
 import { styled } from "@mui/material/styles";
 import {
   ENGAGEMENT_STATUS_OPTIONS,
@@ -833,9 +834,16 @@ export default function Clients({ socket }) {
           ))
         ) : (
           <Grid container size={12} sx={{ justifyContent: "center", py: 4 }}>
-            <Typography variant="body2" color="text.secondary">
-              No clients match the current filters.
-            </Typography>
+            {clientRelationships.length === 0 ? (
+              <EmptyState
+                title="No clients yet"
+                hint="Clients appear here after they create an account and add you as their trainer (Account → Trainers). Send new clients your sign-up link to get started."
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No clients match the current filters.
+              </Typography>
+            )}
           </Grid>
         )}
       </Grid>

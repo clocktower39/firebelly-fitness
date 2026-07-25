@@ -4,9 +4,9 @@
 // navigation (date selector + weekly status strip) is always pinned above these and is not reorderable.
 export const DAILY_OVERVIEW_SECTIONS = [
   { key: "checkin", label: "Daily Check-in" },
-  { key: "metrics", label: "Body Metrics" },
   { key: "workouts", label: "Workouts" },
   { key: "cardio", label: "Cardio Summary" },
+  { key: "metrics", label: "Body Metrics" },
   { key: "load", label: "Training Load" },
   { key: "coverage", label: "Daily Coverage", trainerOnly: true },
 ];

@@ -43,6 +43,7 @@ import {
   Send,
 } from "@mui/icons-material";
 import { conversationApi } from "../../api/conversationApi";
+import EmptyState from "../../Components/EmptyState";
 import dayjs from "dayjs";
 import {
   getConversations,
@@ -359,9 +360,14 @@ export default function Messages() {
           </List>
         )
       ) : conversations.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-          No conversations yet.
-        </Typography>
+        <Box sx={{ p: 2 }}>
+          <EmptyState
+            compact
+            title="No conversations yet"
+            hint="Message a client 1:1, share files, or broadcast to everyone at once — replies land here."
+            action={{ label: "New message", onClick: openCompose }}
+          />
+        </Box>
       ) : (
         <List disablePadding>
           {conversations.map((c) => {

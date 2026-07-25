@@ -81,6 +81,7 @@ const getSocketURL = () => {
 function App({ }) {
   const dispatch = useDispatch();
   const themeMode = useSelector((state) => state.user.themeMode);
+  const textScale = useSelector((state) => state.user.textScale);
   const [themeSelection, setThemeSelection] = useState(theme());
 
   const userId = useSelector((state) => state.user._id);
@@ -108,6 +109,14 @@ function App({ }) {
     return Array.from(ids).sort();
   }, shallowEqual);
   const [socket, setSocket] = useState(null);
+
+  // Text-size setting: scale the root font size. MUI typography is rem-based, so this
+  // scales all text app-wide while px-based layout spacing stays put. "default" pins
+  // 100% explicitly — identical to the app before this setting existed.
+  useEffect(() => {
+    const scaleMap = { default: "100%", large: "112.5%", xlarge: "125%" };
+    document.documentElement.style.fontSize = scaleMap[textScale] || "100%";
+  }, [textScale]);
 
   useEffect(() => {
     if (userId) {

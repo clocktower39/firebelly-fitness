@@ -52,6 +52,7 @@ const updateUserValidate = {
         gymBarcode: Joi.string().allow(""),
         themeMode: Joi.string().allow(""),
         workoutWeightUnit: Joi.string().allow(""),
+        textScale: Joi.string().valid("default", "large", "xlarge"),
         defaultSessionLengthMinutes: Joi.number().integer().min(5).max(480),
         favoriteSports: Joi.array().items(Joi.string().allow("")),
         favoriteYogaStyles: Joi.array().items(Joi.string().allow("")),

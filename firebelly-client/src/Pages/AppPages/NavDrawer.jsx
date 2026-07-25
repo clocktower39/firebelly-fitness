@@ -51,6 +51,10 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Storefront as StorefrontIcon,
   FitnessCenter as ExerciseLibraryIcon,
+  LibraryBooks as ProgramsIcon,
+  DashboardCustomize as TemplatesIcon,
+  Tune as ManageExercisesIcon,
+  Sell as ProductsIcon,
   Chat as MessagesIcon,
   Feedback as FeedbackIcon,
   Inbox as InboxIcon,
@@ -103,7 +107,7 @@ export default function NavDrawer() {
     {
       header: "Sessions & Community",
       items: [
-        { title: "Scheduling", to: "/sessions", icon: <CalendarIcon /> },
+        { title: "Session Calendar", to: "/sessions", icon: <CalendarIcon /> },
         { title: "Groups", to: "/groups", icon: <GroupsIcon /> },
         { title: "Trainers", to: "/account/trainers", icon: <TrainersIcon /> },
         { title: "Shop", to: "/trainer-store", icon: <StorefrontIcon /> },
@@ -124,9 +128,9 @@ export default function NavDrawer() {
       items: [
         { title: "Clients", to: "/clients", icon: <ClientsIcon /> },
         { title: "Coverage", to: "/coverage", icon: <CoverageIcon /> },
-        { title: "Programs", to: "/programs", icon: <GoalsIcon /> },
-        { title: "Workout Templates", to: "/workout-templates", icon: <CalendarIcon /> },
-        { title: "Exercises", to: "/exercises", icon: <GoalsIcon /> },
+        { title: "Programs", to: "/programs", icon: <ProgramsIcon /> },
+        { title: "Workout Templates", to: "/workout-templates", icon: <TemplatesIcon /> },
+        { title: "Manage Exercises", to: "/exercises", icon: <ManageExercisesIcon /> },
       ],
     },
     {
@@ -134,7 +138,7 @@ export default function NavDrawer() {
       items: [
         { title: "Invoices", to: "/invoices", icon: <SessionIcon /> },
         { title: "Session History", to: "/session-history", icon: <SessionHistoryIcon /> },
-        { title: "Products", to: "/products", icon: <GoalsIcon /> },
+        { title: "Products", to: "/products", icon: <ProductsIcon /> },
       ],
     },
   ];

@@ -15,6 +15,8 @@ import {
   Popover,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { HexColorPicker } from "react-colorful";
@@ -69,6 +71,10 @@ const ColorField = ({ label, value, onChange }) => {
 export default function AccountSettings() {
   const dispatch = useDispatch();
   const userThemeMode = useSelector((state) => state.user.themeMode);
+  const textScale = useSelector((state) => state.user.textScale) || "default";
+  const handleTextScaleChange = (event, next) => {
+    if (next) dispatch(updateUserSettings({ textScale: next }));
+  };
   const customThemes = useSelector((state) => state.user.customThemes) || [];
   const isActiveCustomTheme = (themeId) => userThemeMode === `custom:${themeId}`;
 
@@ -249,6 +255,28 @@ export default function AccountSettings() {
                   Save
                 </Button>
               </Grid>
+            </Grid>
+            <Grid container size={12} sx={{ paddingTop: "10px" }}>
+              <Typography color="primary.contrastText" variant="h6">
+                Text Size
+              </Typography>
+            </Grid>
+            <Grid container size={12} sx={{ justifyContent: "center" }}>
+              <ToggleButtonGroup
+                value={textScale}
+                exclusive
+                onChange={handleTextScaleChange}
+                aria-label="text size"
+              >
+                <ToggleButton value="default">Default</ToggleButton>
+                <ToggleButton value="large" sx={{ fontSize: "1.1rem" }}>Large</ToggleButton>
+                <ToggleButton value="xlarge" sx={{ fontSize: "1.22rem" }}>Extra Large</ToggleButton>
+              </ToggleButtonGroup>
+            </Grid>
+            <Grid container size={12} sx={{ justifyContent: "center" }}>
+              <Typography variant="caption" color="text.secondary">
+                Applies everywhere, on every device you sign in on.
+              </Typography>
             </Grid>
             <Grid container size={12} sx={{ paddingTop: "10px" }}>
               <Typography color="primary.contrastText" variant="h6">

@@ -26,6 +26,7 @@ import {
 } from "@mui/material";
 import { requestClients } from "../../Redux/actions";
 import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
+import EmptyState from "../../Components/EmptyState";
 
 export default function Programs() {
   const dispatch = useDispatch();
@@ -205,7 +206,11 @@ export default function Programs() {
         {loading && <Typography>Loading programs...</Typography>}
         {error && <Typography color="error">{error}</Typography>}
         {!loading && !error && programs.length === 0 && (
-          <Typography color="text.secondary">No programs yet.</Typography>
+          <EmptyState
+            title="No programs yet"
+            hint="A program is a multi-week training plan you build once and assign to any client — start from the Training Block wizard for a generated draft, or build one by hand."
+            action={{ label: "Build your first program", onClick: () => navigate("/programs/builder") }}
+          />
         )}
         {!loading && !error && programs.length > 0 && filteredAndSortedPrograms.length === 0 && (
           <Typography color="text.secondary">No programs match your filter.</Typography>

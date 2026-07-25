@@ -21,6 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 import { serverURL } from "../../Redux/actions";
+import EmptyState from "../../Components/EmptyState";
 
 const roleLabels = {
   TRAINER: "Trainer",
@@ -111,7 +112,11 @@ export default function Groups() {
           {loading && <Typography>Loading groups...</Typography>}
           {error && <Typography color="error">{error}</Typography>}
           {!loading && !error && groups.length === 0 && (
-            <Typography color="text.secondary">No groups yet.</Typography>
+            <EmptyState
+              title="No groups yet"
+              hint="A group lets you message several clients at once, assign the same program to a whole team, and bill group sessions together."
+              action={{ label: "Create your first group", onClick: () => setOpenCreateDialog(true) }}
+            />
           )}
 
           <Grid container spacing={2}>

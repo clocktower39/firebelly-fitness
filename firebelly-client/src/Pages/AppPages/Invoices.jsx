@@ -34,6 +34,7 @@ import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import CloseIcon from "@mui/icons-material/Close";
 import InvoiceReportsDialog from "../../Components/InvoiceReportsDialog";
 import LogSessionsDialog from "../../Components/LogSessionsDialog";
+import EmptyState from "../../Components/EmptyState";
 import { alpha } from "@mui/material/styles";
 import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
@@ -1092,14 +1093,18 @@ export default function Invoices() {
                 <Typography color="text.secondary">Loading invoices…</Typography>
               ) : filteredInvoices.length === 0 ? (
                 <Stack spacing={1} sx={{ alignItems: "center", py: 4 }}>
-                  <Typography color="text.secondary">
-                    {invoiceList.length === 0
-                      ? "No invoices yet."
-                      : "No invoices match this filter."}
-                  </Typography>
+                  {invoiceList.length === 0 ? (
+                    <EmptyState
+                      compact
+                      title="No invoices yet"
+                      hint="Bill a client for sessions or products — recorded payments become session credits and roll into your income and payout reports."
+                    />
+                  ) : (
+                    <Typography color="text.secondary">No invoices match this filter.</Typography>
+                  )}
                   {invoiceList.length === 0 && (
-                    <Button variant="outlined" size="small" onClick={startCreate}>
-                      Create the first one
+                    <Button variant="contained" size="small" onClick={startCreate}>
+                      Create your first invoice
                     </Button>
                   )}
                 </Stack>

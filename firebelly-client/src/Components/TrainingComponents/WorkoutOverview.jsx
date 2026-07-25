@@ -1101,7 +1101,7 @@ export default function WorkoutOverview({
           <DialogContentText id="alert-dialog-slide-description">
             {canUseTemplates
               ? "Pick a workout type, or start from one of your templates."
-              : "Select a workout type to create. More options coming soon."}
+              : "Select a workout type to create."}
           </DialogContentText>
           <Box sx={{ marginTop: "12px" }}>
             <TextField

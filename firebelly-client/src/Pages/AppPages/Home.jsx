@@ -303,9 +303,9 @@ function Home() {
       ) : null,
   };
 
-  // Resolve the render order. A custom order is honored literally; otherwise use the default order but
-  // keep the existing nicety: today's check-in sits at the top until it's done, then drops below the
-  // workout (and a client's check-in shows below like before).
+  // Resolve the render order. A custom order is honored literally; otherwise the default is:
+  // unfilled check-in on top (the day's first job), then Workouts, Cardio, Body Metrics,
+  // Training Load — and once the check-in is done it drops to the very bottom.
   const hasCustomLayout = Array.isArray(dailyOverviewOrder) && dailyOverviewOrder.length > 0;
   let orderedKeys;
   if (hasCustomLayout) {
@@ -313,12 +313,11 @@ function Home() {
   } else {
     orderedKeys = DAILY_OVERVIEW_ORDER.filter((key) => key !== "checkin");
     // The "pin to top until done" nudge is for the client filling in their own check-in — not for a
-    // trainer in a view-as session, where the check-in stays below the workout.
+    // trainer in a view-as session, where the check-in stays at the bottom.
     if (personal && !todayCheckinDone && !inClientAccount) {
       orderedKeys.unshift("checkin");
     } else {
-      const cardioIndex = orderedKeys.indexOf("cardio");
-      orderedKeys.splice(cardioIndex + 1, 0, "checkin");
+      orderedKeys.push("checkin");
     }
   }
 

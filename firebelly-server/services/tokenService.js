@@ -22,6 +22,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   profilePicture: user.profilePicture || null,
   themeMode: user.themeMode || "light",
   workoutWeightUnit: user.workoutWeightUnit === "kg" ? "kg" : "lbs",
+  textScale: user.textScale || "default",
   defaultSessionLengthMinutes: user.defaultSessionLengthMinutes || 60,
   favoriteSports: Array.isArray(user.favoriteSports) ? user.favoriteSports : [],
   favoriteYogaStyles: Array.isArray(user.favoriteYogaStyles) ? user.favoriteYogaStyles : [],

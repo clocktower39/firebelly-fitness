@@ -484,7 +484,7 @@ export default function SessionHistory() {
 
               {sorted.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                  No sessions in this range.
+                  No sessions in this range — try a wider date range or a different client.
                 </Typography>
               ) : (
                 <Stack divider={<Divider flexItem />} spacing={0}>

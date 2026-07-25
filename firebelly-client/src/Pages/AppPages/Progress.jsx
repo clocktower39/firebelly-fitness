@@ -2143,7 +2143,7 @@ const BodyMetrics = ({ targetUser, isTrainerView }) => {
           <Typography variant="subtitle1">History</Typography>
           {entries.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              No entries yet.
+              No entries yet — record your first measurement above to start the history.
             </Typography>
           ) : (
             <TableContainer sx={{ maxHeight: 360 }}>

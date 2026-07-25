@@ -50,7 +50,9 @@ export default function CardioDashboard({ client = null }) {
     return (
       <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
         <Typography variant="body2" color="text.secondary">
-          {error ? "Couldn't load cardio data." : "No cardio logged in the last 12 weeks yet."}
+          {error
+            ? "Couldn't load cardio data."
+            : "No cardio in the last 12 weeks. Log a Cardio workout from any calendar day and distance, pace, and weekly-mileage trends build here automatically."}
         </Typography>
       </Paper>
     );

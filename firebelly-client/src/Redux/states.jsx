@@ -3,6 +3,7 @@ export let user = {
     themeMode: localStorage.getItem('theme'),
     customThemes: [],
     workoutWeightUnit: "lbs",
+    textScale: "default",
     defaultSessionLengthMinutes: 60,
     favoriteSports: [],
     favoriteYogaStyles: [],
