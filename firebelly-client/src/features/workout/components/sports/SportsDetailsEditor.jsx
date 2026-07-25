@@ -66,7 +66,7 @@ export default function SportsDetailsEditor({
                     disableClearable
                     fullWidth
                     options={[...favList, ...otherSports]}
-                    value={sports.sport}
+                    value={sports.sport || null}
                     onChange={(event, newValue) => {
                       if (newValue) handleChange("sport")(newValue);
                     }}
@@ -75,7 +75,9 @@ export default function SportsDetailsEditor({
                         ? (option) => (favList.includes(option) ? "★ Favorites" : "All sports")
                         : undefined
                     }
-                    renderInput={(params) => <TextField {...params} label="Sport" />}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Sport" placeholder="Choose a sport" />
+                    )}
                   />
                   <Tooltip title={isCurrentFavorite ? "Unfavorite" : "Favorite this sport"}>
                     <IconButton

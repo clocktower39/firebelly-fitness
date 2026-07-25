@@ -87,7 +87,9 @@ export const SPORTS_OPTIONAL_SECTIONS = [
 export const DEFAULT_SPORTS_STAT = { label: "", value: "" };
 
 export const DEFAULT_SPORTS_FIELDS = {
-  sport: "Basketball",
+  // No hardcoded default sport: a new section stays blank until the preferred-sport lookup
+  // fills it (most-used favorite → most-used overall) or the user picks one.
+  sport: "",
   sessionType: "Practice",
   durationMinutes: "",
   rpe: "",
