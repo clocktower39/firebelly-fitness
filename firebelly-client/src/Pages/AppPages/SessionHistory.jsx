@@ -24,6 +24,7 @@ import { scheduleApi } from "../../api/scheduleApi";
 import { billingApi } from "../../api/billingApi";
 import { buildCsv, downloadCsv } from "../../utils/csv";
 import { requestClients } from "../../Redux/actions";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
 
 // Trainer report: pick a client + a date range and list every session (appointment) they've
 // had in that window, tagged by status. Read-only — reads the schedule range API. See the
@@ -303,8 +304,8 @@ export default function SessionHistory() {
               <Autocomplete
                 size="small"
                 sx={{ maxWidth: 360 }}
-                options={clients.filter((c) => c.accepted)}
-                getOptionLabel={(o) => `${o.client?.firstName || ""} ${o.client?.lastName || ""}`.trim()}
+                options={[...clients.filter((c) => c.accepted)].sort(compareRelationshipsByClientLastName)}
+                getOptionLabel={(o) => formatClientLastFirst(o.client)}
                 isOptionEqualToValue={(o, v) => o.client?._id === v.client?._id}
                 value={selectedClientRel}
                 onChange={(_, v) => setClientId(v ? v.client._id : "")}

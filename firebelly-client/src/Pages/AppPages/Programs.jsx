@@ -25,6 +25,7 @@ import {
   Typography,
 } from "@mui/material";
 import { requestClients } from "../../Redux/actions";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
 
 export default function Programs() {
   const dispatch = useDispatch();
@@ -130,7 +131,7 @@ export default function Programs() {
   }, [programs, ownerFilter]);
 
   const acceptedClients = useMemo(
-    () => clients.filter((clientRel) => clientRel.accepted),
+    () => clients.filter((clientRel) => clientRel.accepted).sort(compareRelationshipsByClientLastName),
     [clients]
   );
 
@@ -312,7 +313,7 @@ export default function Programs() {
               >
                 {acceptedClients.map((clientRel) => (
                   <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                    {clientRel.client.firstName} {clientRel.client.lastName}
+                    {formatClientLastFirst(clientRel.client)}
                   </MenuItem>
                 ))}
               </Select>

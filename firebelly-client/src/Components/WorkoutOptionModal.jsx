@@ -737,10 +737,12 @@ export function ModalAction(props) {
           });
         }
   
-        let accountOptions = clients.map((client) => ({
-          label: `${client.client.lastName}, ${client.client.firstName}`,
-          value: client.client._id,
-        }));
+        let accountOptions = clients
+          .map((client) => ({
+            label: `${client.client.lastName}, ${client.client.firstName}`,
+            value: client.client._id,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label));
   
         accountOptions.unshift({
           label: `${user.lastName}, ${user.firstName}`,
@@ -828,7 +830,7 @@ export function ModalAction(props) {
               <Grid container size={12} sx={{ paddingBottom: "15px" }}>
                 <Autocomplete
                   disablePortal
-                  options={accountOptions.sort((a, b) => a.label > b.label)}
+                  options={accountOptions}
                   isOptionEqualToValue={(option, value) => option.value === value.value}
                   renderInput={(params) => <TextField {...params} label="Copy to account" />}
                   sx={{ width: "100%" }}

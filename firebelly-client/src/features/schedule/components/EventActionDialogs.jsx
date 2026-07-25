@@ -33,6 +33,7 @@ import {
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../../utils/clientRelationships";
 
 // Purchased session types float to the top of the booking pickers (most remaining first,
 // then purchased-but-used-up, then the rest in their usual order), with the client's
@@ -296,9 +297,9 @@ export default function EventActionDialogs({
 
       {/* Client search */}
       <Autocomplete
-        options={clients.filter((clientRel) => clientRel.accepted)}
+        options={[...clients.filter((clientRel) => clientRel.accepted)].sort(compareRelationshipsByClientLastName)}
         getOptionLabel={(option) =>
-          `${option.client.firstName} ${option.client.lastName}`
+          formatClientLastFirst(option.client)
         }
         isOptionEqualToValue={(option, value) => option.client._id === value.client._id}
         value={clients.find((clientRel) => clientRel.client._id === quickBookClientId) || null}
@@ -859,11 +860,11 @@ export default function EventActionDialogs({
                     }}
                   >
                     <MenuItem value="">Keep open</MenuItem>
-                    {clients
-                      .filter((clientRel) => clientRel.accepted)
+                    {[...clients.filter((clientRel) => clientRel.accepted)]
+                      .sort(compareRelationshipsByClientLastName)
                       .map((clientRel) => (
                         <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                          {clientRel.client.firstName} {clientRel.client.lastName}
+                          {formatClientLastFirst(clientRel.client)}
                         </MenuItem>
                       ))}
                   </Select>
@@ -1330,11 +1331,11 @@ export default function EventActionDialogs({
                 }}
               >
                 <MenuItem value="">Custom booking</MenuItem>
-                {clients
-                  .filter((clientRel) => clientRel.accepted)
+                {[...clients.filter((clientRel) => clientRel.accepted)]
+                  .sort(compareRelationshipsByClientLastName)
                   .map((clientRel) => (
                     <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                      {clientRel.client.firstName} {clientRel.client.lastName}
+                      {formatClientLastFirst(clientRel.client)}
                     </MenuItem>
                   ))}
               </Select>

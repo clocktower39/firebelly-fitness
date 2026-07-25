@@ -39,6 +39,7 @@ import dayjs from "dayjs";
 import { requestClients } from "../../Redux/actions";
 import { formatPrice } from "../../utils/currency";
 import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
 
 const STATUS_CHIP = {
   DRAFT: { label: "Draft", color: "default" },
@@ -750,9 +751,9 @@ export default function Invoices() {
               <Autocomplete
                 size="small"
                 sx={{ minWidth: 220, flexGrow: 1 }}
-                options={clients.filter((clientRel) => clientRel.accepted)}
+                options={[...clients.filter((clientRel) => clientRel.accepted)].sort(compareRelationshipsByClientLastName)}
                 getOptionLabel={(o) =>
-                  `${o.client?.firstName || ""} ${o.client?.lastName || ""}`.trim()
+                  formatClientLastFirst(o.client)
                 }
                 isOptionEqualToValue={(o, v) => o.client?._id === v.client?._id}
                 value={clients.find((c) => c.client?._id === clientFilter) || null}
@@ -836,11 +837,11 @@ export default function Invoices() {
                         value={selectedClientId}
                         onChange={(event) => setSelectedClientId(event.target.value)}
                       >
-                        {clients
-                          .filter((clientRel) => clientRel.accepted)
+                        {[...clients.filter((clientRel) => clientRel.accepted)]
+                          .sort(compareRelationshipsByClientLastName)
                           .map((clientRel) => (
                             <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                              {clientRel.client.firstName} {clientRel.client.lastName}
+                              {formatClientLastFirst(clientRel.client)}
                             </MenuItem>
                           ))}
                       </Select>

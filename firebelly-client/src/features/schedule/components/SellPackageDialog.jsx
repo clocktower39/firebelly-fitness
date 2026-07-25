@@ -20,6 +20,7 @@ import { scheduleApi } from "../api/scheduleApi";
 import { billingApi } from "../../../api/billingApi";
 import { formatPrice } from "../../../utils/currency";
 import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../../utils/clientRelationships";
 
 // Level 1 "sell a package": trainer records a sale -> creates a PAID invoice with a
 // SESSION line item, which lands credits on the client's ledger balance.
@@ -33,7 +34,7 @@ export default function SellPackageDialog({ open, onClose, clients, trainerId, o
   const [saving, setSaving] = useState(false);
 
   const acceptedClients = useMemo(
-    () => (clients || []).filter((c) => c.accepted),
+    () => (clients || []).filter((c) => c.accepted).sort(compareRelationshipsByClientLastName),
     [clients]
   );
 
@@ -118,7 +119,7 @@ export default function SellPackageDialog({ open, onClose, clients, trainerId, o
 
           <Autocomplete
             options={acceptedClients}
-            getOptionLabel={(o) => `${o.client.firstName} ${o.client.lastName}`}
+            getOptionLabel={(o) => formatClientLastFirst(o.client)}
             isOptionEqualToValue={(o, v) => o.client._id === v.client._id}
             value={acceptedClients.find((c) => c.client._id === clientId) || null}
             onChange={(_, v) => {

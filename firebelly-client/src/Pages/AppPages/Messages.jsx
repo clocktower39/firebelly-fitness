@@ -223,7 +223,8 @@ export default function Messages() {
       if (!c.accepted || !c.client?._id) return;
       map.set(String(c.client._id), {
         userId: String(c.client._id),
-        name: `${c.client.firstName || ""} ${c.client.lastName || ""}`.trim() || "Client",
+        name: `${c.client.lastName || ""}, ${c.client.firstName || ""}`.replace(/^, |, $/g, "").trim() || "Client",
+        sortName: `${c.client.lastName || ""} ${c.client.firstName || ""}`.trim().toLowerCase(),
         profilePicture: c.client.profilePicture,
       });
     });
@@ -233,11 +234,12 @@ export default function Messages() {
       if (map.has(id)) return;
       map.set(id, {
         userId: id,
-        name: `${t.firstName || ""} ${t.lastName || ""}`.trim() || "Trainer",
+        name: `${t.lastName || ""}, ${t.firstName || ""}`.replace(/^, |, $/g, "").trim() || "Trainer",
+        sortName: `${t.lastName || ""} ${t.firstName || ""}`.trim().toLowerCase(),
         profilePicture: t.profilePicture,
       });
     });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(map.values()).sort((a, b) => (a.sortName || a.name).localeCompare(b.sortName || b.name));
   }, [clients, myTrainers]);
 
   const filteredContacts = contacts.filter((c) =>
@@ -263,9 +265,10 @@ export default function Messages() {
         .filter((c) => c.accepted && c.client?._id)
         .map((c) => ({
           userId: String(c.client._id),
-          name: `${c.client.firstName || ""} ${c.client.lastName || ""}`.trim() || "Client",
+          name: `${c.client.lastName || ""}, ${c.client.firstName || ""}`.replace(/^, |, $/g, "").trim() || "Client",
+          sortName: `${c.client.lastName || ""} ${c.client.firstName || ""}`.trim().toLowerCase(),
         }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => a.sortName.localeCompare(b.sortName)),
     [clients]
   );
 

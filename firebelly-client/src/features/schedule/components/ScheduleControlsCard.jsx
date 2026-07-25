@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import DefaultSessionLengthField from "../../../Components/AccountComponents/DefaultSessionLengthField";
 import CalendarSyncDialog from "./CalendarSyncDialog";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../../utils/clientRelationships";
 
 export default function ScheduleControlsCard({
   user,
@@ -140,8 +141,8 @@ export default function ScheduleControlsCard({
             {isTrainerView && (
               <Autocomplete
                 multiple
-                options={clients.filter((clientRel) => clientRel.accepted)}
-                getOptionLabel={(option) => `${option.client.firstName} ${option.client.lastName}`}
+                options={[...clients.filter((clientRel) => clientRel.accepted)].sort(compareRelationshipsByClientLastName)}
+                getOptionLabel={(option) => formatClientLastFirst(option.client)}
                 value={clients.filter((clientRel) =>
                   selectedClientIds.includes(clientRel.client._id)
                 )}

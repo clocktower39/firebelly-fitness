@@ -35,6 +35,7 @@ import {
 import { requestClients, serverURL } from "../../Redux/actions";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Delete } from "@mui/icons-material";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
 
 const roleLabels = {
   TRAINER: "Trainer",
@@ -134,7 +135,7 @@ export default function GroupDetail() {
   );
 
   const acceptedClients = useMemo(
-    () => clients.filter((clientRel) => clientRel.accepted),
+    () => clients.filter((clientRel) => clientRel.accepted).sort(compareRelationshipsByClientLastName),
     [clients]
   );
 
@@ -1330,7 +1331,7 @@ export default function GroupDetail() {
                   <MenuItem value="">Select a client</MenuItem>
                   {acceptedClients.map((clientRel) => (
                     <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                      {clientRel.client.firstName} {clientRel.client.lastName}
+                      {formatClientLastFirst(clientRel.client)}
                     </MenuItem>
                   ))}
                 </Select>

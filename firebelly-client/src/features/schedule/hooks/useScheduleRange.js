@@ -80,7 +80,10 @@ export default function useScheduleRange({
         }
       }
     });
-    return Array.from(seen.values());
+    // Alphabetical (by display label), real clients before custom-name bookings.
+    return Array.from(seen.values()).sort(
+      (a, b) => (a.type === "custom") - (b.type === "custom") || a.label.localeCompare(b.label)
+    );
   }, [clientLookup, weekEvents]);
 
   const filteredWeekEvents = useMemo(() => {

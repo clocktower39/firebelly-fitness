@@ -33,6 +33,7 @@ import { scheduleApi } from "../../api/scheduleApi";
 import { requestClients } from "../../Redux/actions";
 import { toMatrix, detectRoles, buildRows, COLUMN_ROLES } from "../../utils/sessionImportParse";
 import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
 
 // Import → Reconcile → Commit: paste a client's session sheet, review the server's
 // classified plan against the calendar + invoices, apply it in one undoable batch.
@@ -351,8 +352,8 @@ export default function ImportSessions() {
             <Autocomplete
               size="small"
               sx={{ maxWidth: 360 }}
-              options={clients.filter((c) => c.accepted)}
-              getOptionLabel={(o) => `${o.client?.firstName || ""} ${o.client?.lastName || ""}`.trim()}
+              options={[...clients.filter((c) => c.accepted)].sort(compareRelationshipsByClientLastName)}
+              getOptionLabel={(o) => formatClientLastFirst(o.client)}
               isOptionEqualToValue={(o, v) => o.client?._id === v.client?._id}
               value={selectedClientRel}
               onChange={(_, v) => {

@@ -40,6 +40,7 @@ import {
   ViewList as ListViewIcon,
 } from "@mui/icons-material";
 import { requestClients } from "../../Redux/actions";
+import { compareClientsByLastName, formatClientLastFirst } from "../../utils/clientRelationships";
 
 const formatTemplateSummary = (workout) => {
   const totalExercises =
@@ -118,7 +119,7 @@ export default function WorkoutTemplates() {
       (Array.isArray(clients) ? clients : [])
         .filter((relationship) => relationship?.accepted && relationship?.client?._id)
         .map((relationship) => relationship.client)
-        .sort((a, b) => clientName(a).localeCompare(clientName(b))),
+        .sort(compareClientsByLastName),
     [clients]
   );
 
@@ -644,7 +645,7 @@ export default function WorkoutTemplates() {
               >
                 {acceptedClients.map((client) => (
                   <MenuItem key={client._id} value={String(client._id)}>
-                    {clientName(client)}
+                    {formatClientLastFirst(client)}
                   </MenuItem>
                 ))}
               </Select>

@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { scheduleApi } from "../api/scheduleApi";
 import { formatPrice } from "../../../utils/currency";
+import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../../utils/clientRelationships";
 
 // Grandfathering UI: explicitly grant a (usually brand-new) client access to buy an
 // ARCHIVED session type at its old rate, or revoke that access. Clients who already
@@ -25,7 +26,7 @@ export default function ClientAccessDialog({ open, onClose, clients, sessionType
   const [busyId, setBusyId] = useState("");
 
   const acceptedClients = useMemo(
-    () => (clients || []).filter((c) => c.accepted),
+    () => (clients || []).filter((c) => c.accepted).sort(compareRelationshipsByClientLastName),
     [clients]
   );
   const archivedTypes = useMemo(
@@ -103,7 +104,7 @@ export default function ClientAccessDialog({ open, onClose, clients, sessionType
 
           <Autocomplete
             options={acceptedClients}
-            getOptionLabel={(o) => `${o.client.firstName} ${o.client.lastName}`}
+            getOptionLabel={(o) => formatClientLastFirst(o.client)}
             isOptionEqualToValue={(o, v) => o.client._id === v.client._id}
             value={acceptedClients.find((c) => c.client._id === clientId) || null}
             onChange={(_, v) => setClientId(v ? v.client._id : "")}

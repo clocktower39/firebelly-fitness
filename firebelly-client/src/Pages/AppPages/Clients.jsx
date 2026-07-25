@@ -110,7 +110,12 @@ const sortClientRelationships = (relationships, sortKey) =>
   [...relationships].sort((a, b) => {
     const nameA = (a?.client?.[sortKey] || "").toLowerCase();
     const nameB = (b?.client?.[sortKey] || "").toLowerCase();
-    return nameA.localeCompare(nameB);
+    // Tie-break on the other name part so "Smith, Amy" sorts before "Smith, Bob".
+    const otherKey = sortKey === "lastName" ? "firstName" : "lastName";
+    return (
+      nameA.localeCompare(nameB) ||
+      (a?.client?.[otherKey] || "").toLowerCase().localeCompare((b?.client?.[otherKey] || "").toLowerCase())
+    );
   });
 
 export default function Clients({ socket }) {
@@ -128,7 +133,7 @@ export default function Clients({ socket }) {
   const [showOnlyOnline, setShowOnlyOnline] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [engagementFilter, setEngagementFilter] = useState("active");
-  const [sortKey, setSortKey] = useState("firstName");
+  const [sortKey, setSortKey] = useState("lastName");
   const [searchParams] = useSearchParams();
 
   // Deep link from the "new client request" notification: /clients?filter=pending

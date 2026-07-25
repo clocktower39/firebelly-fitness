@@ -28,6 +28,8 @@ import { enterClientAccount, requestClients, requestWorkoutsByDatesIfNeeded } fr
 import { accountApi } from "../../api/accountApi";
 import { scheduleApi } from "../../api/scheduleApi";
 import {
+  compareClientsByLastName,
+  formatClientLastFirst,
   getRelationshipEngagementStatus,
   isRelationshipActivelyCoached,
 } from "../../utils/clientRelationships";
@@ -35,8 +37,7 @@ import WorkoutTrainerSessionDialog from "./WorkoutTrainerSessionDialog";
 
 dayjs.extend(utc);
 
-const formatClientName = (client) =>
-  `${client?.firstName || ""} ${client?.lastName || ""}`.trim() || "Unnamed client";
+const formatClientName = (client) => formatClientLastFirst(client);
 
 const DAYS_OF_WEEK = [
   { value: 0, label: "Su" },
@@ -76,7 +77,7 @@ export default function WeeklyClientWorkoutTracker({
         .filter(
           (relationship) => isRelationshipActivelyCoached(relationship) && relationship?.client?._id
         )
-        .sort((a, b) => formatClientName(a.client).localeCompare(formatClientName(b.client))),
+        .sort((a, b) => compareClientsByLastName(a.client, b.client)),
     [clientRelationships]
   );
   const acceptedClients = useMemo(
@@ -233,7 +234,7 @@ export default function WeeklyClientWorkoutTracker({
           .sort(
             (a, b) =>
               Number(a.hasWorkout) - Number(b.hasWorkout) ||
-              formatClientName(a.client).localeCompare(formatClientName(b.client))
+              compareClientsByLastName(a.client, b.client)
           );
 
         const coveredCount = entries.filter((entry) => entry.hasWorkout).length;
@@ -517,7 +518,7 @@ export default function WeeklyClientWorkoutTracker({
   const daysDialogClients = [...acceptedClients].sort(
     (a, b) =>
       (a.preferredWorkoutDays?.length ? 1 : 0) - (b.preferredWorkoutDays?.length ? 1 : 0) ||
-      formatClientName(a).localeCompare(formatClientName(b))
+      compareClientsByLastName(a, b)
   );
 
   if (!user?.isTrainer) return null;
