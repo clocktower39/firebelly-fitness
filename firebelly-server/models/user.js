@@ -85,6 +85,8 @@ const UserSchema = new mongoose.Schema({
     lastMeasurementReminderAt: { type: Date, default: null }, // internal: measurement reminder dedup
     lastReadinessReminderAt: { type: Date, default: null }, // internal: readiness reminder dedup
     lastReadinessFlagAt: { type: Date, default: null }, // internal: low-readiness deload flag dedup
+    // internal: activity-feed items the trainer dismissed without replying (capped ~300)
+    dismissedActivityIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
     customThemes: {
         type: [
             {

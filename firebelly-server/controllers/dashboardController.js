@@ -3,6 +3,7 @@ const Relationship = require("../models/relationship");
 const Invoice = require("../models/invoice");
 const Training = require("../models/training");
 const ScheduleEvent = require("../models/scheduleEvent");
+const User = require("../models/user");
 const invoiceController = require("./invoiceController");
 const readinessController = require("./readinessController");
 const { buildExerciseRecords } = require("./training/workoutCore");
@@ -219,10 +220,14 @@ const get_activity = async (req, res, next) => {
       ])
     );
 
+    const trainerDoc = await User.findById(user._id).select("dismissedActivityIds").lean();
+    const dismissed = trainerDoc?.dismissedActivityIds || [];
+
     const workouts = await Training.find({
       user: { $in: clientIds },
       isTemplate: { $ne: true },
       complete: true,
+      _id: { $nin: dismissed },
       date: { $gte: new Date(now - 7 * DAY_MS), $lte: new Date(now.getTime() + DAY_MS) },
     })
       .sort({ date: -1 })
@@ -410,4 +415,23 @@ const get_recap = async (req, res, next) => {
   }
 };
 
-module.exports = { get_attention, get_activity, react_to_workout, get_recap };
+// Dismiss feed items without replying — trainer-local, the client never knows.
+const dismiss_activity = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!user?.isTrainer) return res.status(403).json({ error: "Only trainers can dismiss." });
+    const ids = (Array.isArray(req.body?.workoutIds) ? req.body.workoutIds : [])
+      .map(String)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (!ids.length) return res.status(400).json({ error: "workoutIds required." });
+    await User.updateOne(
+      { _id: user._id },
+      { $push: { dismissedActivityIds: { $each: ids, $slice: -300 } } }
+    );
+    return res.json({ ok: true, dismissed: ids.length });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+module.exports = { get_attention, get_activity, react_to_workout, get_recap, dismiss_activity };
