@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Relationship = require("../models/relationship");
 const Invoice = require("../models/invoice");
 const Training = require("../models/training");
+const ScheduleEvent = require("../models/scheduleEvent");
 const invoiceController = require("./invoiceController");
 const readinessController = require("./readinessController");
 const { buildExerciseRecords } = require("./training/workoutCore");
@@ -334,4 +335,79 @@ const react_to_workout = async (req, res, next) => {
   }
 };
 
-module.exports = { get_attention, get_activity, react_to_workout };
+// Month numbers for the forwardable client recap. Month = "YYYY-MM"; workout dates are
+// UTC-anchored, so the window is computed in UTC.
+const get_recap = async (req, res, next) => {
+  try {
+    const user = res.locals.user;
+    if (!user?.isTrainer) return res.status(403).json({ error: "Only trainers can build recaps." });
+    const { clientId, month } = req.body || {};
+    if (!clientId || !mongoose.Types.ObjectId.isValid(String(clientId)) || !/^\d{4}-\d{2}$/.test(String(month || ""))) {
+      return res.status(400).json({ error: "clientId and month (YYYY-MM) are required." });
+    }
+    const relationship = await Relationship.findOne({ trainer: user._id, client: clientId, accepted: true }).lean();
+    if (!relationship) return res.status(403).json({ error: "Unauthorized access." });
+
+    const [y, m] = month.split("-").map(Number);
+    const start = new Date(Date.UTC(y, m - 1, 1));
+    const end = new Date(Date.UTC(y, m, 1));
+    const prevStart = new Date(Date.UTC(y, m - 2, 1));
+
+    const monthQuery = { user: clientId, isTemplate: { $ne: true }, complete: true };
+    const [workouts, prevWorkouts, sessionsAttended] = await Promise.all([
+      Training.find({ ...monthQuery, date: { $gte: start, $lt: end } })
+        .select("title date training")
+        .populate({ path: "training.exercise", select: "_id exerciseTitle" })
+        .lean(),
+      Training.find({ ...monthQuery, date: { $gte: prevStart, $lt: start } }).select("training").lean(),
+      ScheduleEvent.countDocuments({
+        trainerId: user._id, clientId, eventType: "APPOINTMENT", status: "COMPLETED",
+        startDateTime: { $gte: start, $lt: end },
+      }),
+    ]);
+
+    let volume = 0;
+    let hardSets = 0;
+    const dayKeys = new Set();
+    const prTitles = new Set();
+    for (const workout of workouts) {
+      const totals = achievedTotals(workout.training);
+      volume += totals.volume;
+      hardSets += totals.hardSets;
+      dayKeys.add(String(workout.date).slice(0, 10));
+      const exerciseIds = [
+        ...new Set(
+          (workout.training || []).flat()
+            .filter((e) => e && !e.isWarmup)
+            .map((e) => String(e.exercise?._id || e.exercise || ""))
+            .filter(Boolean)
+        ),
+      ];
+      try {
+        const records = await buildExerciseRecords({
+          userId: clientId, exerciseIds, beforeDate: workout.date, excludeWorkoutId: workout._id,
+        });
+        detectPrExercises(workout.training, records).forEach((t) => prTitles.add(t));
+      } catch (err) {
+        console.error("recap PR detection failed (non-blocking):", err.message);
+      }
+    }
+    const prevVolume = prevWorkouts.reduce((sum, w) => sum + achievedTotals(w.training).volume, 0);
+
+    return res.json({
+      month,
+      workoutsCompleted: workouts.length,
+      daysTrained: dayKeys.size,
+      volume,
+      hardSets,
+      prevVolume,
+      prevWorkoutsCompleted: prevWorkouts.length,
+      prExercises: [...prTitles],
+      sessionsAttended,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+module.exports = { get_attention, get_activity, react_to_workout, get_recap };

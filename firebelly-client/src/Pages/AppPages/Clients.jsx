@@ -47,6 +47,7 @@ import Goals from "./Goals";
 import TrainingProfileView from "../../Components/AccountComponents/TrainingProfileView";
 import ClientTrainingBlocks from "../../Components/Goals/ClientTrainingBlocks";
 import LogSessionsDialog from "../../Components/LogSessionsDialog";
+import MonthlyRecapDialog from "../../Components/MonthlyRecapDialog";
 import EmptyState from "../../Components/EmptyState";
 import { styled } from "@mui/material/styles";
 import {
@@ -135,6 +136,7 @@ export default function Clients({ socket }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [engagementFilter, setEngagementFilter] = useState("active");
   const [sortKey, setSortKey] = useState("lastName");
+  const [recapClient, setRecapClient] = useState(null);
   const [searchParams] = useSearchParams();
 
   // Deep link from the "new client request" notification: /clients?filter=pending
@@ -540,6 +542,14 @@ export default function Clients({ socket }) {
                       <MenuItem
                         onClick={() => {
                           setMenuAnchor(null);
+                          setRecapClient(clientRelationship.client);
+                        }}
+                      >
+                        Monthly Recap
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          setMenuAnchor(null);
                           setLogSessionsOpen(true);
                         }}
                       >
@@ -847,6 +857,11 @@ export default function Clients({ socket }) {
           </Grid>
         )}
       </Grid>
+      <MonthlyRecapDialog
+        client={recapClient}
+        open={Boolean(recapClient)}
+        onClose={() => setRecapClient(null)}
+      />
       <Dialog
         open={openCalendar}
         onClose={handleCloseCalendar}

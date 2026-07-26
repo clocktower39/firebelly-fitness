@@ -41,6 +41,7 @@ import SwipeableViewsModule from "react-swipeable-views";
 import Exercise from "./Exercise";
 import CircuitFeedback from "./CircuitFeedback";
 import WorkoutLoadPanel from "../../features/workout/components/load/WorkoutLoadPanel";
+import CompletionCelebration from "./CompletionCelebration";
 import { warmupTemplateApi } from "../../api/warmupTemplateApi";
 import { ExerciseListAutocomplete } from "../../features/workout/components/AddExercisesDialog";
 import dayjs from "dayjs";
@@ -139,7 +140,12 @@ function SwipeableSet(props) {
     handleConfirmDialogClose();
   };
 
-  const handleWorkoutCompleteCheckbox = () => setWorkoutCompleteStatus((prev) => !prev);
+  const [celebrating, setCelebrating] = useState(false);
+  const handleWorkoutCompleteCheckbox = () =>
+    setWorkoutCompleteStatus((prev) => {
+      if (!prev) setCelebrating(true); // completing (not un-completing) earns the moment
+      return !prev;
+    });
 
   const allExercises = useMemo(() => {
     return localTraining.flatMap((group) => group.map((ex) => ex));
@@ -218,6 +224,7 @@ function SwipeableSet(props) {
           </Button>
         }
       />
+      <CompletionCelebration open={celebrating} onDone={() => setCelebrating(false)} />
       {/* Hidden on the completion page (the step after the last circuit) — no one warms up
           after finishing. */}
       {newWarmup && activeStep < localTraining.length && (
