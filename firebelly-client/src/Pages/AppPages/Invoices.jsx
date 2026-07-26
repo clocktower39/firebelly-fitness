@@ -28,10 +28,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import CloseIcon from "@mui/icons-material/Close";
+import PersonIcon from "@mui/icons-material/Person";
+import GroupsIcon from "@mui/icons-material/Groups";
 import InvoiceReportsDialog from "../../Components/InvoiceReportsDialog";
 import LogSessionsDialog from "../../Components/LogSessionsDialog";
 import EmptyState from "../../Components/EmptyState";
@@ -814,22 +818,35 @@ export default function Invoices() {
         <DialogContent sx={{ pt: 1 }}>
               <Stack spacing={2} sx={{ mt: 1 }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  <FormControl fullWidth>
-                    <InputLabel>Bill to</InputLabel>
-                    <Select
-                      label="Bill to"
-                      value={billToType}
-                      onChange={(event) => {
-                        setBillToType(event.target.value);
-                        setSelectedClientId("");
-                        setSelectedGroupId("");
-                        setBillToEmail("");
-                      }}
-                    >
-                      <MenuItem value="CLIENT">Client</MenuItem>
-                      <MenuItem value="GROUP">Group</MenuItem>
-                    </Select>
-                  </FormControl>
+                  {/* Two options don't deserve a dropdown — segmented toggle instead. */}
+                  <ToggleButtonGroup
+                    exclusive
+                    value={billToType}
+                    onChange={(event, next) => {
+                      if (!next || next === billToType) return;
+                      setBillToType(next);
+                      setSelectedClientId("");
+                      setSelectedGroupId("");
+                      setBillToEmail("");
+                    }}
+                    sx={{
+                      flexShrink: 0,
+                      "& .MuiToggleButton-root": {
+                        px: 2.5,
+                        textTransform: "none",
+                        fontWeight: 600,
+                      },
+                    }}
+                  >
+                    <ToggleButton value="CLIENT">
+                      <PersonIcon fontSize="small" sx={{ mr: 0.75 }} />
+                      Client
+                    </ToggleButton>
+                    <ToggleButton value="GROUP">
+                      <GroupsIcon fontSize="small" sx={{ mr: 0.75 }} />
+                      Group
+                    </ToggleButton>
+                  </ToggleButtonGroup>
                   {billToType === "CLIENT" ? (
                     <FormControl fullWidth>
                       <InputLabel>Client</InputLabel>
