@@ -123,6 +123,11 @@ const trainingSchema = new mongoose.Schema(
     },
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     assignedAt: { type: Date, default: null },
+    // Trainer-set freeze: reactive load seeding skips this workout entirely, so its prescribed
+    // weights/seconds stay exactly as written no matter what the client logs in earlier sessions
+    // (used when a client should stop advancing loads, e.g. injury management). Server-managed —
+    // deliberately NOT in TRAINING_UPDATE_FIELDS, so client saves can't set or clear it.
+    holdProgression: { type: Boolean, default: false },
     isTemplate: { type: Boolean, default: false },
     // Distinguishes a program's week/day docs (isTemplate for storage purposes, but they
     // belong to a program) from deliberate standalone templates the trainer built to reuse.

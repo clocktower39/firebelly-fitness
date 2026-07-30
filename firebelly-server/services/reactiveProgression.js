@@ -144,11 +144,13 @@ const applyResultsToFutureProgram = async (completed) => {
   );
   if (!signalByExercise.size) return [];
 
-  // Future, incomplete workouts in the same program.
+  // Future, incomplete workouts in the same program. holdProgression docs are frozen: the
+  // trainer has pinned their prescribed loads, so completions must never reseed them.
   const future = await Training.find({
     user: clientId,
     programId,
     complete: { $ne: true },
+    holdProgression: { $ne: true },
     date: { $gt: completed.date },
   }).lean();
   if (!future.length) return [];
