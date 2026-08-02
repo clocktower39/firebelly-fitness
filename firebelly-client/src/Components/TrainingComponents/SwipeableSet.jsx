@@ -465,7 +465,10 @@ function SwipeableSet(props) {
 }
 const FeedbackWorkoutInput = ({ workoutFeedback, setWorkoutFeedback, onResize }) => {
   const user = useSelector((state) => state.user);
-  const [feedbackDifficulty, setFeedbackDifficulty] = useState(Number(workoutFeedback.difficulty) || 1);
+  // Not `|| 1`: difficulty 0 is a real rating ("Too Easy") and must survive a remount.
+  const [feedbackDifficulty, setFeedbackDifficulty] = useState(
+    [0, 1, 2].includes(Number(workoutFeedback.difficulty)) ? Number(workoutFeedback.difficulty) : 1
+  );
 
   const handleFeedbackDifficultyChange = (event) => {
     const newValue = Number(event.target.value);

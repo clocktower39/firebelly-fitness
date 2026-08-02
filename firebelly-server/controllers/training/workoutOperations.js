@@ -83,6 +83,15 @@ const applyAutoregulation = async (training, { scheme = "linear" } = {}) => {
       if (!ex?.goals) return;
       const lib = byId.get(String(ex.exercise)) || {};
       const difficulty = ex?.feedback?.difficulty;
+      // Scheme follows each exercise's own type (the caller's `scheme` is only a fallback):
+      // %-lifts ramp percent, Rep Range climbs the double-progression ladder, the rest are
+      // linear. A single request-level scheme would apply linear jumps to rep-range lifts.
+      const exScheme =
+        ex.exerciseType === "Reps with %"
+          ? "percent"
+          : ex.exerciseType === "Rep Range"
+            ? "rep-range"
+            : scheme;
       const { goals, decision } = autoregulateExerciseGoals(
         ex.goals,
         ex.achieved,
@@ -92,7 +101,7 @@ const applyAutoregulation = async (training, { scheme = "linear" } = {}) => {
           measurementType: lib.measurementType,
           exerciseType: ex.exerciseType,
         },
-        { scheme, difficulty: difficulty == null ? 1 : difficulty }
+        { scheme: exScheme, difficulty: difficulty == null ? 1 : difficulty }
       );
       ex.goals = goals;
       if (tally[decision] != null) tally[decision] += 1;

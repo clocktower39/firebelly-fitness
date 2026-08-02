@@ -24,27 +24,38 @@ const familyOf = (equipment) => {
   return "other";
 };
 
-// The weight jump for one step, given the family + complexity + the current load.
-const weightIncrement = (family, complexity, currentWeight) => {
-  const w = Number(currentWeight) || 0;
-  switch (family) {
-    case "barbell":
-      return complexity === "isolation" ? 2.5 : 5;
-    case "dumbbell":
-      return w < 40 ? 2.5 : 5; // per hand; gyms carry 2.5s up to ~40
-    case "machine":
-      return 10;
-    case "cable":
-      return 2.5;
-    default:
-      return 5;
-  }
-};
-
 const loadableUnit = (family) => (family === "machine" ? 10 : 2.5);
 const roundToLoadable = (w, family) => {
   const u = loadableUnit(family);
   return Math.max(0, Math.round((Number(w) || 0) / u) * u);
+};
+
+// The weight jump for one step: proportional to the current load (ACSM progression band —
+// increase ~2-10% when earned; smaller % for isolation, larger for compounds), floored at the
+// equipment's smallest practical jump so light loads still move, and rounded loadable. A fixed
+// step was too fast at light loads (+5 on a 45 lb lift = 11%) and far too slow at heavy ones
+// (+5 on a 365 lb deadlift = 1.4%).
+const weightIncrement = (family, complexity, currentWeight) => {
+  const w = Number(currentWeight) || 0;
+  let floor;
+  switch (family) {
+    case "barbell":
+      floor = complexity === "isolation" ? 2.5 : 5;
+      break;
+    case "dumbbell":
+      floor = w < 40 ? 2.5 : 5; // per hand; gyms carry 2.5s up to ~40
+      break;
+    case "machine":
+      floor = 10;
+      break;
+    case "cable":
+      floor = 2.5;
+      break;
+    default:
+      floor = 5;
+  }
+  const pct = complexity === "isolation" ? 0.025 : 0.035;
+  return Math.max(floor, roundToLoadable(w * pct, family));
 };
 
 const clone = (g) => JSON.parse(JSON.stringify(g || {}));
@@ -108,12 +119,22 @@ const progressOneStep = (goals, ctx, scheme) => {
   return g;
 };
 
-// A deload: a lighter recovery week. Cuts intensity by ~10% (weight, or seconds for holds,
-// or reps for bodyweight), rounded to loadable. Volume (sets) is left for the trainer.
+// A deload: a lighter recovery week. Cuts intensity ~10% (weight, or seconds for holds, or
+// reps for bodyweight) AND roughly halves the sets — deload practice in strength/physique
+// sports is a ~1-week block at about half volume with intensity eased 10-20% (Bell et al.).
+// Set arrays are sliced from the front, so ramp schemes keep their lightest sets and drop the
+// heavy top ones.
 const deloadGoals = (goals, ctx, factor = 0.9) => {
   const g = goals;
   const fam = familyOf(ctx.equipment);
   const isTime = ctx.measurementType === "time" || ctx.exerciseType === "Time";
+  const sets = Math.floor(Number(g.sets) || 0);
+  if (sets > 1) {
+    g.sets = Math.max(1, Math.ceil(sets / 2));
+    ["minReps", "maxReps", "exactReps", "weight", "percent", "seconds"].forEach((k) => {
+      if (Array.isArray(g[k])) g[k] = g[k].slice(0, g.sets);
+    });
+  }
   if (isTime) {
     g.seconds = mapArr(g.seconds, (v) => Math.max(0, Math.round(v * factor)));
     return g;
