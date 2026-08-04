@@ -33,6 +33,7 @@ const buildTokenPayload = (user, overrides = {}) => {
   autoPaymentReminders: user.autoPaymentReminders === true,
   timezone: user.timezone || "",
   notificationPrefs: user.notificationPrefs || {},
+  messageSounds: user.messageSounds && typeof user.messageSounds === "object" ? user.messageSounds : {},
   customThemes: user.customThemes || [],
   weeklyFrequency: user.weeklyFrequency || null,
   preferredWorkoutDays: user.preferredWorkoutDays || [],

@@ -9,6 +9,7 @@ import {
   FormControl,
   FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   List,
   ListItem,
@@ -20,12 +21,16 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Delete, PlayArrow } from "@mui/icons-material";
 import {
   pushSupported,
   isPushSubscribed,
   enablePush,
   disablePush,
 } from "../../utils/pushManager";
+import MessageSoundDialog from "../MessageSoundDialog";
+import { soundApi } from "../../api/soundApi";
+import { BUILTIN_SOUNDS, playMessageSound } from "../../utils/messageSounds";
 
 const DEFAULTS = {
   clientWorkoutCompleted: true,
@@ -50,9 +55,16 @@ export default function NotificationPreferences() {
   const [pushBusy, setPushBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const conversations = useSelector((state) => state.conversations) || [];
+  const messageSounds = user.messageSounds || {};
+  const [mySounds, setMySounds] = useState([]);
+  const [defaultSoundOpen, setDefaultSoundOpen] = useState(false);
 
   useEffect(() => {
     if (pushSupported()) isPushSubscribed().then(setPushOn);
+  }, []);
+
+  useEffect(() => {
+    soundApi.list().then((r) => Array.isArray(r) && setMySounds(r));
   }, []);
 
   useEffect(() => {
@@ -74,6 +86,56 @@ export default function NotificationPreferences() {
       (p) => String(p.user?._id || p.user) === String(meId) && p.muted
     )
   );
+
+  // ---- Message sounds (the messageSounds user setting + uploaded tones) ----
+  const soundLabelOf = (ref) => {
+    if (!ref) return "None";
+    if (ref === "none") return "Silent";
+    if (ref.startsWith("builtin:")) {
+      const b = BUILTIN_SOUNDS.find((s) => s.id === ref.slice("builtin:".length));
+      return b ? b.label : "Built-in tone";
+    }
+    if (ref.startsWith("file:")) {
+      const f = mySounds.find((s) => String(s.fileId) === ref.slice("file:".length));
+      return f?.name || "Uploaded sound";
+    }
+    return ref;
+  };
+
+  const labelForSoundKey = (key) => {
+    if (key.startsWith("conv:")) {
+      const c = conversations.find((x) => String(x._id) === key.slice("conv:".length));
+      return c ? `Chat: ${titleOf(c)}` : "Chat (no longer available)";
+    }
+    if (key.startsWith("user:")) {
+      const id = key.slice("user:".length);
+      for (const c of conversations) {
+        const p = (c.participants || []).find((x) => String(x.user?._id || x.user) === id);
+        if (p?.user?.firstName || p?.user?.username) return `Person: ${nameOf(p.user)}`;
+      }
+      return "Person";
+    }
+    return key;
+  };
+
+  const soundAssignments = Object.entries(messageSounds).filter(([k]) => k !== "default");
+
+  const removeSoundAssignment = (key) => {
+    const next = { ...messageSounds };
+    delete next[key];
+    dispatch(updateUserSettings({ messageSounds: next }));
+  };
+
+  const deleteUploadedSound = async (fileId) => {
+    await soundApi.remove(fileId);
+    setMySounds((prev) => prev.filter((s) => String(s.fileId) !== String(fileId)));
+    // Scrub any assignments pointing at the deleted file so they don't linger as dead refs.
+    const ref = `file:${fileId}`;
+    const next = Object.fromEntries(Object.entries(messageSounds).filter(([, v]) => v !== ref));
+    if (Object.keys(next).length !== Object.keys(messageSounds).length) {
+      dispatch(updateUserSettings({ messageSounds: next }));
+    }
+  };
 
   const set = (key, value) => {
     setPrefs((p) => ({ ...p, [key]: value }));
@@ -247,6 +309,101 @@ export default function NotificationPreferences() {
             <Divider sx={{ width: "100%" }} />
           </Grid>
           <Grid container size={12}>
+            <Typography variant="subtitle1">Message sounds</Typography>
+          </Grid>
+          <Grid container size={12} direction="column">
+            <Typography variant="caption" color="text.secondary">
+              Sounds play while the app is open. Give a chat or a person their own sound with the
+              music-note button in the chat window — or set one default for all messages here. You
+              can use any audio file on your phone.
+            </Typography>
+            <List disablePadding sx={{ width: "100%" }}>
+              <ListItem
+                disableGutters
+                secondaryAction={
+                  <>
+                    {messageSounds.default && messageSounds.default !== "none" && (
+                      <IconButton
+                        size="small"
+                        onClick={() => playMessageSound(messageSounds.default)}
+                        title="Preview"
+                      >
+                        <PlayArrow fontSize="small" />
+                      </IconButton>
+                    )}
+                    <Button size="small" onClick={() => setDefaultSoundOpen(true)}>
+                      Change
+                    </Button>
+                  </>
+                }
+              >
+                <ListItemText
+                  primary="All messages"
+                  secondary={soundLabelOf(messageSounds.default)}
+                />
+              </ListItem>
+              {soundAssignments.map(([key, ref]) => (
+                <ListItem
+                  key={key}
+                  disableGutters
+                  secondaryAction={
+                    <>
+                      {ref !== "none" && (
+                        <IconButton size="small" onClick={() => playMessageSound(ref)} title="Preview">
+                          <PlayArrow fontSize="small" />
+                        </IconButton>
+                      )}
+                      <Button size="small" onClick={() => removeSoundAssignment(key)}>
+                        Remove
+                      </Button>
+                    </>
+                  }
+                >
+                  <ListItemText primary={labelForSoundKey(key)} secondary={soundLabelOf(ref)} />
+                </ListItem>
+              ))}
+            </List>
+            {mySounds.length > 0 && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  My uploaded sounds
+                </Typography>
+                <List dense disablePadding sx={{ width: "100%" }}>
+                  {mySounds.map((s) => (
+                    <ListItem
+                      key={String(s.fileId)}
+                      disableGutters
+                      secondaryAction={
+                        <>
+                          <IconButton
+                            size="small"
+                            onClick={() => playMessageSound(`file:${s.fileId}`)}
+                            title="Preview"
+                          >
+                            <PlayArrow fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => deleteUploadedSound(s.fileId)}
+                            title="Delete"
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </>
+                      }
+                    >
+                      <ListItemText primary={s.name || "Custom sound"} />
+                    </ListItem>
+                  ))}
+                </List>
+              </>
+            )}
+          </Grid>
+
+          <Grid container size={12}>
+            <Divider sx={{ width: "100%" }} />
+          </Grid>
+          <Grid container size={12}>
             <Typography variant="subtitle1">Muted chats</Typography>
           </Grid>
           <Grid container size={12}>
@@ -274,6 +431,12 @@ export default function NotificationPreferences() {
           </Grid>
         </Grid>
       </Paper>
+
+      <MessageSoundDialog
+        open={defaultSoundOpen}
+        onClose={() => setDefaultSoundOpen(false)}
+        targets={[{ key: "default", label: "All messages" }]}
+      />
     </Container>
   );
 }

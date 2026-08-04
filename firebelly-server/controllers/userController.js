@@ -35,6 +35,7 @@ const USER_PROFILE_UPDATE_FIELDS = [
   "autoPaymentReminders",
   "timezone",
   "notificationPrefs",
+  "messageSounds",
   "customThemes",
   "weeklyFrequency",
   "preferredWorkoutDays",
@@ -598,6 +599,106 @@ const delete_profile_picture = async (req, res) => {
   }
 };
 
+// ---- Custom notification sounds (assignable per chat / per person in messageSounds) ----
+
+const soundBucket = () =>
+  new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: "notificationSound" });
+
+// Phones routinely report audio files with a generic or video/* mimetype, so the extension is
+// both the acceptance fallback and the source of the stored content type.
+const AUDIO_EXT_MIME = {
+  ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav",
+  ".ogg": "audio/ogg", ".oga": "audio/ogg", ".opus": "audio/ogg", ".flac": "audio/flac",
+  ".weba": "audio/webm", ".webm": "audio/webm", ".mp4": "audio/mp4", ".caf": "audio/x-caf",
+  ".aiff": "audio/aiff", ".aif": "audio/aiff", ".wma": "audio/x-ms-wma", ".amr": "audio/amr",
+};
+const MAX_SOUNDS_PER_USER = 20;
+
+// Upload a notification tone from the user's device. Audio only (phones sometimes report
+// audio files with a video/* or empty mimetype, so the extension is accepted as a fallback).
+const upload_notification_sound = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+    const mime = req.file.mimetype || "";
+    const ext = path.extname(req.file.originalname || "").toLowerCase();
+    if (!mime.startsWith("audio/") && !AUDIO_EXT_MIME[ext]) {
+      return res.status(400).json({ error: "Please choose an audio file." });
+    }
+    const meId = String(res.locals.user._id);
+    const bucket = soundBucket();
+    const existing = await bucket.find({ "metadata.owner": meId }).toArray();
+    if (existing.length >= MAX_SOUNDS_PER_USER) {
+      return res.status(400).json({ error: `You can keep up to ${MAX_SOUNDS_PER_USER} sounds — delete one first.` });
+    }
+    const label = (req.file.originalname || "Custom sound").replace(/\.[^.]+$/, "");
+    const filename = crypto.randomBytes(16).toString("hex") + ext;
+    // The mime lives in metadata: driver 7.x drops the deprecated contentType upload option.
+    const storedMime = AUDIO_EXT_MIME[ext] || (mime.startsWith("audio/") ? mime : "application/octet-stream");
+    const stream = bucket.openUploadStream(filename, {
+      metadata: { owner: meId, label, mime: storedMime },
+    });
+    stream.end(req.file.buffer);
+    stream.on("finish", () => res.status(200).json({ fileId: stream.id, name: label }));
+    stream.on("error", (err) => next(err));
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const list_notification_sounds = async (req, res, next) => {
+  try {
+    const files = await soundBucket()
+      .find({ "metadata.owner": String(res.locals.user._id) })
+      .sort({ uploadDate: -1 })
+      .toArray();
+    return res.send(
+      files.map((f) => ({ fileId: f._id, name: f.metadata?.label || f.filename, uploadDate: f.uploadDate }))
+    );
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Stream a sound. Served without auth like profile pictures / message attachments (the fileId
+// is an unguessable ObjectId), so <audio> can load it directly.
+const get_notification_sound = async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid id." });
+    }
+    const bucket = soundBucket();
+    const _id = new mongoose.Types.ObjectId(req.params.id);
+    const files = await bucket.find({ _id }).toArray();
+    if (!files.length) return res.status(404).json({ error: "Not found." });
+    res.set("Content-Type", files[0].metadata?.mime || files[0].contentType || "application/octet-stream");
+    bucket
+      .openDownloadStream(_id)
+      .on("error", () => res.sendStatus(404))
+      .pipe(res);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const delete_notification_sound = async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid id." });
+    }
+    const bucket = soundBucket();
+    const _id = new mongoose.Types.ObjectId(req.params.id);
+    const files = await bucket.find({ _id }).toArray();
+    if (!files.length) return res.status(404).json({ error: "Not found." });
+    if (String(files[0].metadata?.owner) !== String(res.locals.user._id)) {
+      return res.status(403).json({ error: "Not your sound." });
+    }
+    await bucket.delete(_id);
+    return res.send({ status: "success", fileId: req.params.id });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   signup_user,
   verify_email,
@@ -613,6 +714,10 @@ module.exports = {
   upload_profile_picture,
   get_profile_picture,
   delete_profile_picture,
+  upload_notification_sound,
+  list_notification_sounds,
+  get_notification_sound,
+  delete_notification_sound,
   refresh_tokens,
   logout_user,
 };

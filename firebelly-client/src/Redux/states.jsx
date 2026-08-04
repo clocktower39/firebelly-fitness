@@ -36,6 +36,7 @@ export let user = {
         readinessReminder: false,
         readinessReminderTime: "08:00",
     },
+    messageSounds: {},
 }
 
 export let exerciseLibrary = [];

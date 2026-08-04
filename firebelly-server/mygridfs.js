@@ -19,8 +19,14 @@ const uploadMessageAttachment = multer({
     limits: { fileSize: 25 * 1024 * 1024 } // 25MB (photos / short videos)
 });
 
+const uploadNotificationSound = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB (a notification tone, not a song)
+});
+
 module.exports = {
     uploadProfilePicture,
     uploadGroupPicture,
-    uploadMessageAttachment
+    uploadMessageAttachment,
+    uploadNotificationSound
 };

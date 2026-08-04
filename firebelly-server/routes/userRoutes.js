@@ -3,7 +3,7 @@ const userController = require('../controllers/userController');
 const { verifyAccessToken } = require("../middleware/auth");
 const { ensureWriteAccess } = require("../middleware/ensureWriteAccess");
 const { validate, Joi } = require('express-validation');
-const { uploadProfilePicture } = require("../mygridfs");
+const { uploadProfilePicture, uploadNotificationSound } = require("../mygridfs");
 
 const router = express.Router();
 
@@ -78,6 +78,8 @@ const updateUserValidate = {
           readinessReminder: Joi.boolean(),
           readinessReminderTime: Joi.string().allow(""),
         }).unknown(false),
+        // "default" | "conv:<id>" | "user:<id>" → "builtin:<tone>" | "file:<gridfsId>" | "none"
+        messageSounds: Joi.object().pattern(Joi.string(), Joi.string().allow("")).unknown(true),
         customThemes: Joi.object().unknown(true),
         weeklyFrequency: Joi.number(),
         preferredWorkoutDays: Joi.array().items(Joi.number().integer().min(0).max(6)),
@@ -124,6 +126,12 @@ router.post('/changePassword', validate(changePasswordValidate, {}, {}), verifyA
 router.post('/user/upload/profilePicture', verifyAccessToken, ensureWriteAccess, uploadProfilePicture.single("file"), userController.upload_profile_picture);
 router.get('/user/profilePicture/:id', userController.get_profile_picture);
 router.get('/user/remove/image/', verifyAccessToken, ensureWriteAccess, userController.delete_profile_picture);
+// Custom notification sounds (uploaded tones assignable per chat / person). GET :id is
+// auth-free like profile pictures so <audio> tags can stream it.
+router.post('/user/sounds', verifyAccessToken, ensureWriteAccess, uploadNotificationSound.single("file"), userController.upload_notification_sound);
+router.get('/user/sounds', verifyAccessToken, userController.list_notification_sounds);
+router.post('/user/sounds/:id/delete', verifyAccessToken, ensureWriteAccess, userController.delete_notification_sound);
+router.get('/user/sounds/:id', userController.get_notification_sound);
 router.post("/refresh-tokens", userController.refresh_tokens);
 router.post("/logout", userController.logout_user);
 

@@ -36,6 +36,7 @@ import {
   Campaign,
   Close,
   Delete,
+  MusicNote,
   Notifications,
   NotificationsOff,
   Quickreply,
@@ -44,6 +45,7 @@ import {
 } from "@mui/icons-material";
 import { conversationApi } from "../../api/conversationApi";
 import EmptyState from "../../Components/EmptyState";
+import MessageSoundDialog from "../../Components/MessageSoundDialog";
 import dayjs from "dayjs";
 import {
   getConversations,
@@ -101,6 +103,7 @@ export default function Messages() {
   const [replyAnchor, setReplyAnchor] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [soundDialogOpen, setSoundDialogOpen] = useState(false);
   const isMobile = useMediaQuery((t) => t.breakpoints.down("md"));
   const endRef = useRef(null);
 
@@ -158,6 +161,19 @@ export default function Messages() {
       ),
     [activeConvo]
   );
+
+  // Sound assignment targets for the open chat: the chat itself + each other participant
+  // ("person" assignments follow that sender into any chat, incl. groups).
+  const soundTargets = useMemo(() => {
+    if (!activeConvo) return [];
+    const targets = [{ key: `conv:${activeConvo._id}`, label: "This chat" }];
+    otherParticipants(activeConvo, meId).forEach((p) => {
+      const id = String(p.user?._id || p.user);
+      targets.push({ key: `user:${id}`, label: `${fullName(p.user)} — in any chat` });
+    });
+    return targets;
+  }, [activeConvo, meId]);
+  const hasCustomSound = soundTargets.some((t) => user?.messageSounds?.[t.key]);
 
   // Clear unread whenever the open conversation has any (including on a freshly arrived message).
   useEffect(() => {
@@ -433,6 +449,15 @@ export default function Messages() {
             <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
               {convoTitle(activeConvo, meId)}
             </Typography>
+            <Tooltip title="Notification sound">
+              <IconButton size="small" onClick={() => setSoundDialogOpen(true)}>
+                <MusicNote
+                  fontSize="small"
+                  color={hasCustomSound ? "primary" : "inherit"}
+                  sx={hasCustomSound ? undefined : { opacity: 0.55 }}
+                />
+              </IconButton>
+            </Tooltip>
             <Tooltip
               title={mutedForMe(activeConvo, meId) ? "Unmute notifications" : "Mute notifications"}
             >
@@ -674,6 +699,12 @@ export default function Messages() {
           </Grid>
         )}
       </Grid>
+
+      <MessageSoundDialog
+        open={soundDialogOpen}
+        onClose={() => setSoundDialogOpen(false)}
+        targets={soundTargets}
+      />
 
       <Dialog open={composeOpen} onClose={() => setComposeOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>New message</DialogTitle>

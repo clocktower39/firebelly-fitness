@@ -1,4 +1,5 @@
 import { conversationApi } from "../../api/conversationApi";
+import { resolveMessageSound, playMessageSound } from "../../utils/messageSounds";
 import {
   UPDATE_CONVERSATIONS,
   UPSERT_CONVERSATION,
@@ -89,10 +90,35 @@ export function removeMessage(messageId, conversationId) {
   };
 }
 
+// Play the user's assigned sound for this sender/chat (Account → Notifications, or the chat's
+// music-note button). Skipped for muted chats and when the chat is open and visible.
+const maybePlayMessageSound = (state, conversationId, message) => {
+  try {
+    const meId = state.user?._id;
+    const convo = (state.conversations || []).find((c) => String(c._id) === String(conversationId));
+    const muted = (convo?.participants || []).some(
+      (p) => String(p.user?._id || p.user) === String(meId) && p.muted
+    );
+    if (muted) return;
+    const viewingIt =
+      document.visibilityState === "visible" &&
+      window.location.pathname === "/messages" &&
+      new URLSearchParams(window.location.search).get("c") === String(conversationId);
+    if (viewingIt) return;
+    const senderId = message?.sender?._id || message?.sender;
+    const ref = resolveMessageSound(state.user?.messageSounds, { senderId, conversationId });
+    if (ref) playMessageSound(ref);
+  } catch (e) {
+    /* a sound must never break message delivery */
+  }
+};
+
 // Socket: a new message arrived (server emits only to the OTHER participants, so it's never mine).
 export function receiveSocketMessage({ conversationId, message }) {
   return async (dispatch, getState) => {
-    const known = (getState().conversations || []).some(
+    const state = getState();
+    maybePlayMessageSound(state, conversationId, message);
+    const known = (state.conversations || []).some(
       (c) => String(c._id) === String(conversationId)
     );
     if (!known) return dispatch(getConversations()); // new conversation — refetch the list

@@ -82,6 +82,9 @@ const UserSchema = new mongoose.Schema({
       readinessReminder: { type: Boolean, default: false }, // daily fatigue check-in reminder
       readinessReminderTime: { type: String, default: "08:00" },
     },
+    // Custom message notification sounds. Flat map like workoutColors:
+    // "default" | "conv:<conversationId>" | "user:<senderUserId>" → "builtin:<tone>" | "file:<gridfsId>" | "none".
+    messageSounds: { type: Object, default: () => ({}) },
     lastMeasurementReminderAt: { type: Date, default: null }, // internal: measurement reminder dedup
     lastReadinessReminderAt: { type: Date, default: null }, // internal: readiness reminder dedup
     lastReadinessFlagAt: { type: Date, default: null }, // internal: low-readiness deload flag dedup
