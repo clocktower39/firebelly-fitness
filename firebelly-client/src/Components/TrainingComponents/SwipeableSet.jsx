@@ -80,6 +80,7 @@ function SwipeableSet(props) {
     onToggleWeightUnit,
     allowFeedback,
     workoutDoc,
+    weightsLocked,
   } = props;
 
   const [heightToggle, setHeightToggle] = useState(true);
@@ -305,6 +306,7 @@ function SwipeableSet(props) {
                       size={size}
                       weightUnit={weightUnit}
                       onToggleWeightUnit={onToggleWeightUnit}
+                      weightsLocked={weightsLocked}
                     />
                   )
                 )}

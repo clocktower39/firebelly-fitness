@@ -55,6 +55,7 @@ export default function Exercise(props) {
     setHeightToggle,
     weightUnit: weightUnitOverride,
     onToggleWeightUnit,
+    weightsLocked,
   } = props;
   const dispatch = useDispatch();
   const techniqueRegistry = useTechniqueRegistry();
@@ -160,6 +161,8 @@ export default function Exercise(props) {
               setPropertyCheck(exercise.goals.weight);
               setPropertyCheck(exercise.goals.percent);
               setPropertyCheck(exercise.goals.seconds);
+              exercise.goals.rpe = Array.isArray(exercise.goals.rpe) ? exercise.goals.rpe : [];
+              setPropertyCheck(exercise.goals.rpe);
             }
             return exercise;
           });
@@ -470,6 +473,7 @@ export default function Exercise(props) {
                   setLocalTraining={setLocalTraining}
                   weightUnit={weightUnit}
                   onToggleWeightUnit={onToggleWeightUnit}
+                  weightsLocked={weightsLocked}
                 />
               </Grid>
               <Grid container size={12} sx={{ alignContent: "center" }}>
@@ -694,6 +698,7 @@ export default function Exercise(props) {
                 setLocalTraining={setLocalTraining}
                 weightUnit={weightUnit}
                 onToggleWeightUnit={onToggleWeightUnit}
+                weightsLocked={weightsLocked}
               />
               <TechniqueLogger
                 registry={techniqueRegistry}

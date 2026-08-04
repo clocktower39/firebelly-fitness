@@ -37,6 +37,9 @@ const roundToLoadable = (w, family) => {
 // (+5 on a 365 lb deadlift = 1.4%).
 const weightIncrement = (family, complexity, currentWeight) => {
   const w = Number(currentWeight) || 0;
+  // No known base → nothing to scale. Keeps zero-load program templates at zero through
+  // weekly ramps / resync / builder progression instead of inventing 0 → 5 → 10 loads.
+  if (w <= 0) return 0;
   let floor;
   switch (family) {
     case "barbell":
@@ -131,7 +134,7 @@ const deloadGoals = (goals, ctx, factor = 0.9) => {
   const sets = Math.floor(Number(g.sets) || 0);
   if (sets > 1) {
     g.sets = Math.max(1, Math.ceil(sets / 2));
-    ["minReps", "maxReps", "exactReps", "weight", "percent", "seconds"].forEach((k) => {
+    ["minReps", "maxReps", "exactReps", "weight", "percent", "seconds", "rpe"].forEach((k) => {
       if (Array.isArray(g[k])) g[k] = g[k].slice(0, g.sets);
     });
   }

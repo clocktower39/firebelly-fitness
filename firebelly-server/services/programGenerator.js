@@ -44,7 +44,6 @@ async function progressWorkout(training, { step, deload }) {
 
 const zeros = (n) => Array.from({ length: n }, () => 0);
 const fill = (n, v) => Array.from({ length: n }, () => v);
-const round25 = (x) => Math.round(Number(x || 0) / 2.5) * 2.5;
 
 // goalType -> scheme + seed params + mesocycle type. Default = hypertrophy.
 const STRATEGY = {
@@ -137,21 +136,21 @@ function cardioTemplateData(cardioGoal, assumptions) {
   return { plan, actual: {} };
 }
 
-// Build a well-formed { exerciseType, goals } for a seed.
+// Build a well-formed { exerciseType, goals } for a seed. Loads are ALWAYS zero: a program is
+// a template (often assigned to several clients), so absolute weights are set per client — by
+// the trainer or by reactive seeding after the first completion. Reps/percent carry the scheme.
 function seedGoals(kind, p) {
   const s = p.sets || 3;
-  const g = { sets: s, minReps: zeros(s), maxReps: zeros(s), exactReps: zeros(s), weight: zeros(s), percent: zeros(s), seconds: zeros(s), oneRepMax: p.oneRepMax || 0 };
+  const g = { sets: s, minReps: zeros(s), maxReps: zeros(s), exactReps: zeros(s), weight: zeros(s), percent: zeros(s), seconds: zeros(s), oneRepMax: 0, rpe: zeros(s) };
   if (kind === "percent") {
     g.exactReps = fill(s, p.reps || 5);
     g.percent = fill(s, p.percent || 80);
-    if (p.oneRepMax) g.weight = fill(s, round25((p.oneRepMax * (p.percent || 80)) / 100));
     return { exerciseType: "Reps with %", goals: g };
   }
   if (kind === "rep-range") {
     g.minReps = fill(s, p.minReps || 8);
     g.maxReps = fill(s, p.maxReps || 12);
     g.exactReps = fill(s, p.minReps || 8); // required for rep-range double-progression to advance
-    g.weight = fill(s, round25(p.weight || 0));
     return { exerciseType: "Rep Range", goals: g };
   }
   if (kind === "time") {
@@ -159,7 +158,6 @@ function seedGoals(kind, p) {
     return { exerciseType: "Time", goals: g };
   }
   g.exactReps = fill(s, p.reps || 8);
-  g.weight = fill(s, round25(p.weight || 0));
   return { exerciseType: "Reps", goals: g };
 }
 
@@ -327,14 +325,12 @@ async function generateProgramFromBlock({ trainingBlockId, trainerId }) {
     // anchor a goal lift as the primary mover on this day if one was assigned here
     const anchor = anchorByDay[strengthDayIdx];
     if (anchor) {
-      if (strategy.scheme === "percent" && anchor.startingWeight) {
-        const reps = anchor.targetReps || strategy.reps || 5;
-        const est1RM = Math.round(anchor.startingWeight * (1 + reps / 30)); // Epley
-        assumptions.push(`Anchored "${anchor.title}" at ~${strategy.percent}% of an estimated ${est1RM} 1RM (from ${anchor.startingWeight} × ${reps}).`);
-        circuits.push([makeEntry(anchor.exercise, "percent", { ...schemeParams("percent", { sets: strategy.sets, reps: strategy.reps, percent: strategy.percent }, useScheme), oneRepMax: est1RM })]);
+      if (strategy.scheme === "percent") {
+        assumptions.push(`Anchored "${anchor.title}" at ${strategy.percent}% — loads stay blank; each client's first sessions set them.`);
+        circuits.push([makeEntry(anchor.exercise, "percent", schemeParams("percent", { sets: strategy.sets, reps: strategy.reps, percent: strategy.percent }, useScheme))]);
       } else {
-        assumptions.push(`Anchored "${anchor.title}" as a rep-range lift${anchor.startingWeight ? ` starting ~${anchor.startingWeight}` : " — no starting load, coach to set"}.`);
-        circuits.push([makeEntry(anchor.exercise, "rep-range", { ...schemeParams("rep-range", { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }, useScheme), weight: anchor.startingWeight || 0 })]);
+        assumptions.push(`Anchored "${anchor.title}" as a rep-range lift — loads stay blank; set per client.`);
+        circuits.push([makeEntry(anchor.exercise, "rep-range", schemeParams("rep-range", { sets: strategy.sets, minReps: strategy.minReps || 8, maxReps: strategy.maxReps || 12 }, useScheme))]);
       }
       usedIds.add(String(anchor.exercise));
     }

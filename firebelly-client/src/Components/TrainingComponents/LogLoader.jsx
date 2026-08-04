@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button, Grid, InputAdornment, TextField, Typography } from "@mui/material";
+import RpeSelect from "./RpeSelect";
 import {
   displayWeightUnit,
   formatWeightInputValue,
@@ -22,6 +23,7 @@ const LoggedField = (props) => {
     setLocalTraining,
     weightUnit = "lbs",
     onToggleWeightUnit,
+    weightsLocked,
   } = props;
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
@@ -104,6 +106,48 @@ const LoggedField = (props) => {
     }
   };
 
+  // Program-builder context: the template prescribes effort, not load — the weight slot becomes
+  // a target-RPE picker (written to goals.rpe), and each client's weight is whatever meets it.
+  const handleRpeChange = (e) => {
+    const v = Number(e.target.value) || 0;
+    setLocalTraining((prev) =>
+      prev.map((set, sIndex) => {
+        if (setIndex === sIndex) {
+          set.map((ex, eIndex) => {
+            if (eIndex === exerciseIndex) {
+              const arr = Array.isArray(ex.goals.rpe) ? [...ex.goals.rpe] : [];
+              while (arr.length < (Number(ex.goals.sets) || 0)) arr.push(0);
+              arr[exerciseSetIndex] = v;
+              ex.goals.rpe = arr;
+            }
+            return ex;
+          });
+        }
+        return set;
+      })
+    );
+  };
+
+  if (weightsLocked && isWeightField) {
+    return (
+      <Grid size={5}>
+        <RpeSelect value={exercise.goals?.rpe?.[exerciseSetIndex]} onChange={handleRpeChange} />
+      </Grid>
+    );
+  }
+
+  // The goal shown in the weight field's "/x" adornment; when the program set no load but did
+  // set a target effort, the guidance becomes "@RPE n" instead of a meaningless "/0".
+  const goalAdornmentValue =
+    exercise.exerciseType === "Reps with %" && field.goalAttribute === "weight"
+      ? Number(parentProps.exercise.goals.oneRepMax) *
+        (Number(parentProps.exercise.goals.percent[exerciseSetIndex]) / 100)
+      : parentProps.exercise.goals[field.goalAttribute][exerciseSetIndex];
+  const rpeTarget = isWeightField
+    ? Number(parentProps.exercise.goals?.rpe?.[exerciseSetIndex]) || 0
+    : 0;
+  const showRpeHint = isWeightField && rpeTarget > 0 && !(Number(goalAdornmentValue) > 0);
+
   return (
     <Grid size={5}>
       <TextField
@@ -128,38 +172,26 @@ const LoggedField = (props) => {
                 position="start"
                 sx={{ fontSize: "10px", textAlign: "right", userSelect: "none" }}
               >
-                <Button
-                  sx={{
-                    color: "text.secondary",
-                    display: "inline-block",
-                    padding: 0,
-                    minHeight: 0,
-                    minWidth: 0,
-                  }}
-                  onClick={(e) => {
-                    exercise.exerciseType === "Reps with %" && field.goalAttribute === "weight"
-                      ? handleGoalAdornmentClick(
-                          e,
-                          Number(parentProps.exercise.goals.oneRepMax) *
-                            (Number(parentProps.exercise.goals.percent[exerciseSetIndex]) / 100)
-                        )
-                      : handleGoalAdornmentClick(
-                          e,
-                          parentProps.exercise.goals[field.goalAttribute][exerciseSetIndex]
-                        );
-                  }}
-                >
-                  <Typography variant="body2" noWrap>
-                    {exercise.exerciseType === "Reps with %" && field.goalAttribute === "weight"
-                      ? `/${
-                          toDisplayValue(
-                            Number(parentProps.exercise.goals.oneRepMax) *
-                              (Number(parentProps.exercise.goals.percent[exerciseSetIndex]) / 100)
-                          )
-                        }`
-                      : `/${toDisplayValue(parentProps.exercise.goals[field.goalAttribute][exerciseSetIndex])}`}
+                {showRpeHint ? (
+                  <Typography variant="body2" noWrap sx={{ color: "text.secondary" }}>
+                    @RPE {rpeTarget}
                   </Typography>
-                </Button>
+                ) : (
+                  <Button
+                    sx={{
+                      color: "text.secondary",
+                      display: "inline-block",
+                      padding: 0,
+                      minHeight: 0,
+                      minWidth: 0,
+                    }}
+                    onClick={(e) => handleGoalAdornmentClick(e, goalAdornmentValue)}
+                  >
+                    <Typography variant="body2" noWrap>
+                      {`/${toDisplayValue(goalAdornmentValue)}`}
+                    </Typography>
+                  </Button>
+                )}
               </InputAdornment>
             ),
           },
@@ -170,7 +202,7 @@ const LoggedField = (props) => {
 };
 
 export default function LogLoader(props) {
-  const { fields, exercise, localTraining, sets, setIndex, setLocalTraining, exerciseIndex, weightUnit, onToggleWeightUnit } =
+  const { fields, exercise, localTraining, sets, setIndex, setLocalTraining, exerciseIndex, weightUnit, onToggleWeightUnit, weightsLocked } =
     props;
 
   let exerciseSets = [];
@@ -267,6 +299,7 @@ export default function LogLoader(props) {
                   setLocalTraining={setLocalTraining}
                   weightUnit={weightUnit}
                   onToggleWeightUnit={onToggleWeightUnit}
+                  weightsLocked={weightsLocked}
                 />
               );
             })}

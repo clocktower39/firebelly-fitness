@@ -1546,9 +1546,9 @@ export default function ProgramBuilder() {
         <DialogTitle>Generate progression</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Fills every week after the base week with a progressed copy of it. Each exercise
-            advances by its <strong>own</strong> rule — barbell +5 (isolation +2.5), dumbbell
-            +2.5→5, machine +10, cable +2.5, bodyweight +1 rep, holds +5s. Overwrites those
+            Fills every week after the base week with a progressed copy of it. Programs carry no
+            weights — each exercise advances by reps, %, or hold time (bodyweight +1 rep, %-lifts
+            +2.5%, holds +5s); loads are set per client after assignment. Overwrites those
             weeks&apos; workouts.
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -1583,8 +1583,8 @@ export default function ProgramBuilder() {
               </Select>
             </FormControl>
             <Typography variant="caption" color="text.secondary">
-              Cumulative from the base week, rounded to loadable weights. Weeks flagged as a
-              deload in your blocks automatically get a lighter (~10%) recovery week.
+              Cumulative from the base week. Weeks flagged as a deload in your blocks
+              automatically get a recovery week (half the sets, lighter intensity).
             </Typography>
           </Stack>
         </DialogContent>

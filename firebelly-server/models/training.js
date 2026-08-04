@@ -60,6 +60,9 @@ const trainingSchema = new mongoose.Schema(
               percent: { type: Array },
               seconds: { type: Array },
               oneRepMax: { type: Number },
+              // per-set target effort (RPE, 10 = max) — how programs prescribe intensity
+              // without absolute loads; 0 = unset
+              rpe: { type: Array },
             },
             achieved: {
               sets: { type: Number },
@@ -89,6 +92,7 @@ const trainingSchema = new mongoose.Schema(
               weight: [0],
               percent: [0],
               seconds: [0],
+              rpe: [0],
             },
             achieved: {
               sets: 0,

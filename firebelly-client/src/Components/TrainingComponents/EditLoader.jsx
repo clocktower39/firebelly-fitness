@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button, Grid, TextField, Typography } from "@mui/material";
+import RpeSelect from "./RpeSelect";
 import {
   displayWeightUnit,
   formatWeightInputValue,
@@ -22,6 +23,7 @@ const LoggedField = (props) => {
     amountOfFields,
     weightUnit = "lbs",
     onToggleWeightUnit,
+    weightsLocked,
   } = props;
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
@@ -95,6 +97,36 @@ const LoggedField = (props) => {
     setDraftValue(null);
   };
 
+  // Program-builder context: the template prescribes effort, not load — the weight slot becomes
+  // a target-RPE picker, and each client's own weight is whatever meets that target.
+  const handleRpeChange = (e) => {
+    const v = Number(e.target.value) || 0;
+    setLocalTraining((prev) =>
+      prev.map((set, sIndex) => {
+        if (setIndex === sIndex) {
+          set.map((ex, eIndex) => {
+            if (eIndex === exerciseIndex) {
+              const arr = Array.isArray(ex.goals.rpe) ? [...ex.goals.rpe] : [];
+              while (arr.length < (Number(ex.goals.sets) || 0)) arr.push(0);
+              arr[exerciseSetIndex] = v;
+              ex.goals.rpe = arr;
+            }
+            return ex;
+          });
+        }
+        return set;
+      })
+    );
+  };
+
+  if (weightsLocked && isWeightField) {
+    return (
+      <Grid size={amountOfFields % 2 === 0 ? 6 : amountOfFields === 1 ? 12 : 4}>
+        <RpeSelect value={exercise.goals.rpe?.[exerciseSetIndex]} onChange={handleRpeChange} />
+      </Grid>
+    );
+  }
+
   return (
     <Grid size={amountOfFields % 2 === 0 ? 6 : amountOfFields === 1 ? 12 : 4}>
       <TextField
@@ -121,7 +153,7 @@ const LoggedField = (props) => {
 };
 
 export default function EditLoader(props) {
-  const { fields, exercise, sets, setIndex, setLocalTraining, exerciseIndex, weightUnit, onToggleWeightUnit } = props;
+  const { fields, exercise, sets, setIndex, setLocalTraining, exerciseIndex, weightUnit, onToggleWeightUnit, weightsLocked } = props;
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
   const weightUnitLabel = displayWeightUnit(normalizedWeightUnit);
   const [oneRepMax, setOneRepMax] = useState(
@@ -179,28 +211,30 @@ export default function EditLoader(props) {
 
   return (
     <Grid container size={12} spacing={1}>
-      {fields?.nonRepeating?.map((field) => (
-        <Grid
-          key={`nonRepeating-${field.label}`}
-          container
-          size={12}
-          sx={{ justifyContent: "center" }}
-        >
-          <TextField
-            label={`One Rep Max (${weightUnitLabel})`}
-            value={oneRepMax}
-            onChange={handleOneRepMaxChange}
-            onBlur={handleOneRepMaxBlur}
-            onFocus={handleOneRepMaxFocus}
-            fullWidth
-            slotProps={{
-              inputLabel: onToggleWeightUnit
-                ? { onClick: onToggleWeightUnit, sx: { cursor: "pointer" } }
-                : undefined,
-            }}
-          />
-        </Grid>
-      ))}
+      {/* One Rep Max is a load — it has no place on a program template (weightsLocked). */}
+      {!weightsLocked &&
+        fields?.nonRepeating?.map((field) => (
+          <Grid
+            key={`nonRepeating-${field.label}`}
+            container
+            size={12}
+            sx={{ justifyContent: "center" }}
+          >
+            <TextField
+              label={`One Rep Max (${weightUnitLabel})`}
+              value={oneRepMax}
+              onChange={handleOneRepMaxChange}
+              onBlur={handleOneRepMaxBlur}
+              onFocus={handleOneRepMaxFocus}
+              fullWidth
+              slotProps={{
+                inputLabel: onToggleWeightUnit
+                  ? { onClick: onToggleWeightUnit, sx: { cursor: "pointer" } }
+                  : undefined,
+              }}
+            />
+          </Grid>
+        ))}
       {exerciseSets.map((count, exerciseSetIndex) => {
         return (
           <Grid
@@ -243,6 +277,7 @@ export default function EditLoader(props) {
                     oneRepMax={oneRepMax}
                     weightUnit={weightUnit}
                     onToggleWeightUnit={onToggleWeightUnit}
+                    weightsLocked={weightsLocked}
                   />
                 );
               })}

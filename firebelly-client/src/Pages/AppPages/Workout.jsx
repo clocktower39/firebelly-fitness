@@ -67,6 +67,29 @@ export default function Workout({ socket }) {
   });
   const [size = 900, setBorderHighlight] = useOutletContext();
 
+  // A program day is a template (often assigned to several clients), so absolute loads never
+  // belong in it: weight/1RM inputs are disabled downstream, and every persist strips them so
+  // history-seeded or legacy values can't survive. Per-client loads come from trainer edits on
+  // the assigned copies and from reactive seeding after the first completion.
+  const lockWeights = isProgramBuilder || Boolean(training?.isProgramDay);
+  const zeroWeightsIn = (groups) =>
+    (groups || []).map((group) =>
+      (group || []).map((entry) =>
+        entry?.isWarmup
+          ? entry
+          : {
+              ...entry,
+              goals: entry.goals
+                ? { ...entry.goals, weight: (entry.goals.weight || []).map(() => 0), oneRepMax: 0 }
+                : entry.goals,
+              achieved: entry.achieved
+                ? { ...entry.achieved, weight: (entry.achieved.weight || []).map(() => 0) }
+                : entry.achieved,
+            }
+      )
+    );
+  const forSave = (groups) => (lockWeights ? zeroWeightsIn(groups) : groups);
+
   const isPersonalWorkout = useCallback(
     () => user._id.toString() === training?.user?._id?.toString(),
     [user._id, training?.user?._id]
@@ -386,6 +409,7 @@ export default function Workout({ socket }) {
         weight: normalizeToSets(achieved.weight),
         percent: normalizeToSets(achieved.percent),
         seconds: normalizeToSets(achieved.seconds),
+        rpe: Array(setCount).fill(0),
       },
       achieved: {
         sets: 0,
@@ -474,7 +498,7 @@ export default function Workout({ socket }) {
         updateTraining(training._id, {
           ...training,
           category: [...trainingCategory],
-          training: [...newTraining],
+          training: forSave([...newTraining]),
         })
       );
     }
@@ -501,7 +525,7 @@ export default function Workout({ socket }) {
         updateTraining(training._id, {
           ...training,
           category: [...trainingCategory],
-          training: [...newTraining],
+          training: forSave([...newTraining]),
         })
       );
       setActiveStep(0);
@@ -578,7 +602,7 @@ export default function Workout({ socket }) {
       ...training,
       title: trainingTitle,
       category: [...trainingCategory],
-      training: localTraining,
+      training: forSave(localTraining),
       complete,
       workoutFeedback: workoutFeedback,
       workoutType: activeWorkoutType,
@@ -790,6 +814,7 @@ export default function Workout({ socket }) {
                     workoutFeedback={workoutFeedback}
                     workoutUser={training.user}
                     workoutDoc={training}
+                    weightsLocked={lockWeights}
                   />
                 )}
                 {isActivityLog && workoutCompleteStatus && (

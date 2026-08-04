@@ -27,6 +27,7 @@ export default function StrengthWorkoutEditor({
   workoutFeedback,
   workoutUser,
   workoutDoc,
+  weightsLocked,
 }) {
   return (
     <>
@@ -60,6 +61,7 @@ export default function StrengthWorkoutEditor({
           onToggleWeightUnit={onToggleWeightUnit}
           allowFeedback={allowFeedback}
           workoutDoc={workoutDoc}
+          weightsLocked={weightsLocked}
         />
       )}
     </>
