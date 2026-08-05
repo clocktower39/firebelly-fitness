@@ -30,6 +30,12 @@ import {
   Snackbar,
   Stack,
   Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Tabs,
   TextField,
   Tooltip,
@@ -86,6 +92,45 @@ function SortableDay({ id, disabled, children }) {
 }
 
 const DEFAULT_WEEKS = 4;
+
+// Whole-program overview rows: every day's exercise names at once, flagging an exercise that
+// appears on 2+ DIFFERENT days of the same week. Weeks repeat by design (progressed clones),
+// so cross-week repetition is expected — cross-day repetition inside a week is the duplicate
+// that matters. Warm-ups are skipped as noise.
+const buildProgramOverview = (weeks, workoutCache) =>
+  (weeks || []).map((week, weekIndex) => {
+    const days = (week || []).map((day) => {
+      const workout = day.workoutId ? workoutCache[day.workoutId] : null;
+      const exercises = [];
+      (workout?.training || []).forEach((circuit) =>
+        (Array.isArray(circuit) ? circuit : []).forEach((entry) => {
+          if (!entry || entry.isWarmup) return;
+          const id = String(entry.exercise?._id || entry.exercise || "");
+          const name = entry.exercise?.exerciseTitle || "";
+          if (name) exercises.push({ id, name });
+        })
+      );
+      return {
+        assigned: Boolean(day.workoutId),
+        loaded: Boolean(workout),
+        exercises,
+      };
+    });
+    const daysByExercise = new Map();
+    days.forEach((day, dayIndex) => {
+      new Set(day.exercises.map((e) => e.id)).forEach((id) => {
+        const set = daysByExercise.get(id) || new Set();
+        set.add(dayIndex);
+        daysByExercise.set(id, set);
+      });
+    });
+    days.forEach((day) => {
+      day.exercises.forEach((e) => {
+        e.dup = (daysByExercise.get(e.id)?.size || 0) >= 2;
+      });
+    });
+    return { weekIndex, days };
+  });
 
 // Planned sets per primary muscle group across one week's cached day workouts — the
 // pre-assignment volume audit (warm-ups excluded; every hard set credits each primary muscle).
@@ -241,6 +286,9 @@ export default function ProgramBuilder() {
   const [copyDaySource, setCopyDaySource] = useState(null); // { weekIndex, dayIndex, workoutId }
   const [copyDayTarget, setCopyDayTarget] = useState({ week: "", day: "" });
   const [isCopyingDay, setIsCopyingDay] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewDupsOnly, setOverviewDupsOnly] = useState(false);
+  const [overviewHighlightId, setOverviewHighlightId] = useState(null);
   const [importSearch, setImportSearch] = useState("");
   const [importSort, setImportSort] = useState("newest");
   const [importCategory, setImportCategory] = useState("");
@@ -1261,6 +1309,18 @@ export default function ProgramBuilder() {
                   >
                     Generate progression
                   </Button>
+                  <Tooltip title="Every workout in the program at once, with repeated exercises flagged.">
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setOverviewOpen(true)}
+                        disabled={!weeks.some((week) => week?.some((day) => day.workoutId))}
+                      >
+                        Overview
+                      </Button>
+                    </span>
+                  </Tooltip>
                   <Button
                     size="small"
                     variant="outlined"
@@ -1592,6 +1652,126 @@ export default function ProgramBuilder() {
             }}
           >
             Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={overviewOpen}
+        onClose={() => {
+          setOverviewOpen(false);
+          setOverviewHighlightId(null);
+        }}
+        fullWidth
+        maxWidth="xl"
+      >
+        <DialogTitle
+          sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}
+        >
+          Program overview
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={overviewDupsOnly}
+                onChange={(e) => setOverviewDupsOnly(e.target.checked)}
+              />
+            }
+            label="Duplicates only"
+          />
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            ⚠ marks an exercise appearing on two or more days of the same week. Tap a name to
+            light up every occurrence across the program. Warm-ups aren&apos;t shown; repeats
+            across weeks are expected (weeks are progressed copies).
+          </Typography>
+          {overviewOpen && (
+            <TableContainer sx={{ maxHeight: "70vh" }}>
+              <Table stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Week</TableCell>
+                    {(weeks[0] || []).map((_, dayIndex) => (
+                      <TableCell key={`ov-head-${dayIndex}`} sx={{ fontWeight: 700 }}>
+                        Day {dayIndex + 1}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {buildProgramOverview(weeks, workoutCache).map((row) => (
+                    <TableRow key={`ov-week-${row.weekIndex}`} hover>
+                      <TableCell sx={{ whiteSpace: "nowrap", verticalAlign: "top", fontWeight: 600 }}>
+                        Week {row.weekIndex + 1}
+                        {weekPlan[row.weekIndex]?.isDeload ? " · DL" : ""}
+                      </TableCell>
+                      {row.days.map((day, dayIndex) => {
+                        const list = overviewDupsOnly
+                          ? day.exercises.filter((e) => e.dup)
+                          : day.exercises;
+                        return (
+                          <TableCell
+                            key={`ov-${row.weekIndex}-${dayIndex}`}
+                            sx={{ verticalAlign: "top", minWidth: 140 }}
+                          >
+                            {!day.assigned ? (
+                              <Typography variant="caption" color="text.disabled">
+                                —
+                              </Typography>
+                            ) : !day.loaded ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Loading…
+                              </Typography>
+                            ) : list.length === 0 ? (
+                              <Typography variant="caption" color="text.disabled">
+                                {overviewDupsOnly ? "·" : "No exercises"}
+                              </Typography>
+                            ) : (
+                              list.map((e, i) => (
+                                <Typography
+                                  key={`ov-ex-${e.id}-${i}`}
+                                  variant="caption"
+                                  onClick={() =>
+                                    setOverviewHighlightId((prev) => (prev === e.id ? null : e.id))
+                                  }
+                                  sx={{
+                                    display: "block",
+                                    cursor: "pointer",
+                                    lineHeight: 1.7,
+                                    color: e.dup ? "warning.main" : "text.primary",
+                                    bgcolor:
+                                      overviewHighlightId === e.id
+                                        ? "action.selected"
+                                        : "transparent",
+                                    borderRadius: 0.5,
+                                    px: 0.5,
+                                    mx: -0.5,
+                                  }}
+                                >
+                                  {e.dup ? "⚠ " : ""}
+                                  {e.name}
+                                </Typography>
+                              ))
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setOverviewOpen(false);
+              setOverviewHighlightId(null);
+            }}
+          >
+            Close
           </Button>
         </DialogActions>
       </Dialog>
