@@ -59,7 +59,13 @@ async function resyncProgramFromWeekOne(program, { dayIndexes = null } = {}) {
 
       try {
         const training = deepClone(base.training) || [[]];
-        await progressWorkout(training, { step, deload: isDeload });
+        await progressWorkout(training, {
+          step,
+          deload: isDeload,
+          // Honor the program's chosen style: "same" keeps every week an exact copy of the
+          // base week (feedback-only progression) instead of re-introducing engine ramps.
+          scheme: program.progressionScheme === "same" ? "same" : undefined,
+        });
         const content = {
           training: sanitizeTrainingTechniques(training),
           category: deepClone(base.category) || [],

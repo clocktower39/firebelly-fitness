@@ -82,11 +82,15 @@ const update_program = async (req, res, next) => {
       mesocycles,
       price,
       visibility,
+      progressionScheme,
     } = req.body;
 
     program.title = title;
     program.description = description;
     if (price !== undefined) program.price = Number(price) || 0;
+    if (["", "same", "linear", "rep-range", "percent"].includes(progressionScheme)) {
+      program.progressionScheme = progressionScheme;
+    }
     // Let a published program's listing be changed (private ⇄ profile ⇄ public) without re-publishing.
     if (PROGRAM_VISIBILITIES.includes(visibility)) program.visibility = visibility;
 

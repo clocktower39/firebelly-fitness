@@ -774,12 +774,23 @@ export default function ProgramBuilder() {
         }
       }
       setAutoProgressOpen(false);
+      // Remember the chosen style on the program so "Update later weeks" honors it (a
+      // feedback-only program must not get engine ramps re-introduced by a resync).
+      try {
+        await programApi.updateProgram(program._id, { progressionScheme: scheme });
+        setProgram((p) => (p ? { ...p, progressionScheme: scheme } : p));
+      } catch (e) {
+        /* non-fatal — the generated weeks themselves are already correct */
+      }
       const deloadCount = plan
         .slice(baseWeekIndex + 1, weeksTotal)
         .filter((p) => p?.isDeload).length;
       setSavedMessage(
-        `Progressed weeks ${baseWeekIndex + 2}–${weeksTotal} from week ${baseWeekIndex + 1}` +
-          (deloadCount ? ` · ${deloadCount} deload${deloadCount === 1 ? "" : "s"} applied.` : ".")
+        scheme === "same"
+          ? `Copied week ${baseWeekIndex + 1} into weeks ${baseWeekIndex + 2}–${weeksTotal} — progression will come from client feedback` +
+              (deloadCount ? ` · ${deloadCount} deload${deloadCount === 1 ? "" : "s"} applied.` : ".")
+          : `Progressed weeks ${baseWeekIndex + 2}–${weeksTotal} from week ${baseWeekIndex + 1}` +
+              (deloadCount ? ` · ${deloadCount} deload${deloadCount === 1 ? "" : "s"} applied.` : ".")
       );
     } catch (err) {
       setErrorMessage(err.message || "Unable to generate progression.");
@@ -1903,12 +1914,21 @@ export default function ProgramBuilder() {
       >
         <DialogTitle>Generate progression</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Fills every week after the base week with a progressed copy of it. Programs carry no
-            weights — each exercise advances by reps, %, or hold time (bodyweight +1 rep, %-lifts
-            +2.5%, holds +5s); loads are set per client after assignment. Overwrites those
-            weeks&apos; workouts.
-          </Typography>
+          {progressForm.scheme === "same" ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Copies the base week into every later week unchanged — same reps, same targets,
+              week after week. Once a client completes workouts, the weight they actually used
+              carries forward automatically and only increases when their results and feedback
+              earn it. Overwrites those weeks&apos; workouts.
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Fills every week after the base week with a progressed copy of it. Programs carry no
+              weights — each exercise advances by reps, %, or hold time (bodyweight +1 rep, %-lifts
+              +2.5%, holds +5s); loads are set per client after assignment. Overwrites those
+              weeks&apos; workouts.
+            </Typography>
+          )}
           <Stack spacing={2} sx={{ mt: 1 }}>
             <FormControl fullWidth>
               <InputLabel id="ap-base-label">Base week</InputLabel>
@@ -1935,14 +1955,16 @@ export default function ProgramBuilder() {
                 value={progressForm.scheme}
                 onChange={(e) => setProgressForm((f) => ({ ...f, scheme: e.target.value }))}
               >
+                <MenuItem value="same">Keep the same — progress from feedback only</MenuItem>
                 <MenuItem value="linear">Linear — fixed reps, add weight</MenuItem>
                 <MenuItem value="rep-range">Rep range — build reps, then weight</MenuItem>
                 <MenuItem value="percent">% of 1RM — raise intensity</MenuItem>
               </Select>
             </FormControl>
             <Typography variant="caption" color="text.secondary">
-              Cumulative from the base week. Weeks flagged as a deload in your blocks
-              automatically get a recovery week (half the sets, lighter intensity).
+              {progressForm.scheme === "same"
+                ? "Weeks flagged as a deload in your blocks still get a recovery week (half the sets)."
+                : "Cumulative from the base week. Weeks flagged as a deload in your blocks automatically get a recovery week (half the sets, lighter intensity)."}
             </Typography>
           </Stack>
         </DialogContent>

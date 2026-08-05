@@ -50,6 +50,16 @@ const programSchema = new mongoose.Schema(
       default: "private",
     },
     publishedAt: { type: Date, default: null },
+    // How "Generate progression" / "Update later weeks" fill weeks after the base week:
+    //   ""      → per-exercise engine ramps (default: linear/rep-range/percent by type)
+    //   "same"  → exact copies of the base week; progression comes only from client
+    //             feedback via reactive seeding (deload weeks still get a recovery cut)
+    // Stamped by the last Generate progression run so resync honors the trainer's choice.
+    progressionScheme: {
+      type: String,
+      enum: ["", "same", "linear", "rep-range", "percent"],
+      default: "",
+    },
     price: { type: Number, default: null },
     coverImage: { type: String, default: null },
     tags: { type: [String], default: [] },

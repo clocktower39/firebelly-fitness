@@ -22,7 +22,7 @@ const { getTrainerSchemePreferences, schemeParams } = require("./trainerSchemePr
 const schemeForType = (t) =>
   t === "Reps with %" ? "percent" : t === "Rep Range" ? "rep-range" : "linear";
 
-async function progressWorkout(training, { step, deload }) {
+async function progressWorkout(training, { step, deload, scheme }) {
   const ids = [];
   training.forEach((c) => c.forEach((e) => e.exercise && ids.push(e.exercise)));
   const libs = await Exercise.find({ _id: { $in: ids } })
@@ -36,7 +36,9 @@ async function progressWorkout(training, { step, deload }) {
       e.goals = progressExerciseGoals(
         e.goals,
         { equipment: lib.equipment, movementComplexity: lib.movementComplexity, measurementType: lib.measurementType, exerciseType: e.exerciseType },
-        { scheme: schemeForType(e.exerciseType), step, deload }
+        // "same" overrides the per-type engine ramps: weeks stay identical, feedback does
+        // the progressing. Any other value keeps each exercise's own scheme.
+        { scheme: scheme === "same" ? "same" : schemeForType(e.exerciseType), step, deload }
       );
     })
   );

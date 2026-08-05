@@ -68,6 +68,11 @@ const mapArr = (arr, fn) => (Array.isArray(arr) ? arr.map((v, i) => fn(num(v), i
 // One progression step.
 const progressOneStep = (goals, ctx, scheme) => {
   const g = goals;
+  // "same": no planned progression — later weeks are exact copies of the base week (deloads
+  // still get their recovery cut in progressExerciseGoals). Progression then comes entirely
+  // from reactive seeding: achieved loads carry forward week to week and only step up when
+  // the client's performance and feedback earn it.
+  if (scheme === "same") return g;
   const fam = familyOf(ctx.equipment);
   const isTime = ctx.measurementType === "time" || ctx.exerciseType === "Time";
 
