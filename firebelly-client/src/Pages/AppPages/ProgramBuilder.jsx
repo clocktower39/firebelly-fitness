@@ -3,7 +3,7 @@ import { programApi } from "../../api/programApi";
 import { workoutApi } from "../../api/workoutApi";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { upsertWorkout } from "../../Redux/actions";
+import { upsertWorkout, getExerciseList } from "../../Redux/actions";
 import {
   Box,
   Button,
@@ -23,6 +23,7 @@ import {
   ListItemButton,
   ListItemText,
   MenuItem,
+  Paper,
   Radio,
   RadioGroup,
   Select,
@@ -85,6 +86,30 @@ function SortableDay({ id, disabled, children }) {
 }
 
 const DEFAULT_WEEKS = 4;
+
+// Planned sets per primary muscle group across one week's cached day workouts — the
+// pre-assignment volume audit (warm-ups excluded; every hard set credits each primary muscle).
+const computeWeekMuscleSets = (week, workoutCache, exerciseList) => {
+  const muscleOf = new Map(
+    (exerciseList || []).map((ex) => [String(ex._id), ex.muscleGroups?.primary || []])
+  );
+  const counts = new Map();
+  (week || []).forEach((day) => {
+    const workout = day.workoutId ? workoutCache[day.workoutId] : null;
+    (workout?.training || []).forEach((circuit) =>
+      (Array.isArray(circuit) ? circuit : []).forEach((entry) => {
+        if (!entry || entry.isWarmup) return;
+        const sets = Number(entry.goals?.sets) || 0;
+        if (!sets) return;
+        const exId = String(entry.exercise?._id || entry.exercise || "");
+        (muscleOf.get(exId) || []).forEach((m) => {
+          if (m) counts.set(m, (counts.get(m) || 0) + sets);
+        });
+      })
+    );
+  });
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+};
 const DEFAULT_DAYS = 5;
 const AUTOSAVE_MS = 10000;
 
@@ -201,9 +226,21 @@ export default function ProgramBuilder() {
   const [dirty, setDirty] = useState(false);
   const [workoutCache, setWorkoutCache] = useState({});
   const [equipment, setEquipment] = useState([]);
+  // Full exercise library — the planned-volume panel needs each exercise's primary muscles.
+  const exerciseList = useSelector((s) => s.progress.exerciseList) || [];
+  const exerciseListRequested = useRef(false);
+  useEffect(() => {
+    if (exerciseList.length || exerciseListRequested.current) return;
+    exerciseListRequested.current = true;
+    dispatch(getExerciseList());
+  }, [exerciseList.length, dispatch]);
   const [templates, setTemplates] = useState([]);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importTarget, setImportTarget] = useState({ weekIndex: null, dayIndex: null });
+  const [copyDayDialogOpen, setCopyDayDialogOpen] = useState(false);
+  const [copyDaySource, setCopyDaySource] = useState(null); // { weekIndex, dayIndex, workoutId }
+  const [copyDayTarget, setCopyDayTarget] = useState({ week: "", day: "" });
+  const [isCopyingDay, setIsCopyingDay] = useState(false);
   const [importSearch, setImportSearch] = useState("");
   const [importSort, setImportSort] = useState("newest");
   const [importCategory, setImportCategory] = useState("");
@@ -598,6 +635,45 @@ export default function ProgramBuilder() {
     activeWeekIndex,
     copyWeekTarget,
     program,
+    setErrorMessage,
+    setSavedMessage,
+    updateDaySlot,
+    workoutCache,
+  ]);
+
+  // Copy ONE day into any other week/day slot (same clone-then-attach flow as Copy Week).
+  const handleCopyDay = useCallback(async () => {
+    if (!copyDaySource?.workoutId || copyDayTarget.week === "" || copyDayTarget.day === "") return;
+    const wi = Number(copyDayTarget.week);
+    const di = Number(copyDayTarget.day);
+    setIsCopyingDay(true);
+    try {
+      if (dirty) await saveDraft();
+      const source = workoutCache[copyDaySource.workoutId];
+      let newTitle = source?.title || `Week ${wi + 1} Day ${di + 1}`;
+      newTitle = newTitle
+        .replace(/Week \d+/i, `Week ${wi + 1}`)
+        .replace(/Day \d+/i, `Day ${di + 1}`);
+      const data = await workoutApi.copyWorkoutById({
+        _id: copyDaySource.workoutId,
+        newTitle,
+        option: "exact",
+      });
+      if (data?.error) throw new Error(data.error);
+      setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
+      await updateDaySlot(wi, di, data._id);
+      setCopyDayDialogOpen(false);
+      setSavedMessage(`Copied to Week ${wi + 1}, Day ${di + 1}`);
+    } catch (err) {
+      setErrorMessage(err.message || "Unable to copy day.");
+    } finally {
+      setIsCopyingDay(false);
+    }
+  }, [
+    copyDaySource,
+    copyDayTarget,
+    dirty,
+    saveDraft,
     setErrorMessage,
     setSavedMessage,
     updateDaySlot,
@@ -1228,6 +1304,25 @@ export default function ProgramBuilder() {
                   />
                 ))}
               </Tabs>
+              {(() => {
+                const weekMuscleSets = computeWeekMuscleSets(activeWeek, workoutCache, exerciseList);
+                return weekMuscleSets.length > 0 ? (
+                  <Paper variant="outlined" sx={{ p: 1.5, mt: 1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mb: 0.5 }}
+                    >
+                      Planned sets per muscle group — Week {safeWeekIndex + 1} (warm-ups excluded)
+                    </Typography>
+                    <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                      {weekMuscleSets.map(([muscle, sets]) => (
+                        <Chip key={muscle} size="small" variant="outlined" label={`${muscle} ${sets}`} />
+                      ))}
+                    </Stack>
+                  </Paper>
+                ) : null;
+              })()}
               {activeWeek.length > 1 && (
                 <Typography variant="caption" color="text.secondary">
                   Tip: drag the ⠿ handle on a day to reorder — the new order applies to every week.
@@ -1302,7 +1397,7 @@ export default function ProgramBuilder() {
                             </Typography>
                           )}
                         </CardContent>
-                        <CardActions sx={{ px: 2, pb: 2 }}>
+                        <CardActions sx={{ px: 2, pb: 2, flexWrap: "wrap" }}>
                           <Button
                             size="small"
                             variant={day.workoutId ? "outlined" : "contained"}
@@ -1317,6 +1412,23 @@ export default function ProgramBuilder() {
                               onClick={() => handleOpenImportDialog(safeWeekIndex, dayIndex)}
                             >
                               Import
+                            </Button>
+                          )}
+                          {day.workoutId && (
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => {
+                                setCopyDaySource({
+                                  weekIndex: safeWeekIndex,
+                                  dayIndex,
+                                  workoutId: day.workoutId,
+                                });
+                                setCopyDayTarget({ week: "", day: "" });
+                                setCopyDayDialogOpen(true);
+                              }}
+                            >
+                              Copy to…
                             </Button>
                           )}
                           {safeWeekIndex === 0 &&
@@ -1480,6 +1592,72 @@ export default function ProgramBuilder() {
             }}
           >
             Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={copyDayDialogOpen}
+        onClose={() => setCopyDayDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Copy day to another slot</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="copy-day-week-label">Week</InputLabel>
+              <Select
+                labelId="copy-day-week-label"
+                label="Week"
+                value={copyDayTarget.week}
+                onChange={(e) => setCopyDayTarget((t) => ({ ...t, week: e.target.value }))}
+              >
+                {Array.from({ length: weeksCount }, (_, i) => (
+                  <MenuItem key={i} value={i}>
+                    Week {i + 1}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel id="copy-day-day-label">Day</InputLabel>
+              <Select
+                labelId="copy-day-day-label"
+                label="Day"
+                value={copyDayTarget.day}
+                onChange={(e) => setCopyDayTarget((t) => ({ ...t, day: e.target.value }))}
+              >
+                {Array.from({ length: activeWeek.length }, (_, i) => (
+                  <MenuItem key={i} value={i}>
+                    Day {i + 1}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {copyDayTarget.week !== "" &&
+              copyDayTarget.day !== "" &&
+              Boolean(weeks[Number(copyDayTarget.week)]?.[Number(copyDayTarget.day)]?.workoutId) && (
+                <Typography variant="caption" color="warning.main">
+                  That slot already has a workout — copying will replace it.
+                </Typography>
+              )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCopyDayDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={
+              copyDayTarget.week === "" ||
+              copyDayTarget.day === "" ||
+              isCopyingDay ||
+              (Number(copyDayTarget.week) === copyDaySource?.weekIndex &&
+                Number(copyDayTarget.day) === copyDaySource?.dayIndex)
+            }
+            onClick={handleCopyDay}
+          >
+            {isCopyingDay ? "Copying…" : "Copy"}
           </Button>
         </DialogActions>
       </Dialog>

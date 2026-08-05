@@ -178,12 +178,16 @@ const LoggedField = (props) => {
                   </Typography>
                 ) : (
                   <Button
+                    title="Tap to fill in the planned value"
                     sx={{
-                      color: "text.secondary",
+                      color: "primary.main",
                       display: "inline-block",
-                      padding: 0,
+                      padding: "0 6px",
                       minHeight: 0,
                       minWidth: 0,
+                      borderRadius: 1,
+                      bgcolor: "action.hover",
+                      "&:hover": { bgcolor: "action.selected" },
                     }}
                     onClick={(e) => handleGoalAdornmentClick(e, goalAdornmentValue)}
                   >
@@ -278,8 +282,12 @@ export default function LogLoader(props) {
                   minWidth: 0,
                 }}
                 onClick={() => handleAutofillSet(exerciseSetIndex)}
+                title="Tap to fill this set in as planned"
               >
-                <Typography noWrap>
+                <Typography
+                  noWrap
+                  sx={{ textDecoration: "underline dotted", textUnderlineOffset: "3px" }}
+                >
                   Set {exerciseSetIndex + 1}:
                 </Typography>
               </Button>

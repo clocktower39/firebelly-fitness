@@ -76,6 +76,9 @@ const trainingSchema = new mongoose.Schema(
               comments: { type: [commentSchema], default: [], }
             },
             techniques: { type: [techniqueSchema], default: [] },
+            // Trainer-authored form cue shown under the exercise title in every view;
+            // travels with program assignment like the rest of the entry.
+            coachNote: { type: String, default: "" },
           },
         ],
       ],

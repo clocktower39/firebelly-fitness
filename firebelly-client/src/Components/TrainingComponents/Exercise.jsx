@@ -32,6 +32,8 @@ import EditLoader from "./EditLoader";
 import ExerciseGoalPresetField from "./ExerciseGoalPresetField";
 import useExerciseGoalPreset from "./hooks/useExerciseGoalPreset";
 import { ModalBarChartHistory } from "../../Pages/AppPages/Progress";
+import ExerciseMedia from "../../features/exercise/ExerciseMedia";
+import ExerciseCommentDialog from "./ExerciseCommentDialog";
 import { normalizeWeightUnit } from "../../utils/weightUnits";
 import {
   useTechniqueRegistry,
@@ -56,6 +58,7 @@ export default function Exercise(props) {
     weightUnit: weightUnitOverride,
     onToggleWeightUnit,
     weightsLocked,
+    onExerciseNote,
   } = props;
   const dispatch = useDispatch();
   const techniqueRegistry = useTechniqueRegistry();
@@ -80,6 +83,8 @@ export default function Exercise(props) {
   const [sets, setSets] = useState(exercise.goals.sets || 0);
   const [editMode, setEditMode] = useState(false);
   const [open, setOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [targetExerciseProgress, setTargetExerciseProgess] = useState({});
   const handleClose = () => setOpen(false);
   const handleModalToggle = () => setOpen((prev) => !prev);
@@ -131,6 +136,46 @@ export default function Exercise(props) {
   const handleTypeChange = (e) => setExerciseType(e.target.value);
 
   const handleSetChange = (e) => setSets(Number(e.target.value));
+
+  // Per-exercise notes & the trainer's coaching cue. Both mutate the local entry (persisted by
+  // the normal save bar); a client note is also mirrored into the workout comment thread by the
+  // parent so the trainer gets the usual comment notification.
+  const updateEntry = (mutator) =>
+    setLocalTraining((prev) =>
+      prev.map((set, sIndex) => {
+        if (setIndex === sIndex) {
+          set.map((ex, eIndex) => {
+            if (eIndex === exerciseIndex) mutator(ex);
+            return ex;
+          });
+        }
+        return set;
+      })
+    );
+
+  const handleAddExerciseNote = (text) => {
+    const note = {
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profilePicture: user.profilePicture,
+      },
+      text,
+      timestamp: new Date(),
+    };
+    updateEntry((ex) => {
+      ex.feedback = ex.feedback || { difficulty: 1, comments: [] };
+      ex.feedback.comments = [...(ex.feedback.comments || []), note];
+    });
+    onExerciseNote?.(title?.exerciseTitle || "Exercise", text);
+  };
+
+  const handleSaveCoachNote = (text) => updateEntry((ex) => {
+    ex.coachNote = text;
+  });
+
+  const exerciseNoteCount = (exercise.feedback?.comments || []).filter((c) => !c.deletedAt).length;
 
   useEffect(() => {
     // Ensures each proptery array length matches the amount of sets
@@ -636,6 +681,29 @@ export default function Exercise(props) {
                   </Tooltip>
                 </Grid>
               </Grid>
+              {(exercise.coachNote || exerciseNoteCount > 0) && (
+                <Grid container size={12} sx={{ pl: 0.5, rowGap: 0 }}>
+                  {exercise.coachNote && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ width: "100%", fontStyle: "italic" }}
+                    >
+                      Coach: {exercise.coachNote}
+                    </Typography>
+                  )}
+                  {exerciseNoteCount > 0 && (
+                    <Typography
+                      variant="caption"
+                      color="primary"
+                      sx={{ cursor: "pointer" }}
+                      onClick={() => setNotesOpen(true)}
+                    >
+                      {exerciseNoteCount} note{exerciseNoteCount === 1 ? "" : "s"}
+                    </Typography>
+                  )}
+                </Grid>
+              )}
               <Menu open={exerciseOptionsOpen} onClose={handleExerciseOptionsClose} anchorEl={anchorEl}>
                 <MenuItem
                   onClick={() => {
@@ -653,16 +721,32 @@ export default function Exercise(props) {
                 >
                   View Progress Chart
                 </MenuItem>
-                {(user?.isTrainer || user?.delegationMode === "trainer_client") && (
-                  <MenuItem
-                    onClick={() => {
-                      setSwapOpen(true);
-                      handleExerciseOptionsClose();
-                    }}
-                  >
-                    Swap exercise…
-                  </MenuItem>
-                )}
+                <MenuItem
+                  onClick={() => {
+                    setDemoOpen(true);
+                    handleExerciseOptionsClose();
+                  }}
+                >
+                  Watch demo
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setNotesOpen(true);
+                    handleExerciseOptionsClose();
+                  }}
+                >
+                  {user?.isTrainer ? "Notes & coaching cue" : "Add note"}
+                </MenuItem>
+                {/* Available to clients too (2026-08-04): the server authorizes by resource
+                    ownership, so a client can only ever swap on their own workouts. */}
+                <MenuItem
+                  onClick={() => {
+                    setSwapOpen(true);
+                    handleExerciseOptionsClose();
+                  }}
+                >
+                  Swap exercise…
+                </MenuItem>
                 <MenuItem
                   onClick={() =>
                     setEditMode((prev) => {
@@ -674,6 +758,21 @@ export default function Exercise(props) {
                   Edit Exercise
                 </MenuItem>
               </Menu>
+              <Dialog open={demoOpen} onClose={() => setDemoOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{title?.exerciseTitle || "Exercise demo"}</DialogTitle>
+                <DialogContent>
+                  <ExerciseMedia exercise={title} />
+                </DialogContent>
+              </Dialog>
+              <ExerciseCommentDialog
+                open={notesOpen}
+                onClose={() => setNotesOpen(false)}
+                exerciseTitle={title?.exerciseTitle}
+                entry={exercise}
+                isTrainer={Boolean(user?.isTrainer)}
+                onAddNote={handleAddExerciseNote}
+                onSaveCue={handleSaveCoachNote}
+              />
               <SwapExerciseDialog
                 open={swapOpen}
                 onClose={() => setSwapOpen(false)}

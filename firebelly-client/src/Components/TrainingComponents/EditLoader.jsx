@@ -209,6 +209,30 @@ export default function EditLoader(props) {
     count++;
   }
 
+  // Bulk entry: prescribe Set 1, then stamp it across every set in one tap.
+  const applySetOneToAll = () => {
+    setLocalTraining((prev) =>
+      prev.map((set, sIndex) => {
+        if (setIndex === sIndex) {
+          set.map((ex, eIndex) => {
+            if (eIndex === exerciseIndex) {
+              ["minReps", "maxReps", "exactReps", "weight", "percent", "seconds", "rpe"].forEach(
+                (k) => {
+                  const arr = ex.goals[k];
+                  if (Array.isArray(arr) && arr.length > 0) {
+                    ex.goals[k] = arr.map(() => arr[0]);
+                  }
+                }
+              );
+            }
+            return ex;
+          });
+        }
+        return set;
+      })
+    );
+  };
+
   return (
     <Grid container size={12} spacing={1}>
       {/* One Rep Max is a load — it has no place on a program template (weightsLocked). */}
@@ -235,6 +259,13 @@ export default function EditLoader(props) {
             />
           </Grid>
         ))}
+      {sets > 1 && (
+        <Grid container size={12} sx={{ justifyContent: "flex-end" }}>
+          <Button size="small" onClick={applySetOneToAll}>
+            Copy Set 1 to all sets
+          </Button>
+        </Grid>
+      )}
       {exerciseSets.map((count, exerciseSetIndex) => {
         return (
           <Grid

@@ -7,9 +7,14 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   Snackbar,
   TextField,
+  Typography,
 } from "@mui/material";
 import WorkoutTrainerSessionDialog from "../../Components/TrainingComponents/WorkoutTrainerSessionDialog";
 import { WorkoutOptionModalView } from "../../Components/WorkoutOptionModal";
@@ -324,6 +329,82 @@ export default function Workout({ socket }) {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
+
+  // --- Draft autosave: keep unsaved edits in localStorage so a crash, connection blip, or
+  // accidental tab close can't eat a half-logged workout. Purely a local safety net (no offline
+  // infra): written debounced while dirty, cleared the moment a real save lands.
+  const draftKey = params._id ? `fbWorkoutDraft:${params._id}` : null;
+  const [draftToRestore, setDraftToRestore] = useState(null);
+  const draftCheckedRef = useRef(false);
+
+  // Offer a restore once, when the workout hydrates and a draft exists. Only restore onto the
+  // same server state the draft was based on — if the workout changed elsewhere (trainer edit,
+  // another device), the draft is stale and gets dropped.
+  useEffect(() => {
+    if (!training?._id || !draftKey || draftCheckedRef.current) return;
+    draftCheckedRef.current = true;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft.base !== JSON.stringify(training.training ?? [])) {
+        window.localStorage.removeItem(draftKey);
+        return;
+      }
+      setDraftToRestore(draft);
+    } catch (e) {
+      /* corrupt draft / private mode */
+    }
+  }, [training?._id, training?.training, draftKey]);
+
+  const restoreDraft = () => {
+    if (!draftToRestore) return;
+    suppressNextSocketEmit();
+    if (Array.isArray(draftToRestore.localTraining)) setLocalTraining(draftToRestore.localTraining);
+    if (draftToRestore.workoutFeedback) setWorkoutFeedback(draftToRestore.workoutFeedback);
+    if (typeof draftToRestore.trainingTitle === "string" && draftToRestore.trainingTitle) {
+      setTrainingTitle(draftToRestore.trainingTitle);
+    }
+    setDraftToRestore(null);
+  };
+
+  const discardDraft = () => {
+    try {
+      if (draftKey) window.localStorage.removeItem(draftKey);
+    } catch (e) {
+      /* ignore */
+    }
+    setDraftToRestore(null);
+  };
+
+  useEffect(() => {
+    if (!draftKey || !training?._id) return undefined;
+    if (!isDirty) {
+      try {
+        window.localStorage.removeItem(draftKey);
+      } catch (e) {
+        /* ignore */
+      }
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      try {
+        window.localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            savedAt: Date.now(),
+            base: JSON.stringify(training.training ?? []),
+            localTraining,
+            workoutFeedback,
+            trainingTitle,
+          })
+        );
+      } catch (e) {
+        /* storage full / private mode */
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [draftKey, isDirty, localTraining, workoutFeedback, trainingTitle, training?._id, training?.training]);
 
   const handleTitleChange = (e) => {
     setTitleAuto(false);
@@ -910,6 +991,23 @@ export default function Workout({ socket }) {
                 </Grid>
               )}
 
+              <Dialog open={Boolean(draftToRestore)} onClose={discardDraft} maxWidth="xs" fullWidth>
+                <DialogTitle>Restore unsaved changes?</DialogTitle>
+                <DialogContent>
+                  <Typography variant="body2">
+                    This workout has edits from{" "}
+                    {draftToRestore?.savedAt ? dayjs(draftToRestore.savedAt).format("h:mm A") : "earlier"}{" "}
+                    that never made it to the server — a closed tab or lost connection. Restore
+                    them and keep going?
+                  </Typography>
+                </DialogContent>
+                <DialogActions>
+                  <Button onClick={discardDraft}>Discard</Button>
+                  <Button variant="contained" onClick={restoreDraft}>
+                    Restore
+                  </Button>
+                </DialogActions>
+              </Dialog>
               <AddExercisesDialog
                 user={training.user}
                 addExerciseOpen={addExerciseOpen}

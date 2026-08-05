@@ -106,7 +106,7 @@ const update_training = async (req, res, next) => {
       .populate({
         path: "training.exercise",
         model: "Exercise",
-        select: "_id exerciseTitle",
+        select: "_id exerciseTitle mediaUrl",
       })
       .populate({
         path: "user workoutFeedback.comments.user workoutFeedback.comments.deletedBy training.feedback.comments.user training.feedback.comments.deletedBy",
@@ -291,7 +291,7 @@ const get_training_by_id = (req, res, next) => {
     .populate({
       path: "training.exercise",
       model: "Exercise",
-      select: "_id exerciseTitle",
+      select: "_id exerciseTitle mediaUrl",
     })
     .populate({
       path: "user workoutFeedback.comments.user workoutFeedback.comments.deletedBy training.feedback.comments.user training.feedback.comments.deletedBy",
@@ -385,7 +385,7 @@ const get_workout_queue = async (req, res, next) => {
 
     const workouts = await Training.find(workoutQuery).populate({
       path: "training.exercise",
-      select: "_id exerciseTitle",
+      select: "_id exerciseTitle mediaUrl",
     });
 
     if (!workouts.length) {
@@ -453,7 +453,7 @@ const get_workouts_by_date = async (req, res, next) => {
     .populate({
       path: "training.exercise",
       model: "Exercise",
-      select: "_id exerciseTitle",
+      select: "_id exerciseTitle mediaUrl",
     })
     .populate({
       path: "user workoutFeedback.comments.user workoutFeedback.comments.deletedBy training.feedback.comments.user training.feedback.comments.deletedBy",
@@ -505,7 +505,7 @@ const get_weekly_training = async (req, res, next) => {
       .populate({
         path: "training.exercise",
         model: "Exercise",
-        select: "_id exerciseTitle",
+        select: "_id exerciseTitle mediaUrl",
       });
 
     return res.json({ workouts, user: targetUser });
@@ -567,7 +567,7 @@ const get_exercise_history = (req, res, next) => {
   })
     .populate({
       path: "training.exercise",
-      select: "_id exerciseTitle",
+      select: "_id exerciseTitle mediaUrl",
     })
     .lean()
     .exec()
@@ -614,7 +614,7 @@ const get_exercise_progress_summary = async (req, res, next) => {
       .select("date training")
       .populate({
         path: "training.exercise",
-        select: "_id exerciseTitle",
+        select: "_id exerciseTitle mediaUrl",
       })
       .lean();
 

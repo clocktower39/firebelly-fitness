@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, Fragment, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { serverURL } from "../../Redux/actions";
 import {
+  Alert,
   AppBar,
   Avatar,
   Box,
@@ -85,6 +86,23 @@ function SwipeableSet(props) {
 
   const [heightToggle, setHeightToggle] = useState(true);
   const ref = useRef(null);
+
+  // One-time (per device) teaching hint for the tap-to-fill logging gestures.
+  const [showTapHint, setShowTapHint] = useState(() => {
+    try {
+      return !window.localStorage.getItem("fbTapToFillHintSeen");
+    } catch (e) {
+      return false;
+    }
+  });
+  const dismissTapHint = () => {
+    try {
+      window.localStorage.setItem("fbTapToFillHintSeen", "1");
+    } catch (e) {
+      /* private mode */
+    }
+    setShowTapHint(false);
+  };
 
   // Save-as-warm-up-template (trainer's own session only; hidden in a delegated view-as session).
   const currentUser = useSelector((state) => state.user);
@@ -226,6 +244,15 @@ function SwipeableSet(props) {
         }
       />
       <CompletionCelebration open={celebrating} onDone={() => setCelebrating(false)} />
+      {/* One-time tip teaching the tap-to-fill gestures (per device; not in the builder, where
+          there's nothing to log). */}
+      {showTapHint && !weightsLocked && activeStep < localTraining.length && localTraining.length > 0 && (
+        <Alert severity="info" onClose={dismissTapHint} sx={{ mb: 1 }}>
+          Tip: tap <strong>Set 1</strong> to fill that set in as planned, or tap a{" "}
+          <strong>/number</strong> next to a field to fill just that field — then change anything
+          that was different.
+        </Alert>
+      )}
       {/* Hidden on the completion page (the step after the last circuit) — no one warms up
           after finishing. */}
       {newWarmup && activeStep < localTraining.length && (
@@ -307,6 +334,26 @@ function SwipeableSet(props) {
                       weightUnit={weightUnit}
                       onToggleWeightUnit={onToggleWeightUnit}
                       weightsLocked={weightsLocked}
+                      onExerciseNote={(exTitle, text) =>
+                        // Mirror the exercise note into the workout comment thread so the
+                        // trainer sees it where they already look (and gets the notification).
+                        setWorkoutFeedback((prev) => ({
+                          ...prev,
+                          comments: [
+                            ...(prev?.comments || []),
+                            {
+                              user: {
+                                _id: currentUser._id,
+                                firstName: currentUser.firstName,
+                                lastName: currentUser.lastName,
+                                profilePicture: currentUser.profilePicture,
+                              },
+                              text: `[${exTitle}] ${text}`,
+                              timestamp: new Date(),
+                            },
+                          ],
+                        }))
+                      }
                     />
                   )
                 )}
