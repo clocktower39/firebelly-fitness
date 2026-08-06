@@ -102,6 +102,12 @@ export const workoutApi = {
       body: payload,
     }),
 
+  bulkRescheduleWorkouts: (payload) =>
+    apiFetch("/bulkRescheduleWorkouts", {
+      method: "POST",
+      body: payload,
+    }),
+
   undoBulkMoveCopy: (operation) =>
     apiFetch("/undoBulkMoveCopy", {
       method: "POST",

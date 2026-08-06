@@ -33,6 +33,7 @@ import {
   updateWorkoutDateById,
   copyWorkoutById,
   bulkMoveCopyWorkouts,
+  bulkRescheduleWorkouts,
   getTrainingRangeEnd,
   deleteWorkoutById,
   requestWorkoutsByRange,
@@ -106,6 +107,9 @@ export function ModalAction(props) {
     );
     const [targetQueue, setTargetQueue] = useState(false);
     const [includeCompleted, setIncludeCompleted] = useState(false);
+    // "Slide to training days": which weekdays the client trains on (0=Sun..6=Sat);
+    // prefilled from the days already present in the previewed range.
+    const [slideDays, setSlideDays] = useState(null);
     const [previewWorkouts, setPreviewWorkouts] = useState([]);
     const [previewLoading, setPreviewLoading] = useState(false);
     // Selective bulk scope: which workout TYPES are in (null = all), plus per-workout
@@ -147,6 +151,9 @@ export function ModalAction(props) {
     const typeOn = (t) => !selectedTypes || selectedTypes.includes(t);
     // Protected items stay visible but disabled, WITH the reason — never silently skipped.
     const bulkIneligibleReason = (w) => {
+      if (w.complete && actionType === "move" && moveMode === "slide") {
+        return "completed — stays put";
+      }
       if (w.complete && !includeCompleted) return "completed — turn on “Include completed”";
       if (w.isTemplate && actionType === "delete") return "template — protected from bulk delete";
       return null;
@@ -175,6 +182,13 @@ export function ModalAction(props) {
     };
     const toggleWorkoutCheck = (w) =>
       setCheckOverrides((prev) => ({ ...prev, [w._id]: !isBulkChecked(w) }));
+    // One-tap scope reset: deselect everything to hand-pick a few (e.g. slide only this week's
+    // workouts and leave later weeks as originally planned), or restore the default
+    // everything-eligible selection. selectedTypes [] = no type checked; null = all types.
+    const handleToggleAllChecks = () => {
+      setCheckOverrides({});
+      setSelectedTypes(checkedIds.length ? [] : null);
+    };
 
     const handleTitleChange = (e) => setNewTitle(e.target.value);
     const handleMoveModeChange = (e) => setMoveMode(e.target.value);
@@ -233,6 +247,60 @@ export function ModalAction(props) {
           setActionError(false);
           handleModalToggle();
           setSelectedDate && setSelectedDate(dayjs.utc(rangeTargetDate).format("YYYY-MM-DD"));
+        }
+      });
+    };
+
+    // Slide mapping: each remaining day-group takes the NEXT selected training day — strictly
+    // after both its own original day (nothing ever moves earlier) and the previous group's new
+    // day (order preserved, one group per training day). Missing Wednesday → Wed's workout
+    // lands Friday, Friday's lands Sunday, Sunday's lands next Wednesday: the whole plan
+    // shifts one session, not a fixed number of calendar days.
+    const slideTargets = (() => {
+      if (moveMode !== "slide" || !slideDays?.length) return {};
+      const daySet = new Set(slideDays);
+      const dayKeys = [];
+      checkedWorkouts
+        .slice()
+        .sort((a, b) => dayjs.utc(a.date).valueOf() - dayjs.utc(b.date).valueOf())
+        .forEach((w) => {
+          const key = dayjs.utc(w.date).format("YYYY-MM-DD");
+          if (dayKeys[dayKeys.length - 1] !== key) dayKeys.push(key);
+        });
+      const targets = {};
+      let cursor = null;
+      dayKeys.forEach((key) => {
+        let candidate = dayjs.utc(key);
+        if (cursor && cursor.isAfter(candidate)) candidate = cursor;
+        do {
+          candidate = candidate.add(1, "day");
+        } while (!daySet.has(candidate.day()));
+        targets[key] = candidate.format("YYYY-MM-DD");
+        cursor = candidate;
+      });
+      return targets;
+    })();
+
+    const handleSlideRange = () => {
+      const moves = checkedWorkouts
+        .map((w) => {
+          const target = slideTargets[dayjs.utc(w.date).format("YYYY-MM-DD")];
+          return target ? { id: w._id, date: target } : null;
+        })
+        .filter(Boolean);
+      if (!moves.length) {
+        setActionError("Nothing selected to slide.");
+        return;
+      }
+      dispatch(bulkRescheduleWorkouts({ userId: training?.user?._id, moves })).then((res) => {
+        if (res?.error !== undefined) {
+          setActionError(res.error);
+        } else if (!res?.workouts?.length) {
+          setActionError("No workouts were moved.");
+        } else {
+          setActionError(false);
+          handleModalToggle();
+          setSelectedDate && setSelectedDate(moves[0].date);
         }
       });
     };
@@ -442,7 +510,7 @@ export function ModalAction(props) {
     }, [actionType, localTraining, modalOpen, training?._id]);
 
     useEffect(() => {
-      if (moveMode !== "range" || !rangeStart || rangeEndManual) return;
+      if (!["range", "slide"].includes(moveMode) || !rangeStart || rangeEndManual) return;
 
       dispatch(getTrainingRangeEnd(rangeStart, training?.user?._id)).then((data) => {
         if (data?.error) {
@@ -457,7 +525,7 @@ export function ModalAction(props) {
     }, [dispatch, moveMode, rangeStart, rangeEndManual, training?.user?._id]);
 
     useEffect(() => {
-      if (moveMode !== "range" || !rangeStart || !rangeEnd) return;
+      if (!["range", "slide"].includes(moveMode) || !rangeStart || !rangeEnd) return;
       setPreviewLoading(true);
       // Fetch EVERYTHING in range (completed + templates included) — eligibility is
       // decided client-side so protected items render disabled-with-reason instead of
@@ -481,6 +549,12 @@ export function ModalAction(props) {
         setPreviewLoading(false);
       });
     }, [dispatch, moveMode, rangeStart, rangeEnd, training?.user?._id]);
+
+    // Prefill the training-day chips once from the range's existing pattern (e.g. Wed/Fri/Sun).
+    useEffect(() => {
+      if (moveMode !== "slide" || slideDays !== null || !previewWorkouts.length) return;
+      setSlideDays([...new Set(previewWorkouts.map((w) => dayjs.utc(w.date).day()))].sort((a, b) => a - b));
+    }, [moveMode, slideDays, previewWorkouts]);
 
     if (!training?._id) {
       return (
@@ -539,11 +613,14 @@ export function ModalAction(props) {
               ))}
             </Grid>
           )}
-          <Grid container size={12} sx={{ justifyContent: "center" }}>
+          <Grid container size={12} sx={{ justifyContent: "center", alignItems: "center", gap: 1 }}>
             <Typography variant="caption" color="text.secondary">
               {checkedIds.length} of {previewWorkouts.length} workout
               {previewWorkouts.length === 1 ? "" : "s"} selected
             </Typography>
+            <Button size="small" sx={{ minWidth: 0, py: 0 }} onClick={handleToggleAllChecks}>
+              {checkedIds.length ? "Deselect all" : "Select all"}
+            </Button>
           </Grid>
           <Box sx={{ maxHeight: 220, overflowY: "auto", width: "100%", pr: 0.5 }}>
             {byDay.map(({ key, workouts }) => (
@@ -551,7 +628,11 @@ export function ModalAction(props) {
                 <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
                   {dayjs.utc(key).format("ddd, MMM D")}
                   {verb !== "Delete" &&
-                    (targetQueue
+                    (verb === "Move" && moveMode === "slide"
+                      ? slideTargets[key]
+                        ? ` → ${dayjs.utc(slideTargets[key]).format("ddd, MMM D")}`
+                        : ""
+                      : targetQueue
                       ? " → Queue"
                       : ` → ${dayjs.utc(key).add(previewDeltaDays, "day").format("MMM D")}`)}
                 </Typography>
@@ -603,6 +684,7 @@ export function ModalAction(props) {
             >
               <MenuItem value="single">Single training</MenuItem>
               <MenuItem value="range">Date range</MenuItem>
+              <MenuItem value="slide">Slide to training days</MenuItem>
             </TextField>
 
             {moveMode === "single" ? (
@@ -619,6 +701,74 @@ export function ModalAction(props) {
                     Move
                   </Button>
                 </Grid>
+              </>
+            ) : moveMode === "slide" ? (
+              <>
+                <Grid container spacing={1} sx={{ justifyContent: "center", marginBottom: "10px" }}>
+                  <TextField
+                    fullWidth
+                    label="From day (the missed workout)"
+                    type="date"
+                    value={rangeStart}
+                    onChange={handleRangeStartChange}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <Grid
+                    container
+                    size={12}
+                    sx={{ justifyContent: "center", gap: 0.5, flexWrap: "wrap" }}
+                  >
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label, idx) => {
+                      const on = (slideDays || []).includes(idx);
+                      return (
+                        <Chip
+                          key={label}
+                          size="small"
+                          label={label}
+                          color={on ? "primary" : "default"}
+                          variant={on ? "filled" : "outlined"}
+                          onClick={() =>
+                            setSlideDays((prev) => {
+                              const cur = prev || [];
+                              return cur.includes(idx)
+                                ? cur.filter((d) => d !== idx)
+                                : [...cur, idx].sort((a, b) => a - b);
+                            })
+                          }
+                        />
+                      );
+                    })}
+                  </Grid>
+                  <Grid container size={12} sx={{ justifyContent: "center" }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                      For a missed session the client won&apos;t make up: every workout from this
+                      day on slides to their next selected training day — the missed workout
+                      lands on the next training day and everything after shifts one session
+                      later. Nothing moves earlier than its current date. Training days are
+                      pre-selected from this client&apos;s existing schedule.
+                    </Typography>
+                  </Grid>
+                  {renderBulkChecklist("Move")}
+                </Grid>
+                <Grid container sx={{ justifyContent: "center" }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleSlideRange}
+                    disabled={!rangeStart || !slideDays?.length || checkedIds.length === 0}
+                  >
+                    Slide {checkedIds.length} workout{checkedIds.length === 1 ? "" : "s"}
+                  </Button>
+                </Grid>
+                {canUndoBulk && (
+                  <Grid container sx={{ justifyContent: "center", marginTop: "10px" }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => dispatch(undoBulkMoveCopy(lastBulkOperation))}
+                    >
+                      Undo last bulk action
+                    </Button>
+                  </Grid>
+                )}
               </>
             ) : (
               <>

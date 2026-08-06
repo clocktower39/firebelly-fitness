@@ -467,6 +467,36 @@ export function bulkMoveCopyWorkouts({
   };
 }
 
+// "Slide to training days": explicit per-workout target dates (each workout to the client's
+// next planned training day) — same response handling and undo plumbing as bulk move.
+export function bulkRescheduleWorkouts({ userId, moves }) {
+  return async (dispatch) => {
+    const data = await workoutApi.bulkRescheduleWorkouts({ userId, moves });
+
+    if (data.error) {
+      return dispatch({
+        type: ERROR,
+        error: data.error,
+      });
+    }
+
+    if (data.operation) {
+      dispatch({
+        type: SET_LAST_BULK_OPERATION,
+        operation: data.operation,
+      });
+    }
+
+    dispatch({
+      type: EDIT_WORKOUTS,
+      workouts: [...data.workouts],
+      user: data.user,
+      accountId: data.user?._id,
+    });
+    return data;
+  };
+}
+
 export function undoBulkMoveCopy(operation) {
   return async (dispatch) => {
     const data = await workoutApi.undoBulkMoveCopy(operation);

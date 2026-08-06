@@ -823,6 +823,97 @@ const get_workouts_by_range = async (req, res, next) => {
   }
 };
 
+// Bulk reschedule to EXPLICIT per-workout dates — the "slide to training days" move, where
+// each workout gets its own new date (missed Wednesday → Friday, Friday → Sunday, …) instead
+// of one shared day-offset. The client computes the target dates (so day-of-week math matches
+// exactly what its calendar displays); this endpoint applies them in one write and returns the
+// same undo `operation` shape as bulk move, so undo_bulk_move_copy restores it unchanged.
+const bulk_reschedule_workouts = async (req, res, next) => {
+  try {
+    const { userId, moves } = req.body;
+    if (!Array.isArray(moves) || !moves.length) {
+      return res.status(400).json({ error: "No moves provided." });
+    }
+
+    let targetUserId = res.locals.user._id;
+    if (userId && String(userId) !== String(res.locals.user._id)) {
+      const relationship = await Relationship.findOne({
+        trainer: res.locals.user._id,
+        client: userId,
+        accepted: true,
+      });
+      if (!relationship) {
+        return res.status(403).json({ error: "Unauthorized access." });
+      }
+      targetUserId = userId;
+    }
+
+    const ids = moves
+      .map((m) => m?.id)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const dateById = new Map(moves.map((m) => [String(m?.id), m?.date]));
+    // Scoped to the target user so a stray id can never move someone else's workout.
+    const workouts = await Training.find({ _id: { $in: ids }, user: targetUserId })
+      .select("_id date complete")
+      .lean();
+    if (!workouts.length) {
+      return res.status(404).json({ error: "No matching workouts." });
+    }
+
+    const previousDates = [];
+    const bulkOps = [];
+    workouts.forEach((w) => {
+      if (w.complete) return; // completed workouts happened — never reschedule them
+      const target = dateById.get(String(w._id));
+      const parsed = target ? dayjs.utc(target).startOf("day") : null;
+      if (!parsed || !parsed.isValid()) return;
+      previousDates.push({ id: w._id, date: w.date });
+      bulkOps.push({
+        updateOne: { filter: { _id: w._id }, update: { $set: { date: parsed.toDate() } } },
+      });
+    });
+    if (!bulkOps.length) {
+      return res.status(400).json({ error: "No valid target dates." });
+    }
+    await Training.bulkWrite(bulkOps, { ordered: false });
+
+    const affectedIds = previousDates.map((entry) => entry.id);
+    const hydratedWorkouts = await Training.find({ _id: { $in: affectedIds } })
+      .populate({
+        path: "training.exercise",
+        model: "Exercise",
+        select: "_id exerciseTitle mediaUrl",
+      })
+      .populate({
+        path: "user workoutFeedback.comments.user workoutFeedback.comments.deletedBy training.feedback.comments.user training.feedback.comments.deletedBy",
+        model: "User",
+        select: "_id firstName lastName profilePicture",
+      });
+    const responseUser =
+      hydratedWorkouts[0]?.user ??
+      (await User.findById(targetUserId).select("_id firstName lastName profilePicture").lean());
+
+    const operation = {
+      action: "move",
+      userId: targetUserId,
+      targetQueue: false,
+      affectedIds,
+      createdIds: [],
+      previousDates,
+      timestamp: new Date(),
+    };
+
+    return res.send({
+      workouts: hydratedWorkouts,
+      user: responseUser ?? { _id: targetUserId },
+      deletedIds: [],
+      operation,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 const undo_bulk_move_copy = async (req, res, next) => {
   try {
     const { operation } = req.body;
@@ -1105,6 +1196,7 @@ module.exports = {
   copy_workout_by_id,
   get_training_range_end,
   bulk_move_copy_workouts,
+  bulk_reschedule_workouts,
   get_workouts_by_range,
   undo_bulk_move_copy,
   debug_training_by_ids,
