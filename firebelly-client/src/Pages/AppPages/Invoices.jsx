@@ -848,22 +848,22 @@ export default function Invoices() {
                     </ToggleButton>
                   </ToggleButtonGroup>
                   {billToType === "CLIENT" ? (
-                    <FormControl fullWidth>
-                      <InputLabel>Client</InputLabel>
-                      <Select
-                        label="Client"
-                        value={selectedClientId}
-                        onChange={(event) => setSelectedClientId(event.target.value)}
-                      >
-                        {[...clients.filter((clientRel) => clientRel.accepted)]
-                          .sort(compareRelationshipsByClientLastName)
-                          .map((clientRel) => (
-                            <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                              {formatClientLastFirst(clientRel.client)}
-                            </MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
+                    // Autocomplete, not Select: a Select swallows typed text invisibly and never
+                    // narrows the list — with a real search field you see what you type and the
+                    // options filter as you go.
+                    <Autocomplete
+                      fullWidth
+                      options={[...clients.filter((clientRel) => clientRel.accepted)].sort(
+                        compareRelationshipsByClientLastName
+                      )}
+                      getOptionLabel={(o) => formatClientLastFirst(o.client)}
+                      isOptionEqualToValue={(o, v) => o.client?._id === v.client?._id}
+                      value={clients.find((c) => c.client?._id === selectedClientId) || null}
+                      onChange={(_, v) => setSelectedClientId(v ? v.client._id : "")}
+                      renderInput={(params) => (
+                        <TextField {...params} label="Client" placeholder="Type a name…" />
+                      )}
+                    />
                   ) : (
                     <FormControl fullWidth>
                       <InputLabel>Group</InputLabel>
