@@ -33,6 +33,7 @@ import ExerciseGoalPresetField from "./ExerciseGoalPresetField";
 import useExerciseGoalPreset from "./hooks/useExerciseGoalPreset";
 import { ModalBarChartHistory } from "../../Pages/AppPages/Progress";
 import ExerciseMedia from "../../features/exercise/ExerciseMedia";
+import { resolveDemoMedia } from "../../features/exercise/familyDemo";
 import ExerciseCommentDialog from "./ExerciseCommentDialog";
 import { normalizeWeightUnit } from "../../utils/weightUnits";
 import {
@@ -761,7 +762,23 @@ export default function Exercise(props) {
               <Dialog open={demoOpen} onClose={() => setDemoOpen(false)} fullWidth maxWidth="sm">
                 <DialogTitle>{title?.exerciseTitle || "Exercise demo"}</DialogTitle>
                 <DialogContent>
-                  <ExerciseMedia exercise={title} />
+                  {(() => {
+                    const resolved = resolveDemoMedia(title, exerciseList);
+                    return (
+                      <>
+                        <ExerciseMedia
+                          exercise={
+                            resolved.mediaUrl ? { ...title, mediaUrl: resolved.mediaUrl } : title
+                          }
+                        />
+                        {resolved.from && (
+                          <Typography variant="caption" color="text.secondary">
+                            Demo from {resolved.from} (same movement family)
+                          </Typography>
+                        )}
+                      </>
+                    );
+                  })()}
                 </DialogContent>
               </Dialog>
               <ExerciseCommentDialog

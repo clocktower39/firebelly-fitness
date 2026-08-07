@@ -29,6 +29,7 @@ import {
   toggleExerciseFavorite,
 } from "../../Redux/actions";
 import { exerciseDisplayName, exerciseMatchesQuery } from "../../utils/exerciseName";
+import { resolveDemoMedia } from "../../features/exercise/familyDemo";
 
 const uniqSorted = (arr) =>
   [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
@@ -58,6 +59,7 @@ export default function ExerciseLibrary() {
   const [type, setType] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [openFamilies, setOpenFamilies] = useState({}); // familyKey -> expanded
 
   useEffect(() => {
     if (!exerciseList.length) dispatch(getExerciseList());
@@ -103,6 +105,103 @@ export default function ExerciseLibrary() {
         exerciseDisplayName(a, aliases).localeCompare(exerciseDisplayName(b, aliases))
       );
   }, [exerciseList, aliases, favorites, search, type, primaryMuscles, secondaryMuscles, equipment, verifiedOnly, favoritesOnly]);
+
+  // Family grouping: consecutive-independent groups keyed by familyKey; a family with a single
+  // visible member (or no family) renders as a plain card. Order follows the first member.
+  const groupedFiltered = useMemo(() => {
+    const byKey = new Map();
+    const order = [];
+    filtered.forEach((ex) => {
+      const fam = (ex.familyKey || "").trim();
+      const key = fam || `solo:${ex._id}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, { family: fam, members: [] });
+        order.push(key);
+      }
+      byKey.get(key).members.push(ex);
+    });
+    return order.map((k) => byKey.get(k));
+  }, [filtered]);
+
+  const renderExerciseCard = (ex) => {
+    const resolved = resolveDemoMedia(ex, exerciseList);
+    const thumb = mediaThumbFor({ mediaUrl: resolved.mediaUrl });
+    return (
+      <Grid key={ex._id} size={{ xs: 12, sm: 6, md: 4 }}>
+        <Card sx={{ height: "100%", position: "relative" }}>
+          <IconButton
+            size="small"
+            aria-label="favorite"
+            onClick={(e) => {
+              e.stopPropagation();
+              dispatch(toggleExerciseFavorite(ex._id));
+            }}
+            sx={{ position: "absolute", top: 4, right: 4, zIndex: 1 }}
+          >
+            {favorites.includes(ex._id) ? (
+              <Star fontSize="small" color="warning" />
+            ) : (
+              <StarBorder fontSize="small" />
+            )}
+          </IconButton>
+          <CardActionArea
+            sx={{ height: "100%", alignItems: "flex-start" }}
+            onClick={() => navigate(`/exercise-library/${ex._id}`)}
+          >
+            {thumb &&
+              (thumb.type === "video" ? (
+                <Box
+                  component="video"
+                  src={thumb.src}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  sx={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
+                />
+              ) : (
+                <Box
+                  component="img"
+                  src={thumb.src}
+                  alt=""
+                  loading="lazy"
+                  sx={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
+                />
+              ))}
+            <CardContent sx={{ width: "100%" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, pr: 3 }}>
+                {exerciseDisplayName(ex, aliases)}
+              </Typography>
+              {aliases[ex._id] && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {ex.exerciseTitle}
+                </Typography>
+              )}
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                {(ex.muscleGroups?.primary || []).slice(0, 3).map((m) => (
+                  <Chip key={m} label={m} size="small" color="primary" variant="outlined" />
+                ))}
+                {ex.movementComplexity && (
+                  <Chip label={ex.movementComplexity} size="small" variant="outlined" />
+                )}
+                {ex.verified && (
+                  <Chip label="Verified" size="small" color="success" variant="outlined" />
+                )}
+              </Stack>
+              {(ex.equipment || []).length > 0 && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1 }}
+                >
+                  {(ex.equipment || []).join(" · ")}
+                </Typography>
+              )}
+            </CardContent>
+          </CardActionArea>
+        </Card>
+      </Grid>
+    );
+  };
 
   return (
     <Container maxWidth="lg" sx={{ pt: 3, pb: 10 }}>
@@ -197,82 +296,58 @@ export default function ExerciseLibrary() {
       </Typography>
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
-        {filtered.map((ex) => {
-          const thumb = mediaThumbFor(ex);
+        {groupedFiltered.map((group) => {
+          if (!group.family || group.members.length < 2) {
+            return group.members.map(renderExerciseCard);
+          }
+          const open = Boolean(openFamilies[group.family]);
+          const famResolved = resolveDemoMedia(
+            { familyKey: group.family },
+            exerciseList
+          );
+          const famThumb = mediaThumbFor({ mediaUrl: famResolved.mediaUrl });
+          const famMuscles = [
+            ...new Set(group.members.flatMap((m) => m.muscleGroups?.primary || [])),
+          ].slice(0, 3);
           return (
-          <Grid key={ex._id} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card sx={{ height: "100%", position: "relative" }}>
-              <IconButton
-                size="small"
-                aria-label="favorite"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dispatch(toggleExerciseFavorite(ex._id));
-                }}
-                sx={{ position: "absolute", top: 4, right: 4, zIndex: 1 }}
-              >
-                {favorites.includes(ex._id) ? (
-                  <Star fontSize="small" color="warning" />
-                ) : (
-                  <StarBorder fontSize="small" />
-                )}
-              </IconButton>
-              <CardActionArea
-                sx={{ height: "100%", alignItems: "flex-start" }}
-                onClick={() => navigate(`/exercise-library/${ex._id}`)}
-              >
-                {thumb &&
-                  (thumb.type === "video" ? (
-                    <Box
-                      component="video"
-                      src={thumb.src}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      sx={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
-                    />
-                  ) : (
-                    <Box
-                      component="img"
-                      src={thumb.src}
-                      alt=""
-                      loading="lazy"
-                      sx={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
-                    />
-                  ))}
-                <CardContent sx={{ width: "100%" }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, pr: 3 }}>
-                    {exerciseDisplayName(ex, aliases)}
-                  </Typography>
-                  {aliases[ex._id] && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                      {ex.exerciseTitle}
-                    </Typography>
-                  )}
-                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-                    {(ex.muscleGroups?.primary || []).slice(0, 3).map((m) => (
-                      <Chip key={m} label={m} size="small" color="primary" variant="outlined" />
-                    ))}
-                    {ex.movementComplexity && (
-                      <Chip label={ex.movementComplexity} size="small" variant="outlined" />
-                    )}
-                    {ex.verified && (
-                      <Chip label="Verified" size="small" color="success" variant="outlined" />
-                    )}
-                  </Stack>
-                  {(ex.equipment || []).length > 0 && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block", mt: 1 }}
-                    >
-                      {(ex.equipment || []).join(" · ")}
-                    </Typography>
-                  )}
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          </Grid>
+            <React.Fragment key={`fam-${group.family}`}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Card sx={{ height: "100%", position: "relative", borderColor: "primary.main" }} variant="outlined">
+                  <CardActionArea
+                    sx={{ height: "100%", alignItems: "flex-start" }}
+                    onClick={() =>
+                      setOpenFamilies((prev) => ({ ...prev, [group.family]: !open }))
+                    }
+                  >
+                    {famThumb &&
+                      (famThumb.type === "video" ? (
+                        <Box component="video" src={famThumb.src} muted playsInline preload="metadata" sx={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+                      ) : (
+                        <Box component="img" src={famThumb.src} alt="" loading="lazy" sx={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+                      ))}
+                    <CardContent sx={{ width: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {group.family}
+                      </Typography>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                        <Chip
+                          size="small"
+                          color="primary"
+                          label={`${group.members.length} variations ${open ? "▴" : "▾"}`}
+                        />
+                        {famMuscles.map((m) => (
+                          <Chip key={m} label={m} size="small" color="primary" variant="outlined" />
+                        ))}
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                        {open ? "Tap to collapse" : "Tap to see all variations"}
+                      </Typography>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+              {open && group.members.map(renderExerciseCard)}
+            </React.Fragment>
           );
         })}
         {!filtered.length && (

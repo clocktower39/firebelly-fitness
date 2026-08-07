@@ -32,6 +32,7 @@ import { exerciseDisplayName } from "../../utils/exerciseName";
 import AddToWorkoutDialog from "../../features/exercise/AddToWorkoutDialog";
 import { findSubstitutes } from "../../utils/exerciseSubstitutes";
 import ExerciseMedia from "../../features/exercise/ExerciseMedia";
+import { resolveDemoMedia } from "../../features/exercise/familyDemo";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -210,7 +211,21 @@ export default function ExerciseDetail() {
       </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <ExerciseMedia exercise={exercise} />
+        {(() => {
+          const resolved = resolveDemoMedia(exercise, exerciseList);
+          return (
+            <>
+              <ExerciseMedia
+                exercise={resolved.mediaUrl ? { ...exercise, mediaUrl: resolved.mediaUrl } : exercise}
+              />
+              {resolved.from && (
+                <Typography variant="caption" color="text.secondary">
+                  Demo from {resolved.from} (same movement family)
+                </Typography>
+              )}
+            </>
+          );
+        })()}
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>

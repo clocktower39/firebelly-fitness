@@ -10,6 +10,10 @@ const exerciseSchema = new mongoose.Schema(
     equipment: { type: Array, required: true, default: [], },
     description: { type: String, required: false, default: '', },
     mediaUrl: { type: String, required: false, default: '', }, // demo media: GIF / MP4 / image / YouTube URL
+    // Variant-family grouping (e.g. every chest-press variant carries familyKey "Chest Press"):
+    // groups the library display and lets a variant without its own demo inherit the family's
+    // video. Presentation-only — each variant keeps its own id, history, and progression.
+    familyKey: { type: String, default: '', index: true },
     tags: { type: Array, required: true, default: [], },
 
     generalVariation: { type: Array },

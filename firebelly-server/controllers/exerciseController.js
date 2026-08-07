@@ -23,6 +23,7 @@ const EXERCISE_FIELDS = [
   "movementComplexity",
   "measurementType",
   "verified",
+  "familyKey",
 ];
 
 const create_exercise = async (req, res, next) => {
