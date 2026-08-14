@@ -62,6 +62,7 @@ router.post('/nextWorkout', verifyAccessToken, trainingController.get_next_worko
 router.post('/workouts', verifyAccessToken, trainingController.get_workouts_by_date);
 router.post('/updateTraining', validate(updateTrainingValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.update_training);
 router.post('/swapExerciseForward', validate(swapExerciseValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.swap_exercise_forward);
+router.post('/reorderExercisesForward', verifyAccessToken, ensureWriteAccess, trainingController.reorder_exercises_forward);
 router.post('/createTraining', validate(createTrainingValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.create_training);
 router.post('/trainingWeek', verifyAccessToken, trainingController.get_weekly_training);
 router.post('/exerciseHistory', verifyAccessToken, trainingController.get_exercise_history);

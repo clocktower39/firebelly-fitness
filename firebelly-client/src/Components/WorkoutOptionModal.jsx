@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -34,6 +34,7 @@ import {
   copyWorkoutById,
   bulkMoveCopyWorkouts,
   bulkRescheduleWorkouts,
+  reorderExercisesForward,
   getTrainingRangeEnd,
   deleteWorkoutById,
   requestWorkoutsByRange,
@@ -130,6 +131,12 @@ export function ModalAction(props) {
     const [draftReorderTraining, setDraftReorderTraining] = useState(() =>
       cloneTrainingDraft(localTraining)
     );
+    // "Keep this order for the rest of the program" — cascades the new layout to this program
+    // day in every later workout (loads stay with each week's own entries).
+    const [reorderApplyForward, setReorderApplyForward] = useState(false);
+    const [reorderBusy, setReorderBusy] = useState(false);
+    const [reorderResult, setReorderResult] = useState(null);
+    const reorderSubmittingRef = useRef(false);
   
     const isPersonalWorkout = useCallback(
       () => user._id.toString() === training?.user?._id?.toString(),
@@ -206,8 +213,58 @@ export function ModalAction(props) {
     const handleRangeTargetChange = (e) => setRangeTargetDate(e.target.value);
     const handleTargetQueueChange = (e) => setTargetQueue(e.target.checked);
     const handleIncludeCompletedChange = (e) => setIncludeCompleted(e.target.checked);
-    const handleReorderDone = () => {
+    // This workout is part of a program, so "keep this order going forward" has somewhere to go.
+    const canCascadeReorder = Boolean(training?.programId) || Boolean(training?.isProgramDay);
+
+    const handleReorderDone = async () => {
       setLocalTraining && setLocalTraining(draftReorderTraining);
+      if (reorderApplyForward && canCascadeReorder) {
+        // Send the new layout as exercise ids (warm-ups excluded — they stay pinned up front).
+        // The editor owns the anchor locally, so the server only rewrites the later workouts.
+        const shape = (draftReorderTraining || [])
+          .filter((circuit) => !(circuit || []).some((e) => e?.isWarmup))
+          .map((circuit) =>
+            (circuit || []).map((e) => String(e?.exercise?._id || e?.exercise || ""))
+          )
+          .filter((ids) => ids.length && ids.every(Boolean));
+        if (shape.length) {
+          // Synchronous latch: a second tap can land before React re-renders the disabled
+          // button, and the repeat call would report 0 changes over the first call's work.
+          if (reorderSubmittingRef.current) return;
+          reorderSubmittingRef.current = true;
+          setReorderBusy(true);
+          const res = await dispatch(
+            reorderExercisesForward({
+              anchorWorkoutId: training._id,
+              shape,
+              programId: training.programId || undefined,
+            })
+          );
+          reorderSubmittingRef.current = false;
+          setReorderBusy(false);
+          // Stay open to report what changed (same as the swap dialog) instead of closing blind.
+          setReorderResult(
+            res
+              ? {
+                  updatedCount: res.updatedCount || 0,
+                  laterUpdatedCount: res.laterUpdatedCount || 0,
+                  consideredCount: res.consideredCount || 0,
+                  dates: (res.affected || [])
+                    .map((a) => a.date)
+                    .filter(Boolean)
+                    .sort(),
+                }
+              : null
+          );
+          return;
+        }
+      }
+      setReorderApplyForward(false);
+      handleModalToggle();
+    };
+    const handleReorderClose = () => {
+      setReorderResult(null);
+      setReorderApplyForward(false);
       handleModalToggle();
     };
     const handleReorderCancel = () => {
@@ -1257,13 +1314,68 @@ export function ModalAction(props) {
               setLocalTraining={setDraftReorderTraining}
               weightUnit={weightUnit}
             />
+            {canCascadeReorder && !reorderResult && (
+              <Grid container size={12} sx={{ justifyContent: "center", marginTop: "8px" }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={reorderApplyForward}
+                      onChange={(e) => setReorderApplyForward(e.target.checked)}
+                    />
+                  }
+                  label="Keep this order for the rest of the program"
+                />
+                <Grid container size={12} sx={{ justifyContent: "center" }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                    Applies this exercise order to the same day in every later workout of this
+                    program. Each week keeps its own weights and reps — only the order changes.
+                    Completed workouts are left alone.
+                  </Typography>
+                </Grid>
+              </Grid>
+            )}
+            {reorderResult && (
+              <Grid container size={12} sx={{ justifyContent: "center", marginTop: "8px" }}>
+                <Grid container size={12} direction="column" sx={{ alignItems: "center" }}>
+                  <Typography variant="body2" color="success.main" sx={{ textAlign: "center" }}>
+                    Updated {reorderResult.updatedCount} workout
+                    {reorderResult.updatedCount === 1 ? "" : "s"}.
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                    {reorderResult.laterUpdatedCount > 0
+                      ? `This one and ${reorderResult.laterUpdatedCount} later workout${
+                          reorderResult.laterUpdatedCount === 1 ? "" : "s"
+                        }${
+                          reorderResult.dates?.length > 1
+                            ? ` (through ${dayjs
+                                .utc(reorderResult.dates[reorderResult.dates.length - 1])
+                                .format("MMM D")})`
+                            : ""
+                        }.`
+                      : reorderResult.consideredCount > 0
+                      ? `The ${reorderResult.consideredCount} later workout${
+                          reorderResult.consideredCount === 1 ? "" : "s"
+                        } on this day already used this order.`
+                      : "No later workouts were found for this day in the program."}
+                  </Typography>
+                </Grid>
+              </Grid>
+            )}
             <Grid container size={12} spacing={1} sx={{ justifyContent: "center", marginTop: "12px" }}>
-              <Button variant="outlined" onClick={handleReorderCancel}>
-                Cancel
-              </Button>
-              <Button variant="contained" onClick={handleReorderDone}>
-                Done
-              </Button>
+              {reorderResult ? (
+                <Button variant="contained" onClick={handleReorderClose}>
+                  Close
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outlined" onClick={handleReorderCancel} disabled={reorderBusy}>
+                    Cancel
+                  </Button>
+                  <Button variant="contained" onClick={handleReorderDone} disabled={reorderBusy}>
+                    {reorderBusy ? "Applying…" : "Done"}
+                  </Button>
+                </>
+              )}
             </Grid>
           </>
         );

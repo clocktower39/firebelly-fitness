@@ -62,6 +62,12 @@ export const workoutApi = {
       body: payload,
     }),
 
+  reorderExercisesForward: (payload) =>
+    apiFetch("/reorderExercisesForward", {
+      method: "POST",
+      body: payload,
+    }),
+
   updateWorkoutDateById: ({ _id, newDate, newTitle }) =>
     apiFetch("/updateWorkoutDateById", {
       method: "POST",

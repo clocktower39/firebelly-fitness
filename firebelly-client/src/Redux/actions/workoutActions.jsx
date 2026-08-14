@@ -297,6 +297,25 @@ export function swapExerciseForward(payload) {
   };
 }
 
+// Push a workout's exercise ORDER to the same program day in every later workout. Loads, reps
+// and techniques stay with each week's own entries — only their sequence changes.
+export function reorderExercisesForward(payload) {
+  return async (dispatch) => {
+    const data = await workoutApi.reorderExercisesForward(payload);
+
+    if (data?.error) {
+      dispatch({ type: ERROR, error: data.error });
+      return null;
+    }
+
+    // Same rule as the swap cascade: the open editor owns the anchor, so never re-hydrate it.
+    (data.workouts || [])
+      .filter((workout) => String(workout._id) !== String(payload.anchorWorkoutId))
+      .forEach((workout) => dispatch(upsertWorkout(workout)));
+    return data;
+  };
+}
+
 // Append an exercise to an existing workout as a new circuit, then save.
 export function addExerciseToWorkout({ exercise, workout, setCount = 4 }) {
   return async (dispatch) => {

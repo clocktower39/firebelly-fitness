@@ -26,7 +26,7 @@ const ALWAYS_ALLOWED = [
 const AREA_PATTERNS = {
   workouts: [
     /^\/training$/, /^\/workouts$/, /^\/nextWorkout$/, /^\/createTraining$/, /^\/updateTraining$/,
-    /^\/swapExerciseForward$/,
+    /^\/swapExerciseForward$/, /^\/reorderExercisesForward$/,
     /^\/trainingWeek$/, /^\/exerciseHistory$/, /^\/exerciseProgressSummary$/, /^\/myExerciseList$/,
     /^\/sportsDefault$/,
     /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/, /^\/workoutsRange$/, /^\/trainingRangeEnd$/,
@@ -58,7 +58,8 @@ const AREA_PATTERNS = {
 // many POST-but-read endpoints (e.g. POST /workouts, POST /metrics/list) stay readable under "view".
 const WRITE_PATTERNS = {
   workouts: [
-    /^\/createTraining$/, /^\/updateTraining$/, /^\/swapExerciseForward$/, /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/,
+    /^\/createTraining$/, /^\/updateTraining$/, /^\/swapExerciseForward$/, /^\/reorderExercisesForward$/,
+    /^\/copyWorkoutById$/, /^\/updateWorkoutDateById$/,
     /^\/bulkMoveCopyWorkouts$/, /^\/bulkRescheduleWorkouts$/, /^\/undoBulkMoveCopy$/,
     /^\/bulkDeleteWorkouts$/, /^\/undoBulkDelete$/,
     /^\/deleteWorkoutById$/,
