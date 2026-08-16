@@ -47,12 +47,19 @@ const setCount = (goals, achieved) =>
     1
   );
 
-// Which program day a doc belongs to. Prefer the stamped programDay; legacy programs bake
-// week+day into the title ("Back Recovery: Week 3, Day 1"), so normalize the week number out.
-const dayKeyOf = (doc) =>
-  doc?.programDay != null
-    ? `day:${doc.programDay}`
-    : `title:${String(doc?.title || "").toLowerCase().replace(/week\s*\d+/g, "week").trim()}`;
+// Which program day a doc belongs to. Prefer the stamped programDay; otherwise read the day
+// ordinal out of the title — "…Week 3, Day 1", "…• Week 5 Day 1 — Strength", "Base · Wk2 D2 …".
+// Only the ordinal is stable: generated programs rename every week (block, phase, "(Deload)",
+// "Wk2" vs "Week 2"), so comparing normalized titles made each week look like a different day
+// and signals never carried forward. Both callers scope their query by programId, so an
+// ordinal identifies the day slot unambiguously. Titles with no day marker fall back to the
+// old normalized-title behaviour (e.g. a one-day-a-week program simply titled "Week 3").
+const dayKeyOf = (doc) => {
+  if (doc?.programDay != null) return `day:${doc.programDay}`;
+  const ordinal = String(doc?.title || "").match(/\bd(?:ay)?\s*(\d+)\b/i);
+  if (ordinal) return `day:${ordinal[1]}`;
+  return `title:${String(doc?.title || "").toLowerCase().replace(/week\s*\d+/g, "week").trim()}`;
+};
 
 // Explicit effort only — 1 is both the default and "felt right", so it carries no signal.
 // null/undefined = unrated (program-created entries store null until tapped): NOT "easy".

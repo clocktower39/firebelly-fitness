@@ -193,22 +193,9 @@ const swap_exercise_forward = async (req, res, next) => {
 
 // ---- Reorder cascade ----------------------------------------------------------------------
 //
-// Which program day a workout is, for cascade scoping. Prefer the stamped programDay, then the
-// day marker in the title. Generated programs title their days like
-// "Base · Wk2 D2 — Lower · Tumbling Base" and change the block name, focus and "(Deload)"
-// suffix from week to week, so comparing normalized titles (what reactiveProgression.dayKeyOf
-// does) makes every week look like a different day. The "D2" ordinal is the part that actually
-// identifies the day slot, and it survives every one of those variations.
-const dayOrdinalFromTitle = (title) => {
-  const m = String(title || "").match(/\bd(?:ay)?\s*(\d+)\b/i);
-  return m ? Number(m[1]) : null;
-};
-const cascadeDayKey = (doc) => {
-  if (doc?.programDay != null) return `day:${doc.programDay}`;
-  const ordinal = dayOrdinalFromTitle(doc?.title);
-  if (ordinal != null) return `day:${ordinal}`;
-  return dayKeyOf(doc); // no day marker at all — fall back to the normalized title
-};
+// Day scoping uses the shared dayKeyOf (programDay → the D<n>/Day <n> ordinal in the title →
+// normalized title), so the cascade and the progression engine agree on what "this day" means.
+const cascadeDayKey = dayKeyOf;
 //
 // Rearrange a workout's exercises into a given order and push that ORDER (never the loads) to
 // the same program day in every later workout: "Brett's squat before his RDL felt better — keep
