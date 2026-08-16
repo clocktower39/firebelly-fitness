@@ -895,23 +895,42 @@ export default function ProgramBuilder() {
     );
     if (missingIds.length === 0) return;
 
-    missingIds.forEach(async (id) => {
-      fetchingWorkoutIds.current.add(id);
+    // ONE request for every missing day, in chunks. Fetching them individually meant a 12-week
+    // × 6-day program fired 72 requests on open, which tripped the API rate limiter and locked
+    // the user out of the whole app (login included).
+    const CHUNK = 100;
+    const chunks = [];
+    for (let i = 0; i < missingIds.length; i += CHUNK) {
+      chunks.push(missingIds.slice(i, i + CHUNK));
+    }
+    missingIds.forEach((id) => fetchingWorkoutIds.current.add(id));
+
+    (async () => {
       try {
-        const data = await workoutApi.getTraining({ _id: id });
-        if (data?._id) {
-          setWorkoutCache((prev) => ({ ...prev, [data._id]: data }));
-          // Also put it in Redux state.workouts so the Workout editor can open it (the editor only
-          // reads from there). Without this, server-created templates (e.g. auto-generated programs)
-          // show "Workout does not exist" when a day is opened.
-          dispatch(upsertWorkout(data));
+        for (const ids of chunks) {
+          const data = await workoutApi.getTrainingByIds(ids);
+          if (data?.error) throw new Error(data.error);
+          const workouts = (data?.workouts || []).filter((w) => w?._id);
+          if (workouts.length) {
+            setWorkoutCache((prev) => {
+              const next = { ...prev };
+              workouts.forEach((w) => {
+                next[w._id] = w;
+              });
+              return next;
+            });
+            // Also put them in Redux state.workouts so the Workout editor can open a day (it
+            // only reads from there) — otherwise server-created program days show
+            // "Workout does not exist".
+            workouts.forEach((w) => dispatch(upsertWorkout(w)));
+          }
         }
       } catch (err) {
         setErrorMessage("Unable to load workout details.");
       } finally {
-        fetchingWorkoutIds.current.delete(id);
+        missingIds.forEach((id) => fetchingWorkoutIds.current.delete(id));
       }
-    });
+    })();
   }, [program, setErrorMessage, workoutCache, dispatch]);
 
   if (isLoading || !program) {

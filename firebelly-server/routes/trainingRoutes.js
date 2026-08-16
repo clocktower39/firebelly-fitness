@@ -58,6 +58,7 @@ const swapExerciseValidate = {
 };
 
 router.post('/training', verifyAccessToken, trainingController.get_training_by_id);
+router.post('/trainingByIds', verifyAccessToken, trainingController.get_training_by_ids);
 router.post('/nextWorkout', verifyAccessToken, trainingController.get_next_workout);
 router.post('/workouts', verifyAccessToken, trainingController.get_workouts_by_date);
 router.post('/updateTraining', validate(updateTrainingValidate, {}, {}), verifyAccessToken, ensureWriteAccess, trainingController.update_training);

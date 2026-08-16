@@ -25,7 +25,7 @@ const ALWAYS_ALLOWED = [
 // Client-data areas the client can grant per trainer (none | view | manage).
 const AREA_PATTERNS = {
   workouts: [
-    /^\/training$/, /^\/workouts$/, /^\/nextWorkout$/, /^\/createTraining$/, /^\/updateTraining$/,
+    /^\/training$/, /^\/trainingByIds$/, /^\/workouts$/, /^\/nextWorkout$/, /^\/createTraining$/, /^\/updateTraining$/,
     /^\/swapExerciseForward$/, /^\/reorderExercisesForward$/,
     /^\/trainingWeek$/, /^\/exerciseHistory$/, /^\/exerciseProgressSummary$/, /^\/myExerciseList$/,
     /^\/sportsDefault$/,

@@ -319,6 +319,57 @@ const get_training_by_id = (req, res, next) => {
     .catch((err) => next(err));
 };
 
+// Fetch MANY workouts in one request. The program builder needs every day's full document to
+// render a program, and asking for them one at a time meant a 12-week × 6-day program fired 72
+// requests just to open — enough to trip the API rate limiter and lock the user out of the app
+// (including login). Same access rule as get_training_by_id, applied per distinct owner.
+const MAX_TRAINING_BATCH = 200;
+const get_training_by_ids = async (req, res, next) => {
+  try {
+    const rawIds = Array.isArray(req.body.ids) ? req.body.ids : [];
+    const ids = [...new Set(rawIds.map(String))].filter((id) =>
+      mongoose.Types.ObjectId.isValid(id)
+    );
+    if (!ids.length) return res.send({ workouts: [] });
+    if (ids.length > MAX_TRAINING_BATCH) {
+      return res.status(400).json({ error: `Too many ids (max ${MAX_TRAINING_BATCH}).` });
+    }
+
+    const docs = await Training.find({ _id: { $in: ids } })
+      .populate({
+        path: "training.exercise",
+        model: "Exercise",
+        select: "_id exerciseTitle mediaUrl",
+      })
+      .populate({
+        path: "user workoutFeedback.comments.user workoutFeedback.comments.deletedBy training.feedback.comments.user training.feedback.comments.deletedBy",
+        model: "User",
+        select: "_id firstName lastName profilePicture",
+      });
+
+    // Authorize once per owner rather than once per workout — a program's days share an owner.
+    const meId = String(res.locals.user._id);
+    const ownerIds = [...new Set(docs.map((d) => String(d.user?._id || d.user)))];
+    const allowed = new Set();
+    for (const ownerId of ownerIds) {
+      if (ownerId === meId) {
+        allowed.add(ownerId);
+        continue;
+      }
+      const relationship = await Relationship.findOne({
+        trainer: res.locals.user._id,
+        client: ownerId,
+      }).lean();
+      if (relationship?.accepted) allowed.add(ownerId);
+    }
+
+    const workouts = docs.filter((d) => allowed.has(String(d.user?._id || d.user)));
+    return res.send({ workouts });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // The next dated workout (after the current one) that the viewer can access — their own for
 // clients, or any of their clients' for trainers — so you can move straight to the next one.
 const get_next_workout = async (req, res, next) => {
@@ -814,6 +865,7 @@ module.exports = {
   create_training,
   update_training,
   get_training_by_id,
+  get_training_by_ids,
   get_next_workout,
   get_workout_queue,
   get_workouts_by_date,

@@ -7,6 +7,13 @@ export const workoutApi = {
       body: { _id, client },
     }),
 
+  // Many workouts in one request — the program builder needs every day of a program at once.
+  getTrainingByIds: (ids) =>
+    apiFetch("/trainingByIds", {
+      method: "POST",
+      body: { ids },
+    }),
+
   getNextWorkout: ({ _id }) =>
     apiFetch("/nextWorkout", {
       method: "POST",

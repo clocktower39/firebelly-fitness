@@ -115,12 +115,33 @@ app.use(express.static(__dirname));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json({ limit: "1mb" }));
 app.use(methodOverride("_method"));
+const isTestEnv = process.env.NODE_ENV === "test";
+
+// Getting into the app must never be collateral damage from a busy session. These auth routes
+// carry their own budget so a burst of data requests (a big program loading, a sync) can't
+// spend the general allowance and leave someone unable to sign in — which is exactly what
+// happened when a 12-week program fetched its days one at a time.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: isTestEnv ? 10000 : 40, // generous for a human, still stops credential stuffing
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // only failed attempts count, so a valid login is never blocked
+  message: { error: "Too many sign-in attempts. Please wait a few minutes and try again." },
+});
+const AUTH_PATHS = ["/login", "/login-child", "/signup", "/refresh-tokens"];
+app.use(AUTH_PATHS, authLimiter);
+
+// General API budget for everything else. It must SKIP the auth paths — otherwise those
+// requests are counted twice and a spent general allowance still blocks sign-in, which is the
+// whole failure this is meant to prevent.
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: process.env.NODE_ENV === "test" ? 10000 : 300,
+    limit: isTestEnv ? 10000 : 300,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => AUTH_PATHS.includes(req.path),
   })
 );
 
