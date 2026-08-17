@@ -158,8 +158,28 @@ const analyzeEntry = (entry, workoutEffort = null) => {
     return { kind: "percent", oneRepMax, effort, repResult };
   }
 
-  return { kind: "weight", topWeight: topW, repResult, effort, goals: clone(goals) };
+  // The per-set loads actually performed. A descending rep scheme (12/10/8/6) is run with an
+  // ASCENDING load (35/40/45/50) — reducing the session to one top weight throws that shape
+  // away and puts the heaviest set's load on every set. Carrying the profile keeps it.
+  const perSetWeights = Array.from({ length: sets }, (_, i) => num((ach.weight || [])[i]));
+
+  return { kind: "weight", topWeight: topW, perSetWeights, repResult, effort, goals: clone(goals) };
 };
+
+// A usable per-set load profile: every set logged a real load and they aren't all the same.
+// Partial logging (only the top set filled in) can't be trusted as a shape, and a flat profile
+// has nothing to preserve — both fall back to the normal fill.
+const profileFor = (signal, sets) => {
+  const p = (signal.perSetWeights || []).map(num);
+  if (!p.length || p.some((w) => w <= 0)) return null;
+  if (p.every((w) => w === p[0])) return null;
+  return Array.from({ length: sets }, (_, i) => p[Math.min(i, p.length - 1)]);
+};
+
+// Shift a whole ramp by the same delta so the gaps between sets are preserved exactly
+// (35/40/45/50 with +5 becomes 40/45/50/55).
+const shiftProfile = (profile, delta, fam) =>
+  profile.map((v) => String(roundToLoadable(Math.max(0, v + delta), fam)));
 
 // The core rule table: what a freeform-weight signal does, given the earned-progression streak.
 // Modeled on the ACSM 2-for-2 progression rule (increase only after hitting/beating the target
@@ -231,7 +251,10 @@ const applySignalToEntry = (entry, signal, ctx, { sameDay = true } = {}) => {
     const empty = !(goals.weight || []).some((w) => num(w) > 0);
     if (!sameDay) {
       if (!empty) return false;
-      goals.weight = fill(goals.weight, String(roundToLoadable(signal.topWeight, family)));
+      const profile = profileFor(signal, sets);
+      goals.weight = profile
+        ? shiftProfile(profile, 0, family)
+        : fill(goals.weight, String(roundToLoadable(signal.topWeight, family)));
       return true;
     }
     const { action, steps } = signal.decision || decideWeightAction(signal);
@@ -259,7 +282,10 @@ const applySignalToEntry = (entry, signal, ctx, { sameDay = true } = {}) => {
       }
       const at = (arr, i) => (arr || [])[Math.min(i, Math.max(0, (arr || []).length - 1))];
       const baseTop = base.weight.length ? Math.max(...base.weight.map(num)) : signal.topWeight;
-      goals.weight = fillWeights(goals.weight, sets, baseTop, family);
+      const rrProfile = profileFor(signal, sets);
+      goals.weight = rrProfile
+        ? shiftProfile(rrProfile, baseTop - signal.topWeight, family)
+        : fillWeights(goals.weight, sets, baseTop, family);
       goals.exactReps = Array.from({ length: sets }, (_, i) =>
         num(at(base.exactReps, i)) ? String(num(at(base.exactReps, i))) : at(goals.exactReps, i)
       );
@@ -274,7 +300,12 @@ const applySignalToEntry = (entry, signal, ctx, { sameDay = true } = {}) => {
     } else if (action === "decrease") {
       w = Math.max(0, w - weightIncrement(family, ctx.movementComplexity, w));
     }
-    goals.weight = fillWeights(goals.weight, sets, w, family);
+    // Move the whole ramp by what the top set moved, so a descending rep scheme keeps its
+    // ascending loads. Holding (delta 0) carries the exact loads he used last time.
+    const profile = profileFor(signal, sets);
+    goals.weight = profile
+      ? shiftProfile(profile, w - signal.topWeight, family)
+      : fillWeights(goals.weight, sets, w, family);
     return true;
   }
   return false;
