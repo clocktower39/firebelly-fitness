@@ -104,9 +104,10 @@ export function ModalAction(props) {
     );
     const [rangeEnd, setRangeEnd] = useState("");
     const [rangeEndManual, setRangeEndManual] = useState(false);
-    const [rangeTargetDate, setRangeTargetDate] = useState(
-      dayjs.utc(training?.date || new Date()).format("YYYY-MM-DD")
-    );
+    // Where the moved/copied block lands. Defaults to TODAY, not the anchor workout's date:
+    // you're almost always pulling work forward to now, and a target equal to the range start
+    // is a no-op move.
+    const [rangeTargetDate, setRangeTargetDate] = useState(dayjs().format("YYYY-MM-DD"));
     const [targetQueue, setTargetQueue] = useState(false);
     const [includeCompleted, setIncludeCompleted] = useState(false);
     // "Push to later training days": which weekdays the client trains on (0=Sun..6=Sat),
@@ -545,9 +546,9 @@ export function ModalAction(props) {
 
     useEffect(() => {
       if (!training?.date) return;
-      const dateString = dayjs.utc(training.date).format("YYYY-MM-DD");
-      setRangeStart(dateString);
-      setRangeTargetDate(dateString);
+      // The range STARTS at the workout you opened, but it lands on today by default.
+      setRangeStart(dayjs.utc(training.date).format("YYYY-MM-DD"));
+      setRangeTargetDate(dayjs().format("YYYY-MM-DD"));
       setRangeEnd("");
       setRangeEndManual(false);
     }, [training?._id]);
@@ -555,6 +556,10 @@ export function ModalAction(props) {
     useEffect(() => {
       setMoveMode("single");
       setTargetQueue(false);
+      // Re-arm the "lands on today" default every time the panel is opened, so it doesn't
+      // carry a date left over from a previous visit.
+      setRangeTargetDate(dayjs().format("YYYY-MM-DD"));
+      setNewDate(dayjs().format("YYYY-MM-DD"));
       setIncludeCompleted(actionType === "copy");
       setPreviewWorkouts([]);
       setPreviewLoading(false);
