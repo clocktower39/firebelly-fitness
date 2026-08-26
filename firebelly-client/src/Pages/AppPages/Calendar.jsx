@@ -55,6 +55,7 @@ import {
 } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { WorkoutOptionModalView } from "../../Components/WorkoutOptionModal";
+import { programSlot } from "../../utils/programSlot";
 
 // Function to determine the fields based on exercise type
 const exerciseTypeFields = (exerciseType) => {
@@ -265,7 +266,8 @@ export default function Calendar(props) {
         workout?.training?.flatMap((circuit) =>
           circuit.map((exercise) => exercise?.exercise?.exerciseTitle).filter(Boolean),
         ) || [];
-      const searchTarget = [workout?.title, ...categories, ...exercises]
+      const slotLabel = programSlot(workout)?.label;
+      const searchTarget = [workout?.title, slotLabel, ...categories, ...exercises]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -696,6 +698,10 @@ const Workout = ({ workout, scrollToDate, setSelectedWorkout, handleModalToggle,
   const totalExercises =
     workout?.training?.reduce((count, circuit) => count + circuit.length, 0) || 0;
   const categories = workout?.category || [];
+  // Where this sits in its program. Always shown when we can work it out, including when the
+  // title already spells it out — a label in the same place on every card scans faster than
+  // reading position out of titles that follow half a dozen different formats.
+  const slot = programSlot(workout);
   const previewExercises =
     workout?.training?.flatMap((circuit) =>
       circuit.map((exercise) => exercise?.exercise?.exerciseTitle).filter(Boolean),
@@ -788,6 +794,12 @@ const Workout = ({ workout, scrollToDate, setSelectedWorkout, handleModalToggle,
             <Box>
               <Typography variant="h6">{workout?.title}</Typography>
               <Typography variant="caption" sx={{ display: "block", opacity: 0.8 }}>
+                {slot ? (
+                  <Box component="span" sx={{ color: "primary.main", fontWeight: 700 }}>
+                    {slot.label}
+                    {" \u00b7 "}
+                  </Box>
+                ) : null}
                 {dayjs.utc(workout.date).format("MMMM Do, YYYY")}
               </Typography>
             </Box>
