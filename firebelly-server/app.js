@@ -9,6 +9,7 @@ const { ValidationError } = require("express-validation");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const { rateLimitKey } = require("./utils/rateLimitKey");
 const userRoutes = require("./routes/userRoutes");
 const exerciseRoutes = require("./routes/exerciseRoutes");
 const trainingRoutes = require("./routes/trainingRoutes");
@@ -127,6 +128,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // only failed attempts count, so a valid login is never blocked
+  keyGenerator: rateLimitKey,
   message: { error: "Too many sign-in attempts. Please wait a few minutes and try again." },
 });
 const AUTH_PATHS = ["/login", "/login-child", "/signup", "/refresh-tokens"];
@@ -138,9 +140,13 @@ app.use(AUTH_PATHS, authLimiter);
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: isTestEnv ? 10000 : 300,
+    // The app is chatty — one page load fires ~10 calls and every set save is a request — so
+    // 300 (20/min) throttled ordinary navigation once buckets were per-visitor rather than
+    // per-Cloudflare-edge. This still stops scraping while leaving real usage room.
+    limit: isTestEnv ? 10000 : 1000,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: rateLimitKey,
     skip: (req) => AUTH_PATHS.includes(req.path),
   })
 );
