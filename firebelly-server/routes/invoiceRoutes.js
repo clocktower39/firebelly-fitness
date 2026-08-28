@@ -92,6 +92,15 @@ const listInvoicesValidate = {
   }),
 };
 
+const combineInvoicesValidate = {
+  body: Joi.object({
+    invoiceIds: Joi.array().items(objectId).min(2).max(50).required(),
+    source: Joi.string().valid("STANDARD", "BACKFILL").optional(),
+    dueAt: Joi.date().allow(null, "").optional(),
+    notes: Joi.string().allow("").max(2000).optional(),
+  }),
+};
+
 const invoiceIdValidate = {
   body: Joi.object({
     invoiceId: objectId.required(),
@@ -237,6 +246,7 @@ router.post("/invoices/reconcile/preview", validate(reconcilePreviewValidate, {}
 router.post("/invoices/reconcile/commit", validate(reconcileCommitValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_commit);
 router.post("/invoices/reconcile/undo", validate(reconcileUndoValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.reconcile_undo);
 router.post("/invoices/request", validate(requestInvoiceValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.request_invoice);
+router.post("/invoices/combine", validate(combineInvoicesValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.combine_invoices);
 router.post("/invoices/list", validate(listInvoicesValidate, {}, {}), verifyAccessToken, invoiceController.list_invoices);
 router.post("/invoices/detail", validate(invoiceIdValidate, {}, {}), verifyAccessToken, invoiceController.get_invoice);
 router.post("/invoices/status", validate(updateInvoiceStatusValidate, {}, {}), verifyAccessToken, ensureWriteAccess, invoiceController.update_invoice_status);

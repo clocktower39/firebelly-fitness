@@ -2160,6 +2160,171 @@ const reconcile_undo = async (req, res, next) => {
 
 // Which non-void invoice (if any) claims this appointment? Used by the scheduler's
 // cancel flow to offer a one-click void of a booking-time invoice.
+// Open statuses — an invoice still owing money. PAID/VOID are settled and never combined.
+const OPEN_STATUSES = ["DRAFT", "SENT", "PARTIAL", "PAST_DUE"];
+
+// Order line items so the OLDEST session comes first. Because a payment is applied down the
+// list, this is what makes "settle the earliest sessions first" true: with $240 against six
+// $60 sessions, the four oldest are covered and the two newest still owe. Lines without a
+// session date (packages, custom charges) sort last so they never displace a dated session.
+const byOldestSession = (a, b) => {
+  const at = a.sessionDate ? new Date(a.sessionDate).getTime() : Infinity;
+  const bt = b.sessionDate ? new Date(b.sessionDate).getTime() : Infinity;
+  if (at !== bt) return at - bt;
+  return String(a.description || "").localeCompare(String(b.description || ""));
+};
+
+// Fold several open invoices for one client into a single invoice they can settle in one go.
+// The sources are VOIDed (not deleted) and linked both ways, which keeps the audit trail and
+// satisfies assertEventsUnclaimed — every session stays claimed by exactly one live invoice.
+const combine_invoices = async (req, res, next) => {
+  try {
+    const userId = res.locals.user._id;
+    const { invoiceIds, source: requestedSource, dueAt, notes } = req.body;
+
+    const ids = [...new Set((invoiceIds || []).map(String))];
+    if (ids.length < 2) {
+      return res.status(400).json({ error: "Pick at least two invoices to combine." });
+    }
+
+    const invoices = await Invoice.find({ _id: { $in: ids }, trainerId: userId });
+    if (invoices.length !== ids.length) {
+      return res.status(404).json({ error: "One or more invoices could not be found on your account." });
+    }
+
+    const notOpen = invoices.filter((i) => !OPEN_STATUSES.includes(i.status));
+    if (notOpen.length) {
+      return res.status(400).json({
+        error: `Only open invoices can be combined. ${notOpen.map((i) => `${i.invoiceNumber} is ${i.status}`).join(", ")}.`,
+      });
+    }
+    if (invoices.some((i) => i.billToType !== "CLIENT")) {
+      return res.status(400).json({ error: "Only client invoices can be combined." });
+    }
+    const clientIds = [...new Set(invoices.map((i) => String(i.clientId || "")))];
+    if (clientIds.length !== 1 || !clientIds[0]) {
+      return res.status(400).json({ error: "All invoices must belong to the same client." });
+    }
+    const currencies = [...new Set(invoices.map((i) => i.currency))];
+    if (currencies.length !== 1) {
+      return res.status(400).json({ error: "All invoices must use the same currency." });
+    }
+
+    // A BACKFILL is a books-only record the client never sees; a STANDARD one is client-facing.
+    // Combining them changes what the client can see, so default to the more visible of the two
+    // (they are being asked to pay it) and let the caller force the other way.
+    const sources = [...new Set(invoices.map((i) => i.source))];
+    const combinedSource =
+      requestedSource && ["STANDARD", "BACKFILL"].includes(requestedSource)
+        ? requestedSource
+        : sources.includes("STANDARD")
+          ? "STANDARD"
+          : "BACKFILL";
+
+    const lineItems = invoices
+      .flatMap((i) => (i.lineItems || []).map((l) => ({ ...(l.toObject ? l.toObject() : l), _id: undefined })))
+      .sort(byOldestSession);
+
+    const tax = invoices.reduce((sum, i) => sum + (i.tax || 0), 0);
+    const discount = invoices.reduce((sum, i) => sum + (i.discount || 0), 0);
+    const totals = calculateTotals({ lineItems, tax, discount });
+
+    // Payments already taken against the sources come with them, so nothing is collected twice.
+    const payments = invoices
+      .flatMap((i) => (i.payments || []).map((p) => (p.toObject ? p.toObject() : p)))
+      .map(({ _id, ...rest }) => rest)
+      .sort((a, b) => new Date(a.paidAt || 0) - new Date(b.paidAt || 0));
+    const amountPaid = Number(
+      payments.reduce((sum, p) => sum + (p.type === "REFUND" ? -1 : 1) * Number(p.amount || 0), 0).toFixed(2)
+    );
+
+    const balanceDue = Number(Math.max(totals.total - amountPaid, 0).toFixed(2));
+    const status = amountPaid >= totals.total && totals.total > 0 ? "PAID" : amountPaid > 0 ? "PARTIAL" : "SENT";
+
+    const { billToName, billToEmail } = await resolveBillTo({
+      billToType: "CLIENT",
+      clientId: clientIds[0],
+    });
+
+    const numbers = invoices.map((i) => i.invoiceNumber).join(", ");
+    const combined = new Invoice({
+      trainerId: userId,
+      clientId: clientIds[0],
+      billToType: "CLIENT",
+      billToName,
+      billToEmail,
+      invoiceNumber: buildInvoiceNumber(),
+      status,
+      currency: currencies[0],
+      source: combinedSource,
+      issuedAt: new Date(),
+      dueAt: dueAt ? new Date(dueAt) : null,
+      paidAt: status === "PAID" ? new Date() : null,
+      notes: String(notes || `Combines ${numbers}.`).trim(),
+      lineItems,
+      subtotal: totals.subtotal,
+      tax: totals.tax,
+      discount: totals.discount,
+      total: totals.total,
+      amountPaid,
+      balanceDue,
+      payments,
+      sessionCreditsTotal: totals.sessionCreditsTotal,
+      combinedFromIds: invoices.map((i) => i._id),
+      createdBy: userId,
+      updatedBy: userId,
+    });
+
+    // Void the sources BEFORE saving: assertEventsUnclaimed (and the intent behind it) treats a
+    // session as billable by exactly one live invoice, and the combined one re-claims them all.
+    const previous = invoices.map((i) => ({ _id: i._id, status: i.status, voidedAt: i.voidedAt, notes: i.notes }));
+    await Invoice.updateMany(
+      { _id: { $in: invoices.map((i) => i._id) } },
+      { $set: { status: "VOID", voidedAt: new Date(), combinedIntoId: combined._id, updatedBy: userId } }
+    );
+
+    try {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          await combined.save();
+          break;
+        } catch (e) {
+          if (e?.code === 11000 && attempt < 3) {
+            combined.invoiceNumber = buildInvoiceNumber();
+            continue;
+          }
+          throw e;
+        }
+      }
+    } catch (err) {
+      // Never leave the sources voided with nothing to replace them.
+      await Promise.all(
+        previous.map((p) =>
+          Invoice.updateOne(
+            { _id: p._id },
+            { $set: { status: p.status, voidedAt: p.voidedAt, notes: p.notes }, $unset: { combinedIntoId: "" } }
+          )
+        )
+      );
+      throw err;
+    }
+
+    // Voided sources release any credits they had applied; the combined invoice grants them
+    // again if and when it is fully paid, so the ledger nets out.
+    for (const inv of invoices) {
+      if (inv.creditsAppliedAt) await reverseInvoiceCredits(inv, userId);
+    }
+    if (status === "PAID") await applyInvoiceCredits(combined, userId);
+
+    return res.json({
+      invoice: combined.toObject(),
+      combinedFrom: previous.map((p) => String(p._id)),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const invoice_for_event = async (req, res, next) => {
   try {
     const userId = res.locals.user._id;
@@ -2179,6 +2344,7 @@ const invoice_for_event = async (req, res, next) => {
 
 module.exports = {
   create_invoice,
+  combine_invoices,
   invoice_for_event,
   bulk_log_sessions,
   check_logged_dates,

@@ -83,6 +83,12 @@ const invoiceSchema = new mongoose.Schema(
     payments: { type: [paymentSchema], default: [] },
     sessionCreditsTotal: { type: Number, default: 0 },
     creditsAppliedAt: { type: Date, default: null },
+    // Combining several open invoices into one (a client paying off a run of unpaid sessions
+    // in a single settlement). The sources are VOIDed and point here; this invoice lists them.
+    // Keeping both directions means the audit trail survives in either direction and the
+    // combined invoice can be un-combined.
+    combinedFromIds: { type: [mongoose.Schema.Types.ObjectId], ref: "Invoice", default: [] },
+    combinedIntoId: { type: mongoose.Schema.Types.ObjectId, ref: "Invoice", default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
@@ -95,6 +101,8 @@ invoiceSchema.index({ trainerId: 1, clientId: 1, "lineItems.sessionDate": 1 });
 // Session ↔ invoice lookups: which invoice claimed this appointment (Session History links,
 // future "already invoiced" checks).
 invoiceSchema.index({ "lineItems.scheduleEventId": 1 });
+// "which invoice did this one get folded into / what did it absorb"
+invoiceSchema.index({ combinedIntoId: 1 });
 
 const Invoice = mongoose.model("Invoice", invoiceSchema);
 module.exports = Invoice;

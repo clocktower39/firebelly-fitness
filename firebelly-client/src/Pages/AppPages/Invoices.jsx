@@ -30,6 +30,9 @@ import {
   DialogActions,
   ToggleButton,
   ToggleButtonGroup,
+  Checkbox,
+  FormControlLabel,
+  Tooltip,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
@@ -45,6 +48,7 @@ import { requestClients } from "../../Redux/actions";
 import { formatPrice } from "../../utils/currency";
 import { sessionTypeLabel } from "../../utils/sessionTypeLabel";
 import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
+import { allocatePayment } from "../../utils/invoiceAllocation";
 
 const STATUS_CHIP = {
   DRAFT: { label: "Draft", color: "default" },
@@ -107,6 +111,11 @@ export default function Invoices() {
   const [clientFilter, setClientFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  // Voided invoices are history, not work — they stay out of the list unless asked for.
+  const [showVoided, setShowVoided] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [combineOpen, setCombineOpen] = useState(false);
+  const [combineBusy, setCombineBusy] = useState(false);
   const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
   const [rowMenuInvoice, setRowMenuInvoice] = useState(null);
   const [detailInvoice, setDetailInvoice] = useState(null);
@@ -545,9 +554,93 @@ export default function Invoices() {
     return { outstanding, overdue, collectedYTD };
   })();
 
+  // Who actually owes money, and how much — the only part of this page that is work rather
+  // than history. 117 of 128 invoices being PAID is why the list alone reads as noise.
+  const OPEN_STATUSES = ["DRAFT", "SENT", "PARTIAL", "PAST_DUE"];
+  const isOpenInvoice = (inv) => OPEN_STATUSES.includes(inv.status) && Number(inv.balanceDue || 0) > 0;
+
+  const outstandingByClient = (() => {
+    const groups = new Map();
+    invoiceList.forEach((inv) => {
+      if (!isOpenInvoice(inv) || !inv.clientId) return;
+      const key = String(inv.clientId);
+      if (!groups.has(key)) {
+        groups.set(key, { clientId: key, name: inv.billToName || "Client", invoices: [], balance: 0, oldest: null });
+      }
+      const g = groups.get(key);
+      g.invoices.push(inv);
+      g.balance += Number(inv.balanceDue || 0);
+      const dates = (inv.lineItems || []).map((l) => l.sessionDate).filter(Boolean);
+      const earliest = dates.length ? dates.reduce((a, b) => (new Date(a) < new Date(b) ? a : b)) : inv.issuedAt;
+      if (!g.oldest || new Date(earliest) < new Date(g.oldest)) g.oldest = earliest;
+    });
+    return [...groups.values()].sort((a, b) => b.balance - a.balance);
+  })();
+
+  const selectedInvoices = invoiceList.filter((inv) => selectedIds.includes(inv._id));
+  const selectionClientIds = [...new Set(selectedInvoices.map((i) => String(i.clientId || "")))];
+  const canCombine =
+    selectedInvoices.length >= 2 &&
+    selectionClientIds.length === 1 &&
+    Boolean(selectionClientIds[0]) &&
+    selectedInvoices.every((i) => isOpenInvoice(i)) &&
+    new Set(selectedInvoices.map((i) => i.currency)).size === 1;
+
+  const combineBlockedReason = (() => {
+    if (selectedInvoices.length < 2) return "Select at least two invoices.";
+    if (selectionClientIds.length > 1) return "All selected invoices must be for the same client.";
+    if (!selectedInvoices.every((i) => isOpenInvoice(i))) return "Only open invoices with a balance can be combined.";
+    if (new Set(selectedInvoices.map((i) => i.currency)).size > 1) return "All selected invoices must use the same currency.";
+    return "";
+  })();
+
+  const toggleSelected = (id) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const selectClientOpen = (group) => setSelectedIds(group.invoices.map((i) => i._id));
+
+  // Preview of what the combined invoice will look like: every session, oldest first, which is
+  // the order a payment settles them in.
+  const combinePreview = (() => {
+    if (!selectedInvoices.length) return { lines: [], total: 0, paid: 0, mixedSource: false, currency: "USD" };
+    const lines = selectedInvoices
+      .flatMap((i) => i.lineItems || [])
+      .slice()
+      .sort((a, b) => {
+        const at = a.sessionDate ? new Date(a.sessionDate).getTime() : Infinity;
+        const bt = b.sessionDate ? new Date(b.sessionDate).getTime() : Infinity;
+        return at - bt;
+      });
+    const total = selectedInvoices.reduce((sum, i) => sum + Number(i.total || 0), 0);
+    const paid = selectedInvoices.reduce((sum, i) => sum + Number(i.amountPaid || 0), 0);
+    return {
+      lines,
+      total,
+      paid,
+      mixedSource: new Set(selectedInvoices.map((i) => i.source)).size > 1,
+      currency: selectedInvoices[0].currency,
+    };
+  })();
+
+  const handleCombine = async () => {
+    setCombineBusy(true);
+    setError("");
+    const data = await billingApi.combineInvoices({ invoiceIds: selectedIds });
+    setCombineBusy(false);
+    if (data?.error) {
+      setError(data.error);
+      return;
+    }
+    setCombineOpen(false);
+    setSelectedIds([]);
+    await refreshInvoices();
+  };
+
   const filteredInvoices = invoiceList
     .filter((inv) => {
       if (clientFilter && String(inv.clientId) !== String(clientFilter)) return false;
+      // Void is only ever shown deliberately — via the toggle or by filtering to it.
+      if (inv.status === "VOID" && !showVoided && historyFilter !== "VOID") return false;
       if (historyFilter === "REQUESTS") {
         if (!isRequest(inv)) return false;
       } else if (historyFilter !== "ALL" && inv.status !== historyFilter) {
@@ -753,6 +846,17 @@ export default function Invoices() {
                   <MenuItem value="VOID">Void</MenuItem>
                 </Select>
               </FormControl>
+              <FormControlLabel
+                sx={{ ml: 0 }}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={showVoided}
+                    onChange={(e) => setShowVoided(e.target.checked)}
+                  />
+                }
+                label={<Typography variant="body2">Show voided</Typography>}
+              />
               <Autocomplete
                 size="small"
                 sx={{ minWidth: 220, flexGrow: 1 }}
@@ -1102,6 +1206,101 @@ export default function Invoices() {
         </DialogActions>
       </Dialog>
 
+      {user.isTrainer && outstandingByClient.length > 0 && (
+        <Grid container size={12}>
+          <Card sx={{ width: "100%" }} variant="outlined">
+            <CardContent>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
+                <Typography variant="h6">Outstanding</Typography>
+                <Chip
+                  size="small"
+                  color="warning"
+                  label={`${outstandingByClient.reduce((n, g) => n + g.invoices.length, 0)} open · ${formatPrice(
+                    outstandingByClient.reduce((n, g) => n + g.balance, 0),
+                    outstandingByClient[0]?.invoices?.[0]?.currency || "USD"
+                  )}`}
+                />
+              </Stack>
+              <Stack spacing={1}>
+                {outstandingByClient.map((group) => {
+                  const currency = group.invoices[0]?.currency || "USD";
+                  const allSelected = group.invoices.every((i) => selectedIds.includes(i._id));
+                  return (
+                    <Card key={group.clientId} variant="outlined" sx={{ borderColor: "warning.light" }}>
+                      <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1}
+                          sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+                        >
+                          <Box>
+                            <Typography variant="subtitle1">{group.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {group.invoices.length} open invoice{group.invoices.length === 1 ? "" : "s"}
+                              {group.oldest ? ` · oldest session ${dayjs(group.oldest).format("MMM D, YYYY")}` : ""}
+                            </Typography>
+                          </Box>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                            <Typography variant="h6" color="warning.main">
+                              {formatPrice(group.balance, currency)}
+                            </Typography>
+                            {group.invoices.length > 1 && (
+                              <Button
+                                size="small"
+                                variant={allSelected ? "contained" : "outlined"}
+                                onClick={() => {
+                                  selectClientOpen(group);
+                                  setCombineOpen(true);
+                                }}
+                              >
+                                Combine {group.invoices.length}
+                              </Button>
+                            )}
+                          </Stack>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      )}
+
+      {user.isTrainer && selectedIds.length > 0 && (
+        <Grid container size={12}>
+          <Card sx={{ width: "100%", position: "sticky", top: 8, zIndex: 2 }}>
+            <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <Stack direction="row" spacing={2} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                <Typography variant="body2">
+                  {selectedIds.length} selected
+                  {canCombine
+                    ? ` · ${formatPrice(combinePreview.total - combinePreview.paid, combinePreview.currency)} owed`
+                    : ""}
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                <Tooltip title={canCombine ? "" : combineBlockedReason}>
+                  <span>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disabled={!canCombine}
+                      onClick={() => setCombineOpen(true)}
+                    >
+                      Combine into one invoice
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Button size="small" onClick={() => setSelectedIds([])}>
+                  Clear
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      )}
+
       {user.isTrainer && (
         <Grid container size={12}>
           <Card sx={{ width: "100%" }}>
@@ -1151,6 +1350,18 @@ export default function Invoices() {
                         }
                       >
                         <CardContent sx={{ pb: 1.5, "&:last-child": { pb: 1.5 } }}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
+                          {isOpenInvoice(invoice) && (
+                            <Checkbox
+                              size="small"
+                              checked={selectedIds.includes(invoice._id)}
+                              onChange={() => toggleSelected(invoice._id)}
+                              onClick={(e) => e.stopPropagation()}
+                              sx={{ mt: -0.5, ml: -1 }}
+                              inputProps={{ "aria-label": `Select invoice ${invoice.invoiceNumber}` }}
+                            />
+                          )}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Box
                             onClick={() => openDetail(invoice)}
                             sx={{ cursor: "pointer" }}
@@ -1236,6 +1447,8 @@ export default function Invoices() {
                               <MoreVertIcon fontSize="small" />
                             </IconButton>
                           </Stack>
+                          </Box>
+                          </Stack>
                         </CardContent>
                       </Card>
                     );
@@ -1246,6 +1459,87 @@ export default function Invoices() {
           </Card>
         </Grid>
       )}
+
+      <Dialog open={combineOpen} onClose={() => setCombineOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Combine invoices</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              {selectedInvoices.length} invoices for {selectedInvoices[0]?.billToName || "this client"} become one.
+              The originals are voided and linked to the new invoice, so nothing is lost and no session
+              is billed twice.
+            </Typography>
+
+            {combinePreview.mixedSource && (
+              <Alert severity="warning">
+                You are mixing a books-only backfill invoice with a client-facing one. The combined
+                invoice will be client-facing, so the sessions on the backfill become visible to the
+                client.
+              </Alert>
+            )}
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Sessions, oldest first
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Payments apply down this list, so the earliest sessions are settled first.
+              </Typography>
+              <Stack spacing={0.5} sx={{ mt: 1 }}>
+                {combinePreview.lines.map((l, i) => (
+                  <Stack
+                    key={`${l.description}-${i}`}
+                    direction="row"
+                    spacing={1}
+                    sx={{ justifyContent: "space-between" }}
+                  >
+                    <Typography variant="body2">
+                      {l.sessionDate ? `${dayjs(l.sessionDate).format("MMM D, YYYY")} — ` : ""}
+                      {l.description}
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatPrice(l.lineTotal, combinePreview.currency)}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Box>
+
+            <Divider />
+            <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+              <Typography variant="subtitle2">Combined total</Typography>
+              <Typography variant="subtitle2">
+                {formatPrice(combinePreview.total, combinePreview.currency)}
+              </Typography>
+            </Stack>
+            {combinePreview.paid > 0 && (
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                <Typography variant="body2" color="text.secondary">
+                  Already paid (carried over)
+                </Typography>
+                <Typography variant="body2">
+                  {formatPrice(combinePreview.paid, combinePreview.currency)}
+                </Typography>
+              </Stack>
+            )}
+            <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+              <Typography variant="subtitle2" color="warning.main">
+                Balance due
+              </Typography>
+              <Typography variant="subtitle2" color="warning.main">
+                {formatPrice(combinePreview.total - combinePreview.paid, combinePreview.currency)}
+              </Typography>
+            </Stack>
+            {error && <Alert severity="error">{error}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCombineOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleCombine} disabled={!canCombine || combineBusy}>
+            {combineBusy ? "Combining…" : "Combine"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Menu anchorEl={rowMenuAnchor} open={Boolean(rowMenuAnchor)} onClose={closeRowMenu}>
         <MenuItem
@@ -1337,8 +1631,16 @@ export default function Invoices() {
                 </Typography>
 
                 <Divider />
-                <Typography variant="subtitle2">Items</Typography>
-                {(detailInvoice.lineItems || []).map((li, idx) => (
+                <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+                  <Typography variant="subtitle2">Items</Typography>
+                  {Number(detailInvoice.amountPaid || 0) > 0 &&
+                    Number(detailInvoice.balanceDue || 0) > 0 && (
+                      <Typography variant="caption" color="text.secondary">
+                        payment applied oldest session first
+                      </Typography>
+                    )}
+                </Stack>
+                {allocatePayment(detailInvoice.lineItems || [], detailInvoice.amountPaid || 0).map((li, idx) => (
                   <Stack
                     key={idx}
                     direction="row"
@@ -1346,7 +1648,29 @@ export default function Invoices() {
                     sx={{ justifyContent: "space-between" }}
                   >
                     <Box>
-                      <Typography variant="body2">{li.description || li.itemType}</Typography>
+                      <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                        <Typography variant="body2">{li.description || li.itemType}</Typography>
+                        {Number(detailInvoice.amountPaid || 0) > 0 && detailInvoice.status !== "VOID" && (
+                          <Chip
+                            size="small"
+                            variant={li.paidState === "paid" ? "filled" : "outlined"}
+                            color={
+                              li.paidState === "paid"
+                                ? "success"
+                                : li.paidState === "partial"
+                                  ? "warning"
+                                  : "default"
+                            }
+                            label={
+                              li.paidState === "paid"
+                                ? "Paid"
+                                : li.paidState === "partial"
+                                  ? `Part paid ${formatPrice(li.paidAmount, detailInvoice.currency)}`
+                                  : "Owed"
+                            }
+                          />
+                        )}
+                      </Stack>
                       <Typography variant="caption" color="text.secondary">
                         {li.quantity} × {formatPrice(li.unitPrice, detailInvoice.currency)}
                         {li.itemType === "SESSION" && li.sessionCreditsTotal

@@ -13,6 +13,13 @@ export const billingApi = {
       body: payload,
     }),
 
+  // Fold several open invoices for one client into one. Sources are voided and linked.
+  combineInvoices: (payload) =>
+    apiFetch("/invoices/combine", {
+      method: "POST",
+      body: payload,
+    }),
+
   createInvoice: (payload) =>
     apiFetch("/invoices", {
       method: "POST",
