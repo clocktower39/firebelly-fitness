@@ -20,6 +20,29 @@ export const billingApi = {
       body: payload,
     }),
 
+  // Every active session type with THIS client's effective price (grandfathered rate if set,
+  // otherwise the catalog list price) — so the invoice dialog never makes you type a rate.
+  ratesForClient: (payload) =>
+    apiFetch("/clientRates/forClient", {
+      method: "POST",
+      body: payload,
+    }),
+
+  setClientRate: (payload) =>
+    apiFetch("/clientRates/set", {
+      method: "POST",
+      body: payload,
+    }),
+
+  // Billed-vs-taken vs what the credit ledger says, per client.
+  reconciliation: () => apiFetch("/billing/reconciliation", { method: "GET" }),
+
+  clientSessionLedger: (payload) =>
+    apiFetch("/billing/sessionLedger", {
+      method: "POST",
+      body: payload,
+    }),
+
   createInvoice: (payload) =>
     apiFetch("/invoices", {
       method: "POST",

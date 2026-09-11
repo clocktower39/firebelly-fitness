@@ -211,9 +211,17 @@ export default function LogSessionsDialog({ open, onClose, clientId, clientName,
           </Stack>
         ) : confirming ? (
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <Alert severity="info">
-              This records income for <strong>your</strong> reports. It does <strong>not</strong> charge{" "}
-              {clientName || "the client"} and does not touch their session credits.
+            {/* The passive version of this warning was already here and the mistake still
+                happened repeatedly — so name the alternative rather than only the limitation. */}
+            <Alert severity="warning">
+              This records income for <strong>your</strong> reports on sessions that have{" "}
+              <strong>already happened</strong>. It does <strong>not</strong> charge{" "}
+              {clientName || "the client"} and grants <strong>no session credits</strong>, so their
+              balance will not go up.
+              <br />
+              Selling sessions going forward? Close this and use{" "}
+              <strong>Sell package</strong> on the Invoices page instead — that grants the credits
+              they book against.
             </Alert>
             <Box>
               <Typography variant="body1">

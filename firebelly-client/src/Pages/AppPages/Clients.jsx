@@ -11,6 +11,7 @@ import {
   enterClientAccount,
   updateRelationshipProfile,
 } from "../../Redux/actions";
+import { billingApi } from "../../api/billingApi";
 import { accountApi } from "../../api/accountApi";
 import {
   Avatar,
@@ -156,7 +157,35 @@ const ClientCard = ({
   );
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  // Grandfathered session rates. Loaded lazily — only once the panel is actually opened — so
+  // the client list doesn't fire a request per card.
+  const [rates, setRates] = useState(null);
+  const [ratesBusy, setRatesBusy] = useState(false);
   const [logSessionsOpen, setLogSessionsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!expanded || rates !== null) return undefined;
+    let cancelled = false;
+    (async () => {
+      const data = await billingApi.ratesForClient({ clientId: clientRelationship.client._id });
+      if (!cancelled) setRates(data?.error ? [] : data.rates || []);
+    })();
+    return () => { cancelled = true; };
+  }, [expanded, rates, clientRelationship.client._id]);
+
+  const handleRateChange = async (sessionTypeId, value) => {
+    const price = String(value).trim();
+    setRatesBusy(true);
+    const data = await billingApi.setClientRate({
+      clientId: clientRelationship.client._id,
+      sessionTypeId,
+      price: price === "" ? null : Number(price),
+    });
+    setRatesBusy(false);
+    if (data?.error) { setStatusMessage(data.error); return; }
+    const fresh = await billingApi.ratesForClient({ clientId: clientRelationship.client._id });
+    if (!fresh?.error) setRates(fresh.rates || []);
+  };
 
   useEffect(() => {
     setLocalEngagementStatus(getRelationshipEngagementStatus(clientRelationship));
@@ -516,6 +545,54 @@ const ClientCard = ({
                       Optional tags like Online or Programming help you organize clients without
                       affecting access.
                     </Typography>
+                  )}
+                </Stack>
+
+                <Stack spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    <Typography variant="subtitle2">Session Rates</Typography>
+                    {ratesBusy && <CircularProgress size={14} />}
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    What this client pays. Blank means the catalog list price — set a value only
+                    to grandfather them at an older rate.
+                  </Typography>
+                  {rates === null ? (
+                    <Typography variant="caption" color="text.secondary">Loading rates…</Typography>
+                  ) : rates.length === 0 ? (
+                    <Typography variant="caption" color="text.secondary">No session types set up yet.</Typography>
+                  ) : (
+                    <Stack spacing={1}>
+                      {rates.map((rate) => (
+                        <Stack
+                          key={rate.sessionTypeId}
+                          direction="row"
+                          spacing={1}
+                          sx={{ alignItems: "center", justifyContent: "space-between" }}
+                        >
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" noWrap>{rate.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              list ${rate.listPrice ?? "—"}
+                              {rate.isOverride ? " · grandfathered" : ""}
+                            </Typography>
+                          </Box>
+                          <TextField
+                            size="small"
+                            type="number"
+                            placeholder={String(rate.listPrice ?? "")}
+                            defaultValue={rate.isOverride ? String(rate.price) : ""}
+                            onBlur={(event) => {
+                              const next = event.target.value.trim();
+                              const current = rate.isOverride ? String(rate.price) : "";
+                              if (next !== current) handleRateChange(rate.sessionTypeId, next);
+                            }}
+                            sx={{ width: 110 }}
+                            slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                          />
+                        </Stack>
+                      ))}
+                    </Stack>
                   )}
                 </Stack>
 

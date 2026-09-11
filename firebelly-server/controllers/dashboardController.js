@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Relationship = require("../models/relationship");
+const BillingLedgerEntry = require("../models/billingLedgerEntry");
 const Invoice = require("../models/invoice");
 const Training = require("../models/training");
 const ScheduleEvent = require("../models/scheduleEvent");
@@ -118,7 +119,21 @@ const get_attention = async (req, res, next) => {
 
     const unbilledTotals = unbilledCall.code === 200 ? unbilledCall.body?.totals : null;
 
+    // Session-credit balances that have gone negative. This drifts silently — BACKFILL
+    // invoices never grant credits while every completed session debits one — so without a
+    // check here it only surfaces when a booking is refused, months late.
+    const creditBalances = await BillingLedgerEntry.aggregate([
+      { $match: { trainerId, clientId: { $in: clientIds } } },
+      { $group: { _id: "$clientId", balance: { $sum: "$delta" } } },
+      { $match: { balance: { $lt: 0 } } },
+      { $sort: { balance: 1 } },
+    ]);
+    const negativeBalances = creditBalances
+      .filter((b) => nameOf.has(String(b._id)))
+      .map((b) => ({ clientId: String(b._id), name: nameOf.get(String(b._id)), balance: b.balance }));
+
     return res.json({
+      negativeBalances,
       unbilled: {
         sessions: unbilledTotals?.sessions || 0,
         value: unbilledTotals?.value || 0,

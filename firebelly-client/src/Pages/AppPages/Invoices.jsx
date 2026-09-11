@@ -40,6 +40,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import PersonIcon from "@mui/icons-material/Person";
 import GroupsIcon from "@mui/icons-material/Groups";
 import InvoiceReportsDialog from "../../Components/InvoiceReportsDialog";
+import BillingReconciliationDialog from "../../Components/BillingReconciliationDialog";
 import LogSessionsDialog from "../../Components/LogSessionsDialog";
 import EmptyState from "../../Components/EmptyState";
 import { alpha } from "@mui/material/styles";
@@ -97,6 +98,9 @@ export default function Invoices() {
   const [terms, setTerms] = useState("");
   const [lineItems, setLineItems] = useState([defaultLineItem()]);
   const [sessionTypes, setSessionTypes] = useState([]);
+  // This client's effective price per session type — grandfathered rate where one is set,
+  // otherwise the catalog list price. Loaded per client so a rate is never typed from memory.
+  const [clientRates, setClientRates] = useState([]);
   const [sessionTypesStatus, setSessionTypesStatus] = useState("");
 
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -113,6 +117,8 @@ export default function Invoices() {
   const [sortBy, setSortBy] = useState("newest");
   // Voided invoices are history, not work — they stay out of the list unless asked for.
   const [showVoided, setShowVoided] = useState(false);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [packageMode, setPackageMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [combineOpen, setCombineOpen] = useState(false);
   const [combineBusy, setCombineBusy] = useState(false);
@@ -289,6 +295,32 @@ export default function Invoices() {
     return map;
   }, [sessionTypes]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!user.isTrainer) return undefined;
+    (async () => {
+      const data = await billingApi.ratesForClient({ clientId: selectedClientId || null });
+      if (!cancelled && !data?.error) setClientRates(data.rates || []);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedClientId, user.isTrainer]);
+
+  const rateLookup = useMemo(() => {
+    const map = new Map();
+    clientRates.forEach((r) => map.set(String(r.sessionTypeId), r));
+    return map;
+  }, [clientRates]);
+
+  // What this client should be charged for a session type. Falls back to the catalog only when
+  // no rate is on file — never to zero.
+  const priceForType = (sessionTypeId) => {
+    const rate = rateLookup.get(String(sessionTypeId));
+    if (rate && rate.price != null) return rate.price;
+    const type = sessionTypeLookup.get(sessionTypeId);
+    return type?.defaultPrice ?? "";
+  };
+
+
   if (!user.isTrainer) {
     return <Typography>You are not a trainer. This page is unavailable.</Typography>;
   }
@@ -315,8 +347,9 @@ export default function Invoices() {
               next.description = sessionType.name;
             }
             const price = Number(item.unitPrice);
-            if (!price || price === Number(prevType?.defaultPrice)) {
-              next.unitPrice = String(sessionType.defaultPrice ?? "");
+            const previousDefault = item.sessionTypeId ? Number(priceForType(item.sessionTypeId)) : NaN;
+            if (!price || price === previousDefault || price === Number(prevType?.defaultPrice)) {
+              next.unitPrice = String(priceForType(value) ?? "");
             }
           }
         }
@@ -451,6 +484,20 @@ export default function Invoices() {
   const startCreate = () => {
     resetForm();
     setError("");
+    setPackageMode(false);
+    setCreateOpen(true);
+  };
+
+  // Selling a block of sessions is the case that keeps going wrong: done through "Log sessions"
+  // it records income but grants NO session credits, so the client's balance quietly sinks.
+  // This opens the SAME create dialog already shaped as a package — one SESSION line with a
+  // quantity — which is the path that credits correctly.
+  const startPackage = () => {
+    resetForm();
+    setError("");
+    setPackageMode(true);
+    setLineItems([{ ...defaultLineItem(), itemType: "SESSION", quantity: "12" }]);
+    setStatus("SENT");
     setCreateOpen(true);
   };
 
@@ -733,6 +780,12 @@ export default function Invoices() {
       <Grid container size={12} sx={{ justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h4">Invoices</Typography>
         <Stack direction="row" spacing={1}>
+          <Button variant="outlined" onClick={startPackage}>
+            Sell package
+          </Button>
+          <Button variant="outlined" onClick={() => setReconcileOpen(true)}>
+            Balance check
+          </Button>
           <Button variant="outlined" onClick={() => setReportsOpen(true)}>
             Reports
           </Button>
@@ -918,9 +971,16 @@ export default function Invoices() {
       )}
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>New invoice</DialogTitle>
+        <DialogTitle>{packageMode ? "Sell a session package" : "New invoice"}</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
               <Stack spacing={2} sx={{ mt: 1 }}>
+                {packageMode && (
+                  <Alert severity="info">
+                    Pick the client and session type, set how many sessions, and the price fills in
+                    at their rate. Marking this paid grants the session credits they book against —
+                    which is what "Log sessions" does not do.
+                  </Alert>
+                )}
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                   {/* Two options don't deserve a dropdown — segmented toggle instead. */}
                   <ToggleButtonGroup
@@ -1107,6 +1167,27 @@ export default function Invoices() {
                           }
                           slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
                           fullWidth
+                          helperText={(() => {
+                            // Say out loud which rate this is and flag a typo before it is billed.
+                            const rate = rateLookup.get(String(item.sessionTypeId));
+                            if (!rate || rate.price == null) return " ";
+                            const typed = Number(item.unitPrice);
+                            const expected = Number(rate.price);
+                            if (Number.isFinite(typed) && typed !== expected) {
+                              return `Their rate is ${formatPrice(expected, currency)}`;
+                            }
+                            return rate.isOverride
+                              ? `Their rate${rate.note ? ` — ${rate.note}` : ""} (list ${formatPrice(rate.listPrice, currency)})`
+                              : "List price";
+                          })()}
+                          FormHelperTextProps={{
+                            sx: (() => {
+                              const rate = rateLookup.get(String(item.sessionTypeId));
+                              const typed = Number(item.unitPrice);
+                              const off = rate && rate.price != null && Number.isFinite(typed) && typed !== Number(rate.price);
+                              return off ? { color: "warning.main", fontWeight: 600 } : undefined;
+                            })(),
+                          }}
                         />
                         <TextField
                           label="Session Credits (per unit)"
@@ -1584,6 +1665,7 @@ export default function Invoices() {
       </Menu>
 
       <InvoiceReportsDialog open={reportsOpen} onClose={() => setReportsOpen(false)} />
+      <BillingReconciliationDialog open={reconcileOpen} onClose={() => setReconcileOpen(false)} />
 
       <LogSessionsDialog
         open={logSessionsOpen}
