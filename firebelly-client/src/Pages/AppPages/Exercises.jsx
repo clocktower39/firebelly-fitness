@@ -374,12 +374,13 @@ const ExerciseLibrarySection = ({ selectedExercise }) => {
           <Grid size={12}>
             <TextField
               fullWidth
-              label="Demo media URL (GIF / MP4 / image / YouTube)"
+              label="Demo media URL (YouTube incl. Shorts / MP4 / GIF / image)"
               name="mediaUrl"
               value={exercise.mediaUrl || ""}
               onChange={handleChange}
               variant="outlined"
-              placeholder="https://…"
+              placeholder="https://youtube.com/shorts/…"
+              helperText="Paste a YouTube link straight from Share — watch, youtu.be and Shorts links all work. Shorts play in a portrait frame."
             />
           </Grid>
           <Grid size={12}>

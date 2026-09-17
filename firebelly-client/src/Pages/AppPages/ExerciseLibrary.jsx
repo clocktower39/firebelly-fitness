@@ -30,6 +30,7 @@ import {
 } from "../../Redux/actions";
 import { exerciseDisplayName, exerciseMatchesQuery } from "../../utils/exerciseName";
 import { resolveDemoMedia } from "../../features/exercise/familyDemo";
+import { parseMediaUrl } from "../../utils/mediaUrl";
 
 const uniqSorted = (arr) =>
   [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
@@ -37,12 +38,11 @@ const uniqSorted = (arr) =>
 // Small demo thumbnail for a browse card: YouTube links use YouTube's thumbnail image,
 // video files show a muted first frame, anything else renders as an image/GIF directly.
 const mediaThumbFor = (ex) => {
-  const url = (ex?.mediaUrl || "").trim();
-  if (!url) return null;
-  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return { type: "img", src: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
-  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) return { type: "video", src: url };
-  return { type: "img", src: url };
+  const media = parseMediaUrl(ex?.mediaUrl);
+  if (media.kind === "none") return null;
+  if (media.kind === "youtube") return { type: "img", src: media.thumbSrc };
+  if (media.kind === "video") return { type: "video", src: media.src };
+  return { type: "img", src: media.src };
 };
 
 export default function ExerciseLibrary() {
