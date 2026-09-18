@@ -33,6 +33,7 @@ import { buildPilatesTitle } from "../../features/workout/utils/pilatesUtils";
 import StrengthWorkoutEditor from "../../features/workout/components/StrengthWorkoutEditor";
 import WorkoutCategoryField from "../../features/workout/components/WorkoutCategoryField";
 import WorkoutHeader from "../../features/workout/components/WorkoutHeader";
+import WorkoutNeighbourNav from "../../features/workout/components/WorkoutNeighbourNav";
 import DailyCheckinCard from "../../Components/DailyCheckinCard";
 import useWorkoutCardio from "../../features/workout/hooks/useWorkoutCardio";
 import useWorkoutSports from "../../features/workout/hooks/useWorkoutSports";
@@ -137,6 +138,7 @@ export default function Workout({ socket }) {
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [nextWorkout, setNextWorkout] = useState(null);
+  const [prevWorkout, setPrevWorkout] = useState(null);
   const [openTrainerSessionDialog, setOpenTrainerSessionDialog] = useState(false);
   const [workoutType, setWorkoutType] = useState(training?.workoutType || "Strength");
   const [activeWorkoutWeightUnit, setActiveWorkoutWeightUnit] = useState(defaultWorkoutWeightUnit);
@@ -769,15 +771,19 @@ export default function Workout({ socket }) {
     }
   }, []);
 
-  // Pre-fetch the next workout (for the "Next workout" button) + reset to the first step
-  // whenever we move to a different workout.
+  // Pre-fetch the workouts either side of this one (for the previous/next nav) + reset to the
+  // first step whenever we move to a different workout.
   useEffect(() => {
     setNextWorkout(null);
+    setPrevWorkout(null);
     setActiveStep(0);
     workoutApi
       .getNextWorkout({ _id: params._id })
       .then((data) => {
-        if (data && !data.error) setNextWorkout(data.next || null);
+        if (data && !data.error) {
+          setNextWorkout(data.next || null);
+          setPrevWorkout(data.prev || null);
+        }
       })
       .catch(() => {});
   }, [params._id]);
@@ -839,6 +845,14 @@ export default function Workout({ socket }) {
                   scheduleEvent={scheduleEvent}
                   training={training}
                 />
+
+                <Grid container size={12}>
+                  <WorkoutNeighbourNav
+                    prev={prevWorkout}
+                    next={nextWorkout}
+                    onNavigate={(id) => navigate(`/workout/${id}`)}
+                  />
+                </Grid>
 
                 <Grid container size={12} spacing={2} sx={{ paddingTop: "15px" }}>
                   <Grid size={12} container sx={{ alignContent: "center" }}>
@@ -978,18 +992,6 @@ export default function Workout({ socket }) {
               </Box>
               {/* Dock sentinel: only visible once the page is scrolled to the very bottom. */}
               <Box ref={saveBarSentinelRef} aria-hidden sx={{ height: "1px" }} />
-
-              {nextWorkout && activeStep >= localTraining.length && (
-                <Grid container size={12} sx={{ paddingBottom: "5px" }}>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => navigate(`/workout/${nextWorkout._id}`)}
-                  >
-                    Next workout: {nextWorkout.title || "Untitled"} &rarr;
-                  </Button>
-                </Grid>
-              )}
 
               <Dialog open={Boolean(draftToRestore)} onClose={discardDraft} maxWidth="xs" fullWidth>
                 <DialogTitle>Restore unsaved changes?</DialogTitle>

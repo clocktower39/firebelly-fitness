@@ -388,22 +388,38 @@ const get_next_workout = async (req, res, next) => {
       if (!rel) return res.status(403).json({ error: "Unauthorized access." });
     }
 
-    // "Next" is the next workout in the SAME owner's dated flow — never another account. A trainer on
-    // their own workout must not roll into a client's workout (and vice-versa); the access check above
+    // Neighbours in the SAME owner's dated flow — never another account. A trainer on their own
+    // workout must not roll into a client's workout (and vice-versa); the access check above
     // already authorized viewing this owner's workouts.
-    const next = await Training.findOne({
-      user: current.user,
-      isTemplate: { $ne: true },
-      $or: [
-        { date: { $gt: current.date } },
-        { date: current.date, _id: { $gt: current._id } },
-      ],
-    })
-      .sort({ date: 1, _id: 1 })
-      .select("_id title date")
-      .lean();
+    //
+    // Ordering is (date, _id): several workouts can share a calendar day, so _id breaks the tie
+    // and keeps "previous" and "next" exact inverses of each other — step forward then back and
+    // you land where you started.
+    const scope = { user: current.user, isTemplate: { $ne: true } };
+    const [next, prev] = await Promise.all([
+      Training.findOne({
+        ...scope,
+        $or: [
+          { date: { $gt: current.date } },
+          { date: current.date, _id: { $gt: current._id } },
+        ],
+      })
+        .sort({ date: 1, _id: 1 })
+        .select("_id title date")
+        .lean(),
+      Training.findOne({
+        ...scope,
+        $or: [
+          { date: { $lt: current.date } },
+          { date: current.date, _id: { $lt: current._id } },
+        ],
+      })
+        .sort({ date: -1, _id: -1 })
+        .select("_id title date")
+        .lean(),
+    ]);
 
-    return res.json({ next: next || null });
+    return res.json({ next: next || null, prev: prev || null });
   } catch (err) {
     return next(err);
   }
