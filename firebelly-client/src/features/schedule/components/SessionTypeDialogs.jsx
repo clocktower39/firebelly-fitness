@@ -1,4 +1,5 @@
 import React from "react";
+import { payoutExceedsPrice } from "../../../utils/payoutGuard";
 import {
   Box,
   Button,
@@ -226,6 +227,20 @@ export default function SessionTypeDialogs({
   // so disable those fields when editing such a type (rate changes go via "Change price").
   const rateLocked = Boolean(editingSessionTypeId && sessionTypeForm.hasHistory);
 
+  // A payout above the price loses money on every booking of this type.
+  const formPayoutError = payoutExceedsPrice(
+    sessionTypeForm.defaultPrice,
+    sessionTypeForm.defaultPayout,
+    sessionTypeForm.currency,
+    sessionTypeForm.payoutCurrency
+  );
+  const repricePayoutError = payoutExceedsPrice(
+    repriceForm?.defaultPrice,
+    repriceForm?.defaultPayout,
+    repriceForm?.currency ?? repriceTarget?.currency,
+    repriceForm?.payoutCurrency ?? repriceTarget?.payoutCurrency
+  );
+
   return (
     <>
       <Dialog
@@ -358,6 +373,8 @@ export default function SessionTypeDialogs({
                 }
                 slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
                 disabled={rateLocked}
+                error={Boolean(formPayoutError)}
+                helperText={formPayoutError || " "}
                 fullWidth
               />
               <FormControl fullWidth disabled={rateLocked}>
@@ -401,7 +418,7 @@ export default function SessionTypeDialogs({
           <Button
             variant="contained"
             onClick={handleSaveSessionType}
-            disabled={!sessionTypeForm.name.trim()}
+            disabled={!sessionTypeForm.name.trim() || Boolean(formPayoutError)}
           >
             {editingSessionTypeId ? "Save changes" : "Add session type"}
           </Button>
@@ -441,13 +458,19 @@ export default function SessionTypeDialogs({
                 onChange={(e) =>
                   setRepriceForm((f) => ({ ...f, defaultPayout: e.target.value }))
                 }
+                error={Boolean(repricePayoutError)}
+                helperText={repricePayoutError || " "}
               />
             </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={closeRepriceDialog}>Cancel</Button>
-          <Button variant="contained" onClick={handleReprice}>
+          <Button
+            variant="contained"
+            onClick={handleReprice}
+            disabled={Boolean(repricePayoutError)}
+          >
             Save new price
           </Button>
         </DialogActions>

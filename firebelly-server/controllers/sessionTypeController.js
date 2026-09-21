@@ -4,6 +4,7 @@ const BillingLedgerEntry = require("../models/billingLedgerEntry");
 const ScheduleEvent = require("../models/scheduleEvent");
 const Relationship = require("../models/relationship");
 const Invoice = require("../models/invoice");
+const { payoutExceedsPrice } = require("../utils/payoutGuard");
 
 const ensureTrainer = (user) => user && user.isTrainer;
 
@@ -172,6 +173,10 @@ const create_session_type = async (req, res, next) => {
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: "Name is required." });
     }
+    const payoutProblem = payoutExceedsPrice(defaultPrice, defaultPayout, currency, payoutCurrency);
+    if (payoutProblem) {
+      return res.status(400).json({ error: payoutProblem });
+    }
     const sessionType = new SessionType({
       trainerId: user._id,
       name: String(name).trim(),
@@ -264,6 +269,16 @@ const update_session_type = async (req, res, next) => {
       ["durationMinutes", "creditsRequired", "defaultPrice", "defaultPayout", "currency", "payoutCurrency"].forEach(
         (field) => delete updates[field]
       );
+    }
+    const settled = (field) => (updates[field] !== undefined ? updates[field] : existing[field]);
+    const payoutProblem = payoutExceedsPrice(
+      settled("defaultPrice"),
+      settled("defaultPayout"),
+      settled("currency"),
+      settled("payoutCurrency")
+    );
+    if (payoutProblem) {
+      return res.status(400).json({ error: payoutProblem });
     }
     const updated = await SessionType.findByIdAndUpdate(id, updates, { returnDocument: "after" });
     return res.json({ sessionType: updated });
@@ -388,6 +403,16 @@ const reprice_session_type = async (req, res, next) => {
       isDefault: false,
       previousVersionId: existing._id,
     });
+
+    const payoutProblem = payoutExceedsPrice(
+      clone.defaultPrice,
+      clone.defaultPayout,
+      clone.currency,
+      clone.payoutCurrency
+    );
+    if (payoutProblem) {
+      return res.status(400).json({ error: payoutProblem });
+    }
 
     // Archive the old version FIRST so the "unique name among active" index holds.
     existing.archivedAt = existing.archivedAt || new Date();

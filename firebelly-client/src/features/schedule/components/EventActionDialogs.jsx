@@ -34,6 +34,7 @@ import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
 import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../../utils/clientRelationships";
+import { payoutExceedsPrice } from "../../../utils/payoutGuard";
 
 // Purchased session types float to the top of the booking pickers (most remaining first,
 // then purchased-but-used-up, then the rest in their usual order), with the client's
@@ -277,6 +278,21 @@ export default function EventActionDialogs({
     input: { startAdornment: <InputAdornment position="start">$</InputAdornment> },
   };
 
+  // A payout above the price loses money on the session — block the save rather
+  // than let a mistyped digit through. The server enforces this too.
+  const quickBookPayoutError = payoutExceedsPrice(
+    quickBookPrice,
+    quickBookPayout,
+    quickBookPriceCurrency,
+    quickBookPayoutCurrency
+  );
+  const editPayoutError = payoutExceedsPrice(
+    editPriceAmount,
+    editPayoutAmount,
+    editPriceCurrency,
+    editPayoutCurrency
+  );
+
   const selectionContent = selectionRange ? (
     <Stack spacing={2} sx={{ mt: 1 }}>
       {/* Time summary + editable times */}
@@ -377,6 +393,8 @@ export default function EventActionDialogs({
           value={quickBookPayout}
           onChange={(event) => setQuickBookPayout(event.target.value)}
           slotProps={moneyAdornment}
+          error={Boolean(quickBookPayoutError)}
+          helperText={quickBookPayoutError || " "}
           fullWidth
         />
       </Stack>
@@ -439,7 +457,7 @@ export default function EventActionDialogs({
         size="large"
         color={bookingConflictLabels.length > 0 ? "warning" : "primary"}
         onClick={handleQuickBookClient}
-        disabled={!quickBookClientId}
+        disabled={!quickBookClientId || Boolean(quickBookPayoutError)}
       >
         {bookingConflictLabels.length > 0 ? "Book anyway" : "Book session"}
       </Button>
@@ -511,7 +529,7 @@ export default function EventActionDialogs({
           <Button
             variant="contained"
             onClick={handleQuickBookCustom}
-            disabled={!quickBookCustomName.trim()}
+            disabled={!quickBookCustomName.trim() || Boolean(quickBookPayoutError)}
           >
             Book custom client
           </Button>
@@ -964,6 +982,8 @@ export default function EventActionDialogs({
                     value={editPayoutAmount}
                     onChange={(event) => setEditPayoutAmount(event.target.value)}
                     slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                    error={Boolean(editPayoutError)}
+                    helperText={editPayoutError || " "}
                     fullWidth
                   />
                   <FormControl fullWidth>
@@ -1111,7 +1131,7 @@ export default function EventActionDialogs({
           <Button
             variant="contained"
             onClick={handleSaveEdit}
-            disabled={savingEdit}
+            disabled={savingEdit || Boolean(editPayoutError)}
             startIcon={savingEdit ? <CircularProgress size={16} color="inherit" /> : null}
           >
             {savingEdit ? "Saving…" : "Save changes"}

@@ -72,6 +72,8 @@ const isOnBookingInterval = (date) => {
 };
 
 
+const { payoutExceedsPrice } = require("../utils/payoutGuard");
+
 const normalizePrice = (amount, currency) => {
   if (amount === undefined) return {};
   const numeric = amount === "" || amount === null ? null : Number(amount);
@@ -322,6 +324,15 @@ const create_schedule_event = async (req, res, next) => {
     if (payload.payoutAmount !== undefined || payload.payoutCurrency !== undefined) {
       Object.assign(payload, normalizePayout(payload.payoutAmount, payload.payoutCurrency));
     }
+    const payoutProblem = payoutExceedsPrice(
+      payload.priceAmount,
+      payload.payoutAmount,
+      payload.priceCurrency,
+      payload.payoutCurrency
+    );
+    if (payoutProblem) {
+      return res.status(400).json({ error: payoutProblem });
+    }
     const scheduleEvent = new ScheduleEvent(payload);
     const saved = await scheduleEvent.save();
     return res.json({ event: saved });
@@ -376,6 +387,18 @@ const update_schedule_event = async (req, res, next) => {
     }
     if (updates?.payoutAmount !== undefined || updates?.payoutCurrency !== undefined) {
       Object.assign(updates, normalizePayout(updates.payoutAmount, updates.payoutCurrency));
+    }
+    // A request may touch only one of the two fields, so check the values the event
+    // will actually end up with rather than just what was sent.
+    const settled = (field) => (updates?.[field] !== undefined ? updates[field] : existing[field]);
+    const payoutProblem = payoutExceedsPrice(
+      settled("priceAmount"),
+      settled("payoutAmount"),
+      settled("priceCurrency"),
+      settled("payoutCurrency")
+    );
+    if (payoutProblem) {
+      return res.status(400).json({ error: payoutProblem });
     }
     let updated = await ScheduleEvent.findByIdAndUpdate(_id, { $set: updates }, { returnDocument: "after" });
     updated = await merge_open_availability(updated);
