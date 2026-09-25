@@ -617,14 +617,19 @@ const get_exercise_history = (req, res, next) => {
   const { targetExercise, user } = req.body;
   const targetExerciseId = new mongoose.Types.ObjectId(targetExercise._id);
 
-  // The progress chart shows HISTORY, so exclude future-dated (planned, not-yet-performed) workouts
-  // — they'd clutter the chart with irrelevant data. Cutoff = end of today (UTC). Range operators are
-  // type-bracketed, so this also naturally drops undated template workouts (not real history).
+  // The progress chart shows HISTORY: only what was actually performed.
+  //  - complete: true      — a planned workout that was skipped still holds its prescribed goals and
+  //                          an all-zero `achieved`, which plotted as a 0 and dragged the line down.
+  //                          A part-logged workout is just as misleading, so require it finished.
+  //  - isTemplate excluded — templates are prescriptions, never performance.
+  //  - date <= today       — a workout completed early can't be dated in the future; belt and braces.
   const cutoff = new Date();
   cutoff.setUTCHours(23, 59, 59, 999);
 
   Training.find({
     user: user._id,
+    isTemplate: { $ne: true },
+    complete: true,
     date: { $lte: cutoff },
     training: {
       $elemMatch: {
@@ -645,9 +650,10 @@ const get_exercise_history = (req, res, next) => {
       if (res.locals.user._id === user._id || relationship?.accepted) {
         data.map((day) => {
           day.training.map((set) => {
-            let targetedExercise = set.filter((exercise) => {
-              return exercise.exercise._id.equals(targetExerciseId);
-            });
+            let targetedExercise = set.filter((exercise) =>
+              // A free-text warm-up row has no library exercise, so guard the id lookup.
+              Boolean(exercise?.exercise?._id?.equals?.(targetExerciseId))
+            );
             if (targetedExercise.length > 0) {
               historyList.push({ ...targetedExercise[0], date: day.date });
             }
@@ -677,7 +683,17 @@ const get_exercise_progress_summary = async (req, res, next) => {
       return res.status(403).json({ error: "Restricted" });
     }
 
-    const workouts = await Training.find({ user: targetUserId })
+    // Same rule as the history endpoint — this drives the sparklines and the "times performed"
+    // count, so it must read performance only. Without the template filter it was also scanning
+    // every program-day template, none of which is a session the client ever did.
+    const summaryCutoff = new Date();
+    summaryCutoff.setUTCHours(23, 59, 59, 999);
+    const workouts = await Training.find({
+      user: targetUserId,
+      isTemplate: { $ne: true },
+      complete: true,
+      date: { $lte: summaryCutoff },
+    })
       .select("date training")
       .populate({
         path: "training.exercise",
@@ -747,16 +763,25 @@ const buildExerciseRecords = async ({ userId, exerciseIds, beforeDate, excludeWo
     .filter((id) => mongoose.Types.ObjectId.isValid(id));
   if (!ids.length) return {};
 
+  // A record has to have been SET, not just prescribed: a part-logged workout that was never
+  // finished could otherwise claim a PR off numbers the client didn't complete. The activity
+  // feed counts PRs from this same scan, so it would have announced them too.
   const query = {
     user: userId,
     isTemplate: { $ne: true },
+    complete: true,
     training: {
       $elemMatch: {
         $elemMatch: { exercise: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) } },
       },
     },
   };
-  if (beforeDate) query.date = { $lt: new Date(beforeDate) };
+  // A record is historical by definition, so never let a future-dated row claim one. `beforeDate`
+  // ("bests before this workout") narrows further when the caller passes it; both bounds apply.
+  const recordsCutoff = new Date();
+  recordsCutoff.setUTCHours(23, 59, 59, 999);
+  query.date = { $lte: recordsCutoff };
+  if (beforeDate) query.date.$lt = new Date(beforeDate);
   if (excludeWorkoutId && mongoose.Types.ObjectId.isValid(String(excludeWorkoutId))) {
     query._id = { $ne: excludeWorkoutId };
   }

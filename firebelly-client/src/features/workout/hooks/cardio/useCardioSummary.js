@@ -21,7 +21,15 @@ export default function useCardioSummary({ client = null, weeks = 12 } = {}) {
     start.setDate(start.getDate() - weeks * 7);
 
     workoutApi
-      .getWorkoutsByRange({ rangeStart: fmtDate(start), rangeEnd: fmtDate(now), client })
+      .getWorkoutsByRange({
+        rangeStart: fmtDate(start),
+        rangeEnd: fmtDate(now),
+        client,
+        // Performed work only. extractCardioRecords falls back to the PLANNED distance/duration
+        // when nothing was logged, so without this a run that never happened charted as if it
+        // had — at exactly its prescribed pace.
+        filters: { includeTemplates: false, includeIncomplete: false },
+      })
       .then((res) => {
         if (cancelled) return;
         if (!res || res.error) {

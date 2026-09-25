@@ -26,7 +26,8 @@ export default function useTrainingLoadSummary({ client = null, weeks = 12 } = {
         rangeStart: fmtDate(start),
         rangeEnd: fmtDate(now),
         client,
-        filters: { includeTemplates: false },
+        // Performed work only — a skipped or half-logged session must not count toward volume.
+        filters: { includeTemplates: false, includeIncomplete: false },
       })
       .then((res) => {
         if (cancelled) return;

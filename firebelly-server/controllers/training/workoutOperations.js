@@ -802,6 +802,14 @@ const get_workouts_by_range = async (req, res, next) => {
       workoutQuery.isTemplate = { $ne: true };
     }
 
+    // The mirror of includeCompleted, for the progress charts: only what was actually performed.
+    // A planned session carries its prescription with an empty result and a part-logged one is
+    // just as misleading, so both stay out of the numbers. Set after includeCompleted so that a
+    // caller asking for neither can't produce an impossible query.
+    if (filters?.includeIncomplete === false) {
+      workoutQuery.complete = true;
+    }
+
     applyTypeAndIdFilters(workoutQuery, filters);
 
     const workouts = await Training.find(workoutQuery)

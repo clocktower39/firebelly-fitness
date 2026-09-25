@@ -59,8 +59,17 @@ const canAccessGoal = async (user, goalUserId) => {
 const checkStrengthGoalAchievement = async (userId, exerciseId, targetReps, targetWeight) => {
   const exerciseObjectId = new mongoose.Types.ObjectId(exerciseId);
 
+  // A goal is met by work the client actually did. Without these, a goal could be marked
+  // achieved by a session that was only ever planned — or by a program template, which holds
+  // the prescription and no result at all.
+  const goalCutoff = new Date();
+  goalCutoff.setUTCHours(23, 59, 59, 999);
+
   const workouts = await Training.find({
     user: userId,
+    isTemplate: { $ne: true },
+    complete: true,
+    date: { $lte: goalCutoff },
     "training": {
       $elemMatch: {
         $elemMatch: { exercise: exerciseObjectId }
@@ -308,9 +317,15 @@ const get_exercise_max_at_reps = async (req, res, next) => {
 
     const exerciseObjectId = new mongoose.Types.ObjectId(exerciseId);
 
-    // Find all workouts containing this exercise
+    // Best lifted at these reps — performed sessions only, for the same reason as above.
+    const maxCutoff = new Date();
+    maxCutoff.setUTCHours(23, 59, 59, 999);
+
     const workouts = await Training.find({
       user: userId,
+      isTemplate: { $ne: true },
+      complete: true,
+      date: { $lte: maxCutoff },
       "training": {
         $elemMatch: {
           $elemMatch: { exercise: exerciseObjectId }
