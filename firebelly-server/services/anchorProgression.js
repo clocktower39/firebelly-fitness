@@ -8,7 +8,7 @@
 
 const Training = require("../models/training");
 const ExerciseAnchor = require("../models/exerciseAnchor");
-const { familyOf, weightIncrement, roundToLoadable } = require("./progressionEngine");
+const { familyOf, weightIncrement } = require("./progressionEngine");
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const exIdOf = (entry) => String(entry?.exercise?._id || entry?.exercise || "");
@@ -33,7 +33,7 @@ const KEY_FOR_UNIT = { weight: "weight", reps: "exactReps", seconds: "seconds" }
 // Write the anchor's value into one exercise entry. `applyTo` decides whether a ramp moves
 // as a whole (shifting every set by the same delta, preserving the gaps a warm-up ramp needs)
 // or only its top set.
-const applyAnchorToEntry = (entry, anchor, family) => {
+const applyAnchorToEntry = (entry, anchor) => {
   const goals = entry.goals || {};
   const key = KEY_FOR_UNIT[anchor.unit] || "weight";
   const arr = Array.isArray(goals[key]) ? goals[key] : [];
@@ -70,7 +70,14 @@ const applyAnchorToEntry = (entry, anchor, family) => {
 };
 
 // Push an anchor's current value into every future, incomplete occurrence of its exercise in
-// the client's program. Returns the docs that changed.
+// the client's program. Returns the ids of the workouts that changed.
+//
+// Reads .lean() and writes through the raw collection ON PURPOSE. A free-text warm-up row is
+// allowed to carry no library exercise (models/training says so), but the sub-schema types
+// that field as an ObjectId — so hydrating such a doc and calling .save() throws
+// "Cast to ObjectId failed for value \"\"" on a row this function never touched. 36 workouts
+// in production have one. Casting on updateOne would fail the same way, so the write has to
+// bypass mongoose casting; reading lean keeps ObjectIds intact so the round-trip is faithful.
 const resolveAnchorToFutureWorkouts = async (anchor, { from = new Date(), exerciseMeta = {} } = {}) => {
   const docs = await Training.find({
     user: anchor.clientId,
@@ -79,8 +86,7 @@ const resolveAnchorToFutureWorkouts = async (anchor, { from = new Date(), exerci
     complete: { $ne: true },
     holdProgression: { $ne: true },
     date: { $gte: from },
-  });
-  const family = familyOf(exerciseMeta.equipment);
+  }).lean();
   const touched = [];
   for (const doc of docs) {
     let changed = false;
@@ -88,10 +94,13 @@ const resolveAnchorToFutureWorkouts = async (anchor, { from = new Date(), exerci
       (circuit || []).forEach((entry) => {
         if (entry.isWarmup) return;
         if (exIdOf(entry) !== String(anchor.exerciseId)) return;
-        if (applyAnchorToEntry(entry, anchor, family)) changed = true;
+        if (applyAnchorToEntry(entry, anchor)) changed = true;
       })
     );
-    if (changed) { doc.markModified("training"); await doc.save(); touched.push(doc); }
+    if (changed) {
+      await Training.collection.updateOne({ _id: doc._id }, { $set: { training: doc.training } });
+      touched.push(doc._id);
+    }
   }
   return touched;
 };

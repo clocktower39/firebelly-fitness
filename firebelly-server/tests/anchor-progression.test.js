@@ -13,15 +13,15 @@ const {
 const BB = { equipment: "Barbell" };
 
 test("a percentage of the working weight lands on something the bar can actually load", () => {
-  assert.equal(loadForSlot(225, 80, "weight", "barbell"), 180);   // exact
-  assert.equal(loadForSlot(225, 100, "weight", "barbell"), 225);
-  const top = loadForSlot(225, 105, "weight", "barbell");          // 236.25 is not loadable
+  assert.equal(loadForSlot(225, 80, "weight"), 180);   // exact
+  assert.equal(loadForSlot(225, 100, "weight"), 225);
+  const top = loadForSlot(225, 105, "weight");          // 236.25 is not loadable
   assert.ok(top >= 235 && top <= 237.5, `got ${top}`);
 });
 
 test("reps and seconds round to whole numbers, not plate increments", () => {
-  assert.equal(loadForSlot(12, 80, "reps", null), 10);   // 9.6 -> 10
-  assert.equal(loadForSlot(30, 50, "seconds", null), 15);
+  assert.equal(loadForSlot(12, 80, "reps"), 10);   // 9.6 -> 10
+  assert.equal(loadForSlot(30, 50, "seconds"), 15);
 });
 
 const entry = (weights, pct, applyTo = "top") => ({
@@ -34,7 +34,7 @@ const entry = (weights, pct, applyTo = "top") => ({
 test("a ramp shifts as a whole so the warm-up gaps survive", () => {
   // Brett's real shape: 65/85/95/105 leading to a 120 top set, anchor moving to 121.
   const e = entry([65, 85, 95, 105, 120], 100);
-  applyAnchorToEntry(e, { working: 121, unit: "weight" }, "barbell");
+  applyAnchorToEntry(e, { working: 121, unit: "weight" });
   const w = e.goals.weight.map(Number);
   assert.equal(w[w.length - 1], 121, "top set takes the anchor");
   assert.ok(w[0] > 65 && w[0] < 85, `lead-in should shift with it, got ${w[0]}`);
@@ -43,22 +43,22 @@ test("a ramp shifts as a whole so the warm-up gaps survive", () => {
 
 test("applyTo:all flattens every set onto the target instead", () => {
   const e = entry([180, 180, 180], 80, "all");
-  applyAnchorToEntry(e, { working: 225, unit: "weight" }, "barbell");
+  applyAnchorToEntry(e, { working: 225, unit: "weight" });
   assert.deepEqual(e.goals.weight, ["180", "180", "180"]);
-  applyAnchorToEntry(e, { working: 250, unit: "weight" }, "barbell");
+  applyAnchorToEntry(e, { working: 250, unit: "weight" });
   assert.deepEqual(e.goals.weight, ["200", "200", "200"], "80% of 250");
 });
 
 test("an unlinked slot is left completely alone", () => {
   const e = entry([100, 100], null);
-  const changed = applyAnchorToEntry(e, { working: 300, unit: "weight" }, "barbell");
+  const changed = applyAnchorToEntry(e, { working: 300, unit: "weight" });
   assert.equal(changed, false);
   assert.deepEqual(e.goals.weight, ["100", "100"]);
 });
 
 test("unloaded sets in a ramp are not given phantom weight", () => {
   const e = entry([0, 0, 95, 105], 100);
-  applyAnchorToEntry(e, { working: 110, unit: "weight" }, "barbell");
+  applyAnchorToEntry(e, { working: 110, unit: "weight" });
   assert.equal(Number(e.goals.weight[0]), 0, "a bodyweight set must stay at 0");
   assert.equal(Number(e.goals.weight[1]), 0);
 });
@@ -110,4 +110,61 @@ test("the ceiling caps the anchor itself", () => {
   assert.equal(capWorking(230, 235), 230);
   assert.equal(capWorking(240, null), 240, "no ceiling means no cap");
   assert.equal(capWorking(240, undefined), 240);
+});
+
+// A free-text warm-up row carries no library exercise. The model allows it, but the
+// sub-schema types the field as an ObjectId, so hydrating such a doc and calling .save()
+// throws on a row this code never touched — 36 production workouts have one. The resolver
+// must write through without tripping over them.
+const mongoose = require("mongoose");
+process.env.DBURL = process.env.DBURL || "mongodb://127.0.0.1:27017/firebelly-dev";
+const Training = require("../models/training");
+const ExerciseAnchor = require("../models/exerciseAnchor");
+const { resolveAnchorToFutureWorkouts } = require("../services/anchorProgression");
+require("../models/user");
+require("../models/exercise");
+
+test("resolving an anchor survives a workout containing a blank-exercise warm-up row", async () => {
+  await mongoose.connect(process.env.DBURL);
+  assert.equal(mongoose.connection.name, "firebelly-dev", "tests must not touch live data");
+  const clientId = new mongoose.Types.ObjectId();
+  const programId = new mongoose.Types.ObjectId();
+  const exerciseId = new mongoose.Types.ObjectId();
+  const made = [];
+  try {
+    // insert through the raw collection so the blank warm-up row is stored verbatim
+    const doc = {
+      title: "ANCHOR blank-warmup", date: new Date(Date.now() + 7 * 864e5),
+      user: clientId, programId, programWeek: 2, programDay: 1, complete: false,
+      category: ["Strength"], isTemplate: false,
+      training: [[
+        { exercise: "", customName: "Foam roll IT band", exerciseType: "Reps", isWarmup: true,
+          goals: { sets: 1, exactReps: ["0"], weight: ["0"], seconds: [0] },
+          achieved: { sets: 0, reps: ["0"], weight: ["0"], seconds: [0] } },
+        { exercise: exerciseId, customName: "", exerciseType: "Reps", isWarmup: false,
+          goals: { sets: 3, exactReps: ["5", "5", "5"], weight: ["180", "180", "180"], seconds: [0, 0, 0] },
+          achieved: { sets: 0, reps: [0, 0, 0], weight: [0, 0, 0], seconds: [0, 0, 0] },
+          progression: { percentOfAnchor: 80, applyTo: "all", unit: "weight" } },
+      ]],
+    };
+    const ins = await Training.collection.insertOne(doc);
+    made.push(ins.insertedId);
+
+    const anchor = await ExerciseAnchor.create({
+      trainerId: new mongoose.Types.ObjectId(), clientId, programId, exerciseId,
+      working: 250, unit: "weight", rule: "feedback", earnsOnDay: 1,
+    });
+    made.push(null);
+
+    const touched = await resolveAnchorToFutureWorkouts(anchor, { from: new Date() });
+    assert.equal(touched.length, 1, "the workout should have been updated, not thrown past");
+
+    const after = await Training.collection.findOne({ _id: ins.insertedId });
+    assert.deepEqual(after.training[0][1].goals.weight, ["200", "200", "200"], "80% of 250");
+    assert.equal(after.training[0][0].exercise, "", "the warm-up row must survive untouched");
+    await ExerciseAnchor.deleteOne({ _id: anchor._id });
+  } finally {
+    await Training.collection.deleteMany({ _id: { $in: made.filter(Boolean) } });
+    await mongoose.disconnect();
+  }
 });
