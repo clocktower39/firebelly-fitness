@@ -35,7 +35,14 @@ async function progressWorkout(training, { step, deload, scheme }) {
       const lib = map.get(String(e.exercise)) || {};
       e.goals = progressExerciseGoals(
         e.goals,
-        { equipment: lib.equipment, movementComplexity: lib.movementComplexity, measurementType: lib.measurementType, exerciseType: e.exerciseType },
+        {
+          equipment: lib.equipment,
+          movementComplexity: lib.movementComplexity,
+          measurementType: lib.measurementType,
+          exerciseType: e.exerciseType,
+          // the entry's own working ceiling, enforced inside progressExerciseGoals
+          progression: e.progression,
+        },
         // "same" overrides the per-type engine ramps: weeks stay identical, feedback does
         // the progressing. Any other value keeps each exercise's own scheme.
         { scheme: scheme === "same" ? "same" : schemeForType(e.exerciseType), step, deload }

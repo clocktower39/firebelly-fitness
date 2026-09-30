@@ -30,6 +30,7 @@ const {
   weightIncrement,
   roundToLoadable,
   progressExerciseGoals,
+  clampToCeiling,
 } = require("./progressionEngine");
 
 const STREAK_TO_EARN = 2; // consecutive met-at-this-weight sessions (incl. current) before a step up
@@ -211,7 +212,22 @@ const fillWeights = (current, sets, targetTop, fam) => {
 // Apply a signal to one future exercise entry (mutates entry.goals). `sameDay` gates the full
 // decision; cross-day a signal may only fill loads that are still zero/unset. Returns true if
 // the entry changed.
-const applySignalToEntry = (entry, signal, ctx, { sameDay = true } = {}) => {
+// Wraps the seeding logic with the entry's working ceiling. Every branch below mutates
+// `goals` in place and reports whether it changed anything, so capping once on the way out
+// covers all of them — time, percent, weight and rep-range alike.
+//
+// The cap runs even when seeding declines to change anything: a ceiling lowered onto an
+// exercise whose later weeks already sit above it must still pull them down, and that shows
+// up here as "no seeding change, but the clamp moved something".
+const applySignalToEntry = (entry, signal, ctx, opts = {}) => {
+  const seeded = seedEntryFromSignal(entry, signal, ctx, opts);
+  const before = JSON.stringify(entry.goals || {});
+  clampToCeiling(entry.goals, entry.progression);
+  const capped = JSON.stringify(entry.goals || {}) !== before;
+  return seeded || capped;
+};
+
+const seedEntryFromSignal = (entry, signal, ctx, { sameDay = true } = {}) => {
   const goals = entry.goals || {};
   const family = familyOf(ctx.equipment);
   const sets = num(goals.sets) || (goals.weight || []).length || 1;

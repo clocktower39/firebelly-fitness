@@ -7,6 +7,7 @@ import {
   CardContent,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Grid,
@@ -14,6 +15,7 @@ import {
   Menu,
   MenuItem,
   Popover,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -175,6 +177,36 @@ export default function Exercise(props) {
   const handleSaveCoachNote = (text) => updateEntry((ex) => {
     ex.coachNote = text;
   });
+
+  // Working ceiling: the load this exercise should climb to and then hold. Progression may
+  // approach it and never pass it, which is what stops a client being pushed past the weight
+  // they're already doing well at.
+  const [ceilingOpen, setCeilingOpen] = useState(false);
+  const currentCeiling = exercise.progression?.ceiling;
+  const [ceilingDraft, setCeilingDraft] = useState(
+    currentCeiling === null || currentCeiling === undefined ? "" : String(currentCeiling)
+  );
+  const ceilingUnit = exercise.progression?.unit
+    || (exercise.exerciseType === "Time" ? "seconds" : "weight");
+  const ceilingUnitLabel =
+    ceilingUnit === "seconds" ? "seconds" : ceilingUnit === "reps" ? "reps" : weightUnit;
+  const openCeiling = () => {
+    setCeilingDraft(
+      currentCeiling === null || currentCeiling === undefined ? "" : String(currentCeiling)
+    );
+    setCeilingOpen(true);
+  };
+  const saveCeiling = () => {
+    const raw = String(ceilingDraft).trim();
+    // Empty clears the ceiling. `null` (not 0) is "no ceiling" — 0 is a real cap meaning
+    // bodyweight only.
+    const next = raw === "" ? null : Number(raw);
+    if (raw !== "" && (!Number.isFinite(next) || next < 0)) return;
+    updateEntry((ex) => {
+      ex.progression = { ...(ex.progression || {}), unit: ceilingUnit, ceiling: next };
+    });
+    setCeilingOpen(false);
+  };
 
   const exerciseNoteCount = (exercise.feedback?.comments || []).filter((c) => !c.deletedAt).length;
 
@@ -682,6 +714,15 @@ export default function Exercise(props) {
                   </Tooltip>
                 </Grid>
               </Grid>
+              {user?.isTrainer
+                && currentCeiling !== null
+                && currentCeiling !== undefined && (
+                <Grid container size={12} sx={{ pl: 0.5, rowGap: 0 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
+                    Ceiling {currentCeiling} {ceilingUnitLabel} — holds here
+                  </Typography>
+                </Grid>
+              )}
               {(exercise.coachNote || exerciseNoteCount > 0) && (
                 <Grid container size={12} sx={{ pl: 0.5, rowGap: 0 }}>
                   {exercise.coachNote && (
@@ -748,6 +789,18 @@ export default function Exercise(props) {
                 >
                   Swap exercise…
                 </MenuItem>
+                {user?.isTrainer && (
+                  <MenuItem
+                    onClick={() => {
+                      openCeiling();
+                      handleExerciseOptionsClose();
+                    }}
+                  >
+                    {currentCeiling === null || currentCeiling === undefined
+                      ? "Set working ceiling…"
+                      : `Working ceiling: ${currentCeiling} ${ceilingUnitLabel}`}
+                  </MenuItem>
+                )}
                 <MenuItem
                   onClick={() =>
                     setEditMode((prev) => {
@@ -780,6 +833,47 @@ export default function Exercise(props) {
                     );
                   })()}
                 </DialogContent>
+              </Dialog>
+              <Dialog open={ceilingOpen} onClose={() => setCeilingOpen(false)} fullWidth maxWidth="xs">
+                <DialogTitle>Working ceiling</DialogTitle>
+                <DialogContent sx={{ pt: 1 }}>
+                  <Stack spacing={2} sx={{ mt: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      The {ceilingUnitLabel} {title?.exerciseTitle || "this exercise"} should build
+                      to and then hold. Progression can climb toward it but never past it — so a
+                      client who is already at the right {ceilingUnitLabel} stops being pushed.
+                    </Typography>
+                    <TextField
+                      id="exercise-working-ceiling"
+                      label={`Ceiling (${ceilingUnitLabel})`}
+                      type="number"
+                      value={ceilingDraft}
+                      onChange={(e) => setCeilingDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") saveCeiling(); }}
+                      slotProps={{ htmlInput: { min: 0, step: "0.5" } }}
+                      helperText="Leave blank for no ceiling. 0 pins it to bodyweight."
+                      autoFocus
+                      fullWidth
+                    />
+                  </Stack>
+                </DialogContent>
+                <DialogActions>
+                  {currentCeiling !== null && currentCeiling !== undefined && (
+                    <Button
+                      color="error"
+                      onClick={() => {
+                        updateEntry((ex) => {
+                          ex.progression = { ...(ex.progression || {}), ceiling: null };
+                        });
+                        setCeilingOpen(false);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                  <Button onClick={() => setCeilingOpen(false)}>Cancel</Button>
+                  <Button variant="contained" onClick={saveCeiling}>Save</Button>
+                </DialogActions>
               </Dialog>
               <ExerciseCommentDialog
                 open={notesOpen}

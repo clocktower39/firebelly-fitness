@@ -79,6 +79,29 @@ const trainingSchema = new mongoose.Schema(
             // Trainer-authored form cue shown under the exercise title in every view;
             // travels with program assignment like the rest of the entry.
             coachNote: { type: String, default: "" },
+            // Per-exercise progression rule. Rides on the entry, so it travels with program
+            // assignment exactly like coachNote and techniques do.
+            //
+            // `ceiling` is the working ceiling: the number the trainer wants the client to
+            // reach and then HOLD. Progression may climb toward it and must never pass it.
+            // Without it, both the engine ramp and feedback seeding keep adding once the
+            // client is already at the right weight, and every later week has to be walked
+            // back down by hand.
+            //
+            // mode/step/unit/applyTo are declared now so the scheduled-step phase needs no
+            // second migration; only `ceiling` is honored today, and mode defaults to
+            // "feedback" so an entry without a rule behaves exactly as before.
+            progression: {
+              mode: { type: String, enum: ["feedback", "scheduled"], default: "feedback" },
+              step: { type: Number, default: 0 },
+              unit: { type: String, enum: ["weight", "reps", "seconds"], default: "weight" },
+              applyTo: { type: String, enum: ["top", "all"], default: "top" },
+              ceiling: { type: Number, default: null },
+              // This slot's share of the exercise's working weight (see models/exerciseAnchor).
+              // 100 = the anchor itself; 80 = a light day; 105 = a top-set day above it.
+              // null means the slot carries its own absolute load and isn't linked.
+              percentOfAnchor: { type: Number, default: null },
+            },
           },
         ],
       ],

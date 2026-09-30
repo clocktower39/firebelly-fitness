@@ -157,9 +157,37 @@ const deloadGoals = (goals, ctx, factor = 0.9) => {
   return g;
 };
 
+// The working ceiling. `progression.ceiling` is the number the trainer wants the client to
+// arrive at and hold; nothing may push a goal past it. A deload deliberately goes BELOW the
+// ceiling, so this only ever caps — it never raises a value up to the cap.
+//
+// Applied per set rather than only to the top set: a ceiling of 100 on a 65/85/95/105 ramp
+// should land on 65/85/95/100, not leave a set above the line. Values keep their existing
+// string-or-number shape, because the rest of the pipeline stores loads as strings.
+const clampToCeiling = (goals, progression) => {
+  // `null` is the schema default for "no ceiling", and Number(null) is 0 — so this must
+  // reject empties EXPLICITLY. Coercing first would read every unset entry as a 0 lb cap
+  // and zero out every prescription in the database.
+  const raw = progression?.ceiling;
+  if (raw === null || raw === undefined || raw === "") return goals;
+  const cap = Number(raw);
+  if (!Number.isFinite(cap) || cap < 0) return goals;
+  const unit = progression?.unit || "weight";
+  const key = unit === "reps" ? "exactReps" : unit === "seconds" ? "seconds" : "weight";
+  if (!Array.isArray(goals?.[key])) return goals;
+  goals[key] = goals[key].map((v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= cap) return v;
+    return typeof v === "string" ? String(cap) : cap;
+  });
+  return goals;
+};
+
 // Progress an exercise's goals by `step` increments under `scheme`. Chained so per-step
 // rules (dumbbell 40lb threshold, rep-range fill) resolve correctly. When `deload` is set,
 // a recovery cut is applied after the progression (used for a block's deload week).
+// `ctx.progression` carries the entry's own rule, so the ceiling is enforced here rather
+// than at each of the several call sites.
 const progressExerciseGoals = (
   goals,
   ctx = {},
@@ -169,6 +197,7 @@ const progressExerciseGoals = (
   const n = Math.max(0, Math.floor(Number(step) || 0));
   for (let s = 0; s < n; s += 1) g = progressOneStep(g, ctx, scheme);
   if (deload) g = deloadGoals(g, ctx);
+  else g = clampToCeiling(g, ctx.progression);
   return g;
 };
 
@@ -270,6 +299,7 @@ const autoregulateExerciseGoals = (
 
 module.exports = {
   familyOf,
+  clampToCeiling,
   weightIncrement,
   roundToLoadable,
   deloadGoals,
