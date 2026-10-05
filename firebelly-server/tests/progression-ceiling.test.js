@@ -171,3 +171,35 @@ test("lowering a ceiling onto a week already above it pulls that week down", asy
   const tops = after.training[0][0].goals.weight.map(Number);
   assert.ok(Math.max(...tops) <= 120, `left at ${Math.max(...tops)}, above the 120 ceiling`);
 });
+
+// A deload halves the set count. The log screen renders one set row per achieved.reps entry,
+// so without resizing achieved a 2-set deload showed the client 4 rows to fill in.
+const { syncAchievedToSets, deloadGoals: cut } = require("../services/progressionEngine");
+
+test("a deload resizes the logged-set rows to match the new set count", () => {
+  const entry = {
+    exerciseType: "Reps",
+    goals: { sets: 4, minReps: [0,0,0,0], maxReps: [0,0,0,0], exactReps: ["5","5","5","5"],
+      weight: ["0","0","0","0"], percent: [0,0,0,0], seconds: [0,0,0,0], rpe: [8,8,8,8] },
+    achieved: { sets: 0, reps: [0,0,0,0], weight: [0,0,0,0], percent: [0,0,0,0], seconds: [0,0,0,0] },
+  };
+  entry.goals = cut(entry.goals, { equipment: "Barbell", exerciseType: "Reps" });
+  assert.equal(entry.goals.sets, 2, "the deload should halve the sets");
+  assert.equal(entry.achieved.reps.length, 4, "deloadGoals alone leaves achieved stale — that was the bug");
+
+  assert.equal(syncAchievedToSets(entry), true);
+  ["reps", "weight", "percent", "seconds"].forEach((k) =>
+    assert.equal(entry.achieved[k].length, 2, `achieved.${k} must follow the set count`));
+});
+
+test("it pads as well as truncates, and reports when nothing changed", () => {
+  const short = { goals: { sets: 3 }, achieved: { reps: [5], weight: [100], percent: [0], seconds: [0] } };
+  syncAchievedToSets(short);
+  assert.deepEqual(short.achieved.reps, [5, 0, 0], "padding keeps what was logged and zero-fills");
+  assert.equal(syncAchievedToSets(short), false, "a second pass is a no-op");
+});
+
+test("an entry with no achieved block is left alone rather than crashing", () => {
+  assert.equal(syncAchievedToSets({ goals: { sets: 3 } }), false);
+  assert.equal(syncAchievedToSets({}), false);
+});

@@ -17,6 +17,7 @@ const {
   progressExerciseGoals,
   autoregulateExerciseGoals,
   clampToCeiling,
+  syncAchievedToSets,
 } = require("../../services/progressionEngine");
 
 // Engine-driven progression: resolve each exercise's library classification, then apply
@@ -57,6 +58,7 @@ const applyEngineProgression = async (
         },
         { scheme, step, deload }
       );
+      syncAchievedToSets(ex);
     });
   });
 };
@@ -110,6 +112,7 @@ const applyAutoregulation = async (training, { scheme = "linear" } = {}) => {
       // Clamp on every decision, not just "progress": holding or backing off must not leave a
       // load sitting above a ceiling the trainer has since lowered.
       ex.goals = clampToCeiling(goals, ex.progression);
+      syncAchievedToSets(ex);
       if (tally[decision] != null) tally[decision] += 1;
       if (ex.achieved) {
         for (const prop in ex.achieved) {

@@ -12,7 +12,7 @@ const Program = require("../models/program");
 const Training = require("../models/training");
 const Relationship = require("../models/relationship");
 const { buildProgramWeeks, mesocycleWeeks, expandMesocycles } = require("./programs");
-const { progressExerciseGoals } = require("./progressionEngine");
+const { progressExerciseGoals, syncAchievedToSets } = require("./progressionEngine");
 const { sanitizeTrainingTechniques } = require("./techniqueValidation");
 const { snapshotWeekOne } = require("./programmingSignal");
 const { getTrainerExercisePreferences, MIN_SIGNALS } = require("./trainerPreferences");
@@ -47,6 +47,8 @@ async function progressWorkout(training, { step, deload, scheme }) {
         // the progressing. Any other value keeps each exercise's own scheme.
         { scheme: scheme === "same" ? "same" : schemeForType(e.exerciseType), step, deload }
       );
+      // a deload changes the set count, so the logged-set rows have to follow
+      syncAchievedToSets(e);
     })
   );
 }

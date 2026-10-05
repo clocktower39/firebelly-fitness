@@ -183,6 +183,27 @@ const clampToCeiling = (goals, progression) => {
   return goals;
 };
 
+// Keep an entry's `achieved` arrays the same length as its set count. The log screen renders
+// one set row per achieved.reps entry, so a deload that halves sets without resizing achieved
+// shows the client 4 rows to fill in on a 2-set exercise. deloadGoals only receives `goals`,
+// so this has to run where the whole entry is in hand.
+const ACHIEVED_KEYS = ["reps", "weight", "percent", "seconds"];
+const syncAchievedToSets = (entry) => {
+  const n = Math.max(1, Math.floor(Number(entry?.goals?.sets) || 0));
+  if (!entry?.achieved) return false;
+  let changed = false;
+  ACHIEVED_KEYS.forEach((k) => {
+    const arr = entry.achieved[k];
+    if (!Array.isArray(arr) || arr.length === n) return;
+    entry.achieved[k] =
+      arr.length > n
+        ? arr.slice(0, n)
+        : [...arr, ...Array.from({ length: n - arr.length }, () => 0)];
+    changed = true;
+  });
+  return changed;
+};
+
 // Progress an exercise's goals by `step` increments under `scheme`. Chained so per-step
 // rules (dumbbell 40lb threshold, rep-range fill) resolve correctly. When `deload` is set,
 // a recovery cut is applied after the progression (used for a block's deload week).
@@ -300,6 +321,7 @@ const autoregulateExerciseGoals = (
 module.exports = {
   familyOf,
   clampToCeiling,
+  syncAchievedToSets,
   weightIncrement,
   roundToLoadable,
   deloadGoals,
