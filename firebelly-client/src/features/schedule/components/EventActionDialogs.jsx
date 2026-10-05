@@ -34,7 +34,7 @@ import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import { sessionTypeLabel } from "../../../utils/sessionTypeLabel";
 import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../../utils/clientRelationships";
-import { payoutExceedsPrice } from "../../../utils/payoutGuard";
+import { clampPayoutToPrice } from "../../../utils/payoutGuard";
 
 // Purchased session types float to the top of the booking pickers (most remaining first,
 // then purchased-but-used-up, then the rest in their usual order), with the client's
@@ -133,6 +133,7 @@ export default function EventActionDialogs({
   setQuickBookPayout,
   quickBookPayoutCurrency,
   setQuickBookPayoutCurrency,
+  quickBookRateNotice = "",
   quickBookRecurring,
   setQuickBookRecurring,
   quickBookRecurUntil,
@@ -278,20 +279,29 @@ export default function EventActionDialogs({
     input: { startAdornment: <InputAdornment position="start">$</InputAdornment> },
   };
 
-  // A payout above the price loses money on the session — block the save rather
-  // than let a mistyped digit through. The server enforces this too.
-  const quickBookPayoutError = payoutExceedsPrice(
-    quickBookPrice,
-    quickBookPayout,
-    quickBookPriceCurrency,
-    quickBookPayoutCurrency
-  );
-  const editPayoutError = payoutExceedsPrice(
-    editPriceAmount,
-    editPayoutAmount,
-    editPriceCurrency,
-    editPayoutCurrency
-  );
+  // A payout above the price loses money on the session, and it is always a slip rather than
+  // an intention — so correct it down to the price and say so, instead of blocking the save.
+  // Corrected on blur, so typing a second digit isn't fought mid-keystroke. Server does it too.
+  const [quickBookPayoutNotice, setQuickBookPayoutNotice] = React.useState("");
+  const [editPayoutNotice, setEditPayoutNotice] = React.useState("");
+
+  const fixQuickBookPayout = () => {
+    const fixed = clampPayoutToPrice(
+      quickBookPrice, quickBookPayout, quickBookPriceCurrency, quickBookPayoutCurrency
+    );
+    setQuickBookPayoutNotice(fixed.adjusted ? fixed.message : "");
+    if (fixed.adjusted) setQuickBookPayout(fixed.payout);
+  };
+  const fixEditPayout = () => {
+    const fixed = clampPayoutToPrice(
+      editPriceAmount, editPayoutAmount, editPriceCurrency, editPayoutCurrency
+    );
+    setEditPayoutNotice(fixed.adjusted ? fixed.message : "");
+    if (fixed.adjusted) setEditPayoutAmount(fixed.payout);
+  };
+  // What the booking panel has to say about money: the client's grandfathered rate, plus any
+  // payout correction that followed from it.
+  const bookingMoneyNotice = [quickBookRateNotice, quickBookPayoutNotice].filter(Boolean).join(" ");
 
   const selectionContent = selectionRange ? (
     <Stack spacing={2} sx={{ mt: 1 }}>
@@ -384,6 +394,7 @@ export default function EventActionDialogs({
           type="number"
           value={quickBookPrice}
           onChange={(event) => setQuickBookPrice(event.target.value)}
+          onBlur={fixQuickBookPayout}
           slotProps={moneyAdornment}
           fullWidth
         />
@@ -391,13 +402,15 @@ export default function EventActionDialogs({
           label="Payout"
           type="number"
           value={quickBookPayout}
-          onChange={(event) => setQuickBookPayout(event.target.value)}
+          onChange={(event) => { setQuickBookPayout(event.target.value); setQuickBookPayoutNotice(""); }}
+          onBlur={fixQuickBookPayout}
           slotProps={moneyAdornment}
-          error={Boolean(quickBookPayoutError)}
-          helperText={quickBookPayoutError || " "}
           fullWidth
         />
       </Stack>
+      {bookingMoneyNotice && (
+        <Alert severity="info" sx={{ py: 0.5 }}>{bookingMoneyNotice}</Alert>
+      )}
 
       {/* Editable times */}
       <Stack direction="row" spacing={1}>
@@ -457,7 +470,7 @@ export default function EventActionDialogs({
         size="large"
         color={bookingConflictLabels.length > 0 ? "warning" : "primary"}
         onClick={handleQuickBookClient}
-        disabled={!quickBookClientId || Boolean(quickBookPayoutError)}
+        disabled={!quickBookClientId}
       >
         {bookingConflictLabels.length > 0 ? "Book anyway" : "Book session"}
       </Button>
@@ -529,7 +542,7 @@ export default function EventActionDialogs({
           <Button
             variant="contained"
             onClick={handleQuickBookCustom}
-            disabled={!quickBookCustomName.trim() || Boolean(quickBookPayoutError)}
+            disabled={!quickBookCustomName.trim()}
           >
             Book custom client
           </Button>
@@ -980,10 +993,9 @@ export default function EventActionDialogs({
                     label="Amount"
                     type="number"
                     value={editPayoutAmount}
-                    onChange={(event) => setEditPayoutAmount(event.target.value)}
+                    onChange={(event) => { setEditPayoutAmount(event.target.value); setEditPayoutNotice(""); }}
+                    onBlur={fixEditPayout}
                     slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
-                    error={Boolean(editPayoutError)}
-                    helperText={editPayoutError || " "}
                     fullWidth
                   />
                   <FormControl fullWidth>
@@ -999,6 +1011,9 @@ export default function EventActionDialogs({
                     </Select>
                   </FormControl>
                 </Stack>
+                {editPayoutNotice && (
+                  <Alert severity="info" sx={{ py: 0.5 }}>{editPayoutNotice}</Alert>
+                )}
               </Stack>
             )}
             {isTrainerView && editEvent?.eventType !== "AVAILABILITY" && (
@@ -1131,7 +1146,7 @@ export default function EventActionDialogs({
           <Button
             variant="contained"
             onClick={handleSaveEdit}
-            disabled={savingEdit || Boolean(editPayoutError)}
+            disabled={savingEdit}
             startIcon={savingEdit ? <CircularProgress size={16} color="inherit" /> : null}
           >
             {savingEdit ? "Saving…" : "Save changes"}

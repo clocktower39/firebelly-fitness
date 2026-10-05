@@ -35,4 +35,22 @@ export const payoutExceedsPrice = (
   )}).`;
 };
 
+// The scheduler auto-corrects rather than blocking: a payout above the price is always a
+// slip, so lower it to match and say so. Returns the value to use plus the message to show.
+export const clampPayoutToPrice = (
+  price,
+  payout,
+  priceCurrency = "USD",
+  payoutCurrency = "USD"
+) => {
+  const problem = payoutExceedsPrice(price, payout, priceCurrency, payoutCurrency);
+  if (!problem) return { payout, adjusted: false, message: "" };
+  const priceValue = toAmount(price);
+  return {
+    payout: String(priceValue),
+    adjusted: true,
+    message: `Payout automatically lowered to ${money(priceValue, priceCurrency)} to match the session price — it was showing ${money(toAmount(payout), payoutCurrency)}.`,
+  };
+};
+
 export default payoutExceedsPrice;

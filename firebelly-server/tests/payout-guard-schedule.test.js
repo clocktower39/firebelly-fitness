@@ -1,5 +1,6 @@
-// The guard has to hold when a trainer edits only ONE of the two fields — dropping
-// the price under an existing payout is just as wrong as raising the payout above it.
+// The rule has to hold when a trainer edits only ONE of the two fields — dropping the price
+// under an existing payout is just as wrong as raising the payout above it. Appointments now
+// CORRECT the payout down to the price and report it, rather than refusing the save.
 const test = require("node:test");
 const assert = require("node:assert");
 const mongoose = require("mongoose");
@@ -51,15 +52,17 @@ test.after(async () => {
   await mongoose.disconnect();
 });
 
-test("booking with a payout above the price is refused", async () => {
+test("booking with a payout above the price saves it corrected, and says so", async () => {
   const { statusCode, payload } = await call(
     create_schedule_event,
     book({ priceAmount: 60, payoutAmount: 80 }),
     trainer
   );
-  assert.equal(statusCode, 400);
-  assert.match(payload.error, /cannot be more than the price/);
-  assert.equal(await ScheduleEvent.countDocuments({ trainerId: trainer._id }), 0, "nothing should be saved");
+  assert.equal(statusCode, 200, "the booking must go through, not be refused");
+  made.push(payload.event._id);
+  assert.equal(payload.event.payoutAmount, 60, "payout lowered to the price");
+  assert.equal(payload.event.priceAmount, 60, "the price itself is untouched");
+  assert.match(payload.payoutNotice, /lowered to/, "the correction must not be silent");
 });
 
 test("booking with a payout at or below the price is allowed", async () => {
@@ -73,30 +76,34 @@ test("booking with a payout at or below the price is allowed", async () => {
   assert.equal(payload.event.payoutAmount, 45);
 });
 
-test("raising only the payout above the stored price is refused", async () => {
-  const existing = made[0];
+test("raising only the payout above the stored price corrects it to the price", async () => {
+  const existing = made[made.length - 1];
+  const before = await ScheduleEvent.findById(existing).lean();
   const { statusCode, payload } = await call(
     update_schedule_event,
     { _id: existing, updates: { payoutAmount: 90 } },
     trainer
   );
-  assert.equal(statusCode, 400);
-  assert.match(payload.error, /cannot be more than the price/);
+  assert.equal(statusCode, 200);
+  assert.match(payload.payoutNotice, /lowered to/);
   const after = await ScheduleEvent.findById(existing).lean();
-  assert.equal(after.payoutAmount, 45, "the stored payout must be untouched");
+  assert.equal(after.payoutAmount, before.priceAmount, "payout pinned to the price, not 90");
 });
 
-test("dropping only the price below the stored payout is refused", async () => {
-  const existing = made[0];
+test("dropping only the price pulls the payout down with it", async () => {
+  // This is the grandfathered-rate case: re-pricing a session to a client's $45 rate must not
+  // leave the payout at the catalog's $60.
+  const existing = made[made.length - 1];
   const { statusCode, payload } = await call(
     update_schedule_event,
     { _id: existing, updates: { priceAmount: 20 } },
     trainer
   );
-  assert.equal(statusCode, 400);
-  assert.match(payload.error, /cannot be more than the price/);
+  assert.equal(statusCode, 200);
+  assert.match(payload.payoutNotice, /lowered to/);
   const after = await ScheduleEvent.findById(existing).lean();
-  assert.equal(after.priceAmount, 60, "the stored price must be untouched");
+  assert.equal(after.priceAmount, 20, "the new price sticks");
+  assert.equal(after.payoutAmount, 20, "and the payout follows it down");
 });
 
 test("moving both together stays allowed", async () => {

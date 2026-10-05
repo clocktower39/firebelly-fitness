@@ -72,7 +72,7 @@ const isOnBookingInterval = (date) => {
 };
 
 
-const { payoutExceedsPrice } = require("../utils/payoutGuard");
+const { clampPayoutToPrice } = require("../utils/payoutGuard");
 
 const normalizePrice = (amount, currency) => {
   if (amount === undefined) return {};
@@ -324,18 +324,18 @@ const create_schedule_event = async (req, res, next) => {
     if (payload.payoutAmount !== undefined || payload.payoutCurrency !== undefined) {
       Object.assign(payload, normalizePayout(payload.payoutAmount, payload.payoutCurrency));
     }
-    const payoutProblem = payoutExceedsPrice(
+    const payoutFix = clampPayoutToPrice(
       payload.priceAmount,
       payload.payoutAmount,
       payload.priceCurrency,
       payload.payoutCurrency
     );
-    if (payoutProblem) {
-      return res.status(400).json({ error: payoutProblem });
-    }
+    if (payoutFix.adjusted) payload.payoutAmount = payoutFix.payout;
     const scheduleEvent = new ScheduleEvent(payload);
     const saved = await scheduleEvent.save();
-    return res.json({ event: saved });
+    // `payoutNotice` tells the UI a correction happened, so it can say so rather than
+    // letting the number quietly differ from what was typed.
+    return res.json({ event: saved, payoutNotice: payoutFix.message || undefined });
   } catch (err) {
     return next(err);
   }
@@ -388,18 +388,17 @@ const update_schedule_event = async (req, res, next) => {
     if (updates?.payoutAmount !== undefined || updates?.payoutCurrency !== undefined) {
       Object.assign(updates, normalizePayout(updates.payoutAmount, updates.payoutCurrency));
     }
-    // A request may touch only one of the two fields, so check the values the event
-    // will actually end up with rather than just what was sent.
+    // A request may touch only one of the two fields, so correct against the values the
+    // event will actually end up with — lowering a price below an existing payout pulls the
+    // payout down with it, exactly as raising the payout above the price would.
     const settled = (field) => (updates?.[field] !== undefined ? updates[field] : existing[field]);
-    const payoutProblem = payoutExceedsPrice(
+    const payoutFix = clampPayoutToPrice(
       settled("priceAmount"),
       settled("payoutAmount"),
       settled("priceCurrency"),
       settled("payoutCurrency")
     );
-    if (payoutProblem) {
-      return res.status(400).json({ error: payoutProblem });
-    }
+    if (payoutFix.adjusted) updates.payoutAmount = payoutFix.payout;
     let updated = await ScheduleEvent.findByIdAndUpdate(_id, { $set: updates }, { returnDocument: "after" });
     updated = await merge_open_availability(updated);
 
@@ -472,7 +471,7 @@ const update_schedule_event = async (req, res, next) => {
       }
     }
 
-    return res.json({ event: updated });
+    return res.json({ event: updated, payoutNotice: payoutFix.message || undefined });
   } catch (err) {
     return next(err);
   }

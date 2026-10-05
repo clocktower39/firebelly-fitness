@@ -44,6 +44,7 @@ import usePersistentSchedulePreference from "./hooks/usePersistentSchedulePrefer
 import useScheduleClipboardShare from "./hooks/useScheduleClipboardShare";
 import useScheduleBilling from "./hooks/useScheduleBilling";
 import { billingApi } from "../../api/billingApi";
+import { clampPayoutToPrice } from "../../utils/payoutGuard";
 import useScheduleRange from "./hooks/useScheduleRange";
 import useScheduleSelection from "./hooks/useScheduleSelection";
 import useScheduleTableFilters from "./hooks/useScheduleTableFilters";
@@ -1033,6 +1034,43 @@ export default function Schedule() {
     setQuickBookWorkoutId("");
   }, [quickBookClientId]);
 
+  // This client's effective price per session type. Reloaded whenever the client changes,
+  // and re-applied to an already-chosen type so switching client updates the money too.
+  const [quickBookRates, setQuickBookRates] = useState(() => new Map());
+  const [quickBookRateNotice, setQuickBookRateNotice] = useState("");
+  // Re-price when the rates arrive for a client who already has a type selected: picking the
+  // client after the session type is just as common as the other order.
+  useEffect(() => {
+    if (!quickBookSessionTypeId || !quickBookRates.size) return;
+    const row = quickBookRates.get(String(quickBookSessionTypeId));
+    const type = sessionTypes.find((s) => s._id === quickBookSessionTypeId);
+    if (!row || !type) return;
+    const price = row.price != null ? row.price : type.defaultPrice;
+    setQuickBookPrice(price != null ? String(price) : "");
+    setQuickBookPriceCurrency(row.currency || type.currency || "USD");
+    const payout = type.defaultPayout != null ? String(type.defaultPayout) : "";
+    const fixed = clampPayoutToPrice(price, payout, row.currency || "USD", type.payoutCurrency || "USD");
+    setQuickBookPayout(fixed.adjusted ? fixed.payout : payout);
+    setQuickBookRateNotice(
+      [row.isOverride ? `Using this client's grandfathered rate of ${row.price}.` : "", fixed.message]
+        .filter(Boolean).join(" ")
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickBookRates, quickBookSessionTypeId]);
+
+  useEffect(() => {
+    if (!isTrainerView || !quickBookClientId) { setQuickBookRates(new Map()); setQuickBookRateNotice(""); return; }
+    let cancelled = false;
+    billingApi
+      .ratesForClient({ clientId: quickBookClientId })
+      .then((res) => {
+        if (cancelled || !res || res.error) return;
+        setQuickBookRates(new Map((res.rates || []).map((r) => [String(r.sessionTypeId), r])));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isTrainerView, quickBookClientId]);
+
   const quickBookWorkouts = useMemo(
     () => workoutsByAccount?.[quickBookClientId]?.workouts || EMPTY_WORKOUTS,
     [quickBookClientId, workoutsByAccount]
@@ -1042,17 +1080,36 @@ export default function Schedule() {
     [quickBookClientId, workoutQueue]
   );
 
-  // Selecting a session type auto-fills price, payout, and duration (all still
-  // editable for grandfathered-client overrides). Done on change (not in an effect)
-  // so manual edits afterward are never clobbered.
+  // The price this CLIENT pays for a type: their grandfathered rate when they have one,
+  // otherwise the catalog list price. Without this, booking a grandfathered client filled in
+  // the list price and had to be corrected by hand every time — which is how a $45 client
+  // ended up invoiced at $60.
+  const rateForClient = (typeId) => {
+    const row = quickBookRates.get(String(typeId));
+    if (!row) return null;
+    return { amount: row.price, currency: row.currency || "USD", isOverride: Boolean(row.isOverride) };
+  };
+
+  // Selecting a session type auto-fills price, payout, and duration (all still editable).
+  // Done on change (not in an effect) so manual edits afterward are never clobbered.
   const handleSelectQuickBookSessionType = (typeId) => {
     setQuickBookSessionTypeId(typeId);
     const type = sessionTypes.find((t) => t._id === typeId);
     if (!type) return;
-    setQuickBookPrice(type.defaultPrice != null ? String(type.defaultPrice) : "");
-    setQuickBookPriceCurrency(type.currency || "USD");
-    setQuickBookPayout(type.defaultPayout != null ? String(type.defaultPayout) : "");
+    const rate = rateForClient(typeId);
+    const price = rate?.amount != null ? rate.amount : type.defaultPrice;
+    setQuickBookPrice(price != null ? String(price) : "");
+    setQuickBookPriceCurrency(rate?.currency || type.currency || "USD");
+    // The payout can never exceed what the client actually pays, so a grandfathered rate
+    // below the catalog payout pulls the payout down with it.
+    const payout = type.defaultPayout != null ? String(type.defaultPayout) : "";
+    const fixed = clampPayoutToPrice(price, payout, rate?.currency || type.currency || "USD", type.payoutCurrency || "USD");
+    setQuickBookPayout(fixed.adjusted ? fixed.payout : payout);
     setQuickBookPayoutCurrency(type.payoutCurrency || "USD");
+    setQuickBookRateNotice(
+      [rate?.isOverride ? `Using this client's grandfathered rate of ${rate.amount}.` : "",
+       fixed.message].filter(Boolean).join(" ")
+    );
     if (type.durationMinutes && selectionStartTime) {
       setSelectionEndTime(
         dayjs(`2000-01-01T${selectionStartTime}`)
@@ -2090,6 +2147,7 @@ export default function Schedule() {
         quickBookPayout={quickBookPayout}
         setQuickBookPayout={setQuickBookPayout}
         quickBookPayoutCurrency={quickBookPayoutCurrency}
+        quickBookRateNotice={quickBookRateNotice}
         setQuickBookPayoutCurrency={setQuickBookPayoutCurrency}
         quickBookRecurring={quickBookRecurring}
         setQuickBookRecurring={setQuickBookRecurring}

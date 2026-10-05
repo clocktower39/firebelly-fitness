@@ -33,4 +33,19 @@ const payoutExceedsPrice = (price, payout, priceCurrency = "USD", payoutCurrency
   )}).`;
 };
 
-module.exports = { payoutExceedsPrice, toAmount };
+// Appointments auto-correct rather than refuse. A payout above the price is always a slip —
+// the price came from the session type or the client's grandfathered rate, and the payout is
+// what the trainer keeps — so lowering it to match is what was meant. Returns the value to
+// store plus a message to show, so the correction is never silent.
+const clampPayoutToPrice = (price, payout, priceCurrency = "USD", payoutCurrency = "USD") => {
+  const problem = payoutExceedsPrice(price, payout, priceCurrency, payoutCurrency);
+  if (!problem) return { payout: toAmount(payout), adjusted: false, message: "" };
+  const priceValue = toAmount(price);
+  return {
+    payout: priceValue,
+    adjusted: true,
+    message: `Payout lowered to ${money(priceValue, priceCurrency)} to match the session price — it was entered as ${money(toAmount(payout), payoutCurrency)}.`,
+  };
+};
+
+module.exports = { payoutExceedsPrice, clampPayoutToPrice, toAmount };
