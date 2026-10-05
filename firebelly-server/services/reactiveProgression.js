@@ -25,6 +25,12 @@
 // flattened. holdProgression docs are frozen and never touched.
 const Training = require("../models/training");
 const Exercise = require("../models/exercise");
+const ExerciseAnchor = require("../models/exerciseAnchor");
+const {
+  nextWorking,
+  capWorking,
+  resolveAnchorToFutureWorkouts,
+} = require("./anchorProgression");
 const {
   familyOf,
   weightIncrement,
@@ -408,19 +414,76 @@ const applyResultsToFutureProgram = async (completed) => {
       (signal.repResult === "MET" || signal.repResult === "BEAT") && signal.effort === "neutral"
         ? streakFor(id, signal.topWeight, priorDocs)
         : 1;
+    signal.streak = streak;
     signal.decision = decideWeightAction(signal, streak);
+  }
+
+  // An exercise with an ANCHOR is driven by that one working weight, not by per-workout
+  // seeding — otherwise both would write the same load and the linked days would drift apart
+  // again. Move the anchor here, re-render every occurrence from it, and drop the exercise
+  // from the signal map so the loop below leaves it alone.
+  const anchorTouchedIds = [];
+  const anchors = await ExerciseAnchor.find({
+    clientId,
+    programId,
+    exerciseId: { $in: [...signalByExercise.keys()] },
+  });
+  if (anchors.length) {
+    const metaById = new Map(
+      (
+        await Exercise.find({ _id: { $in: anchors.map((a) => a.exerciseId) } })
+          .select("_id equipment movementComplexity")
+          .lean()
+      ).map((m) => [String(m._id), m])
+    );
+    for (const anchor of anchors) {
+      const id = String(anchor.exerciseId);
+      const signal = signalByExercise.get(id);
+      if (!signal) continue;
+      signalByExercise.delete(id);
+      const meta = metaById.get(id) || {};
+      const met = signal.repResult === "MET" || signal.repResult === "BEAT";
+      const { working, reason } = nextWorking(
+        anchor,
+        { day: completed.programDay, met, effort: signal.effort, streak: signal.streak || 1 },
+        meta
+      );
+      const capped = capWorking(working, anchor.ceiling);
+      if (num(capped) !== num(anchor.working)) {
+        anchor.working = capped;
+        anchor.lastMovedAt = new Date();
+        anchor.lastMovedReason = reason;
+        await anchor.save();
+      }
+      // Re-render regardless of whether the number moved: a slot's percentage may have been
+      // edited since, and holding still is a valid outcome that must stay consistent.
+      const touched = await resolveAnchorToFutureWorkouts(anchor, {
+        from: completed.date,
+        exerciseMeta: meta,
+      });
+      touched.forEach((wid) => anchorTouchedIds.push(wid));
+    }
   }
 
   // Future, incomplete workouts in the same program. holdProgression docs are frozen: the
   // trainer has pinned their prescribed loads, so completions must never reseed them.
-  const future = await Training.find({
+  const future = signalByExercise.size
+    ? await Training.find({
     user: clientId,
     programId,
     complete: { $ne: true },
     holdProgression: { $ne: true },
     date: { $gt: completed.date },
-  }).lean();
-  if (!future.length) return [];
+  }).lean()
+    : [];
+  const populate = (ids) =>
+    ids.length
+      ? Training.find({ _id: { $in: ids } })
+          .populate({ path: "training.exercise", model: "Exercise", select: "_id exerciseTitle" })
+          .populate({ path: "user", model: "User", select: "_id firstName lastName profilePicture" })
+          .lean()
+      : [];
+  if (!future.length) return populate(anchorTouchedIds);
 
   const ctxById = new Map(
     (
@@ -448,15 +511,12 @@ const applyResultsToFutureProgram = async (completed) => {
       ops.push({ updateOne: { filter: { _id: w._id }, update: { $set: { training: w.training } } } });
     }
   });
-  if (!ops.length) return [];
+  if (!ops.length) return populate(anchorTouchedIds);
 
   await Training.bulkWrite(ops);
 
-  const ids = ops.map((o) => o.updateOne.filter._id);
-  return Training.find({ _id: { $in: ids } })
-    .populate({ path: "training.exercise", model: "Exercise", select: "_id exerciseTitle" })
-    .populate({ path: "user", model: "User", select: "_id firstName lastName profilePicture" })
-    .lean();
+  const ids = [...new Set([...ops.map((o) => o.updateOne.filter._id), ...anchorTouchedIds].map(String))];
+  return populate(ids);
 };
 
 module.exports = {
