@@ -238,6 +238,17 @@ export default function LogLoader(props) {
                         Number(exercise.achieved.seconds[exerciseSetIndex]) ||
                         exercise.goals.seconds[exerciseSetIndex];
                       break;
+                    case "Rep Range":
+                      // Same as Reps: exactReps carries the working target inside the range
+                      // (double progression climbs it toward maxReps). Without this case the
+                      // switch fell through and tap-to-fill silently did nothing.
+                      exercise.achieved.reps[exerciseSetIndex] =
+                        Number(exercise.achieved.reps[exerciseSetIndex]) ||
+                        exercise.goals.exactReps[exerciseSetIndex];
+                      exercise.achieved.weight[exerciseSetIndex] =
+                        Number(exercise.achieved.weight[exerciseSetIndex]) ||
+                        exercise.goals.weight[exerciseSetIndex];
+                      break;
                     case "Reps with %":
                       exercise.achieved.reps[exerciseSetIndex] =
                         Number(exercise.achieved.reps[exerciseSetIndex]) ||

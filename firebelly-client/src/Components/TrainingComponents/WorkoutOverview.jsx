@@ -1731,6 +1731,24 @@ const WorkoutSet = (props) => {
             {achieved.seconds.length} sets: {achieved.seconds.join(", ")} seconds
           </Typography>
         );
+      case "Rep Range":
+        // Double progression: each set carries a min and a max. Without this case the switch
+        // fell through to `default: break`, which returned undefined — so every rep-range
+        // exercise showed its name on the overview with no sets or reps underneath.
+        return viewMode === "goals" ? (
+          <Typography variant="body1">
+            {goals.sets || (goals.minReps || []).length} sets:{" "}
+            {(goals.minReps || []).map((min, i) => {
+              const max = (goals.maxReps || [])[i];
+              return Number(max) > Number(min) ? `${min}-${max}` : `${min}`;
+            }).join(", ")}{" "}
+            reps
+          </Typography>
+        ) : (
+          <Typography variant="body1">
+            {achieved.reps.length} sets: {achieved.reps.join(", ")} reps
+          </Typography>
+        );
       case "Reps with %":
         return viewMode === "goals" ? (
           <>
@@ -1759,8 +1777,38 @@ const WorkoutSet = (props) => {
             </Grid>
           </>
         );
-      default:
-        break;
+      default: {
+        // Anything else — including the handful of entries with no exerciseType at all —
+        // still shows something rather than a bare exercise name. Reads whichever goal
+        // actually carries numbers.
+        const reps = goals?.exactReps || [];
+        const secs = goals?.seconds || [];
+        if (viewMode === "goals") {
+          if (reps.some((r) => Number(r) > 0)) {
+            return (
+              <Typography variant="body1">
+                {reps.length} sets: {reps.join(", ")} reps
+              </Typography>
+            );
+          }
+          if (secs.some((s) => Number(s) > 0)) {
+            return (
+              <Typography variant="body1">
+                {secs.length} sets: {secs.join(", ")} seconds
+              </Typography>
+            );
+          }
+          return goals?.sets ? (
+            <Typography variant="body1">{goals.sets} sets</Typography>
+          ) : null;
+        }
+        const did = achieved?.reps || [];
+        return did.length ? (
+          <Typography variant="body1">
+            {did.length} sets: {did.join(", ")} reps
+          </Typography>
+        ) : null;
+      }
     }
   };
 

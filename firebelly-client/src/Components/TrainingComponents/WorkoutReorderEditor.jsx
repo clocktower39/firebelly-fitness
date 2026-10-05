@@ -356,6 +356,19 @@ const renderExerciseSummary = (exercise, weightUnit = "lbs") => {
           {(goals.seconds || []).length} sets: {(goals.seconds || []).join(", ")} seconds
         </Typography>
       );
+    case "Rep Range":
+      // Without this the default branch reported "N achieved sets" — the logged count rather
+      // than the prescription, which is what the reorder list is there to show.
+      return (
+        <Typography variant="body2" color="text.secondary">
+          {goals.sets || (goals.minReps || []).length} sets:{" "}
+          {(goals.minReps || []).map((min, i) => {
+            const max = (goals.maxReps || [])[i];
+            return Number(max) > Number(min) ? `${min}-${max}` : `${min}`;
+          }).join(", ")}{" "}
+          reps
+        </Typography>
+      );
     case "Reps with %":
       return (
         <Typography variant="body2" color="text.secondary">
