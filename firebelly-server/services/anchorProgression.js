@@ -109,9 +109,27 @@ const resolveAnchorToFutureWorkouts = async (anchor, { from = new Date(), exerci
 //   - "too hard" on ANY day holds or backs the number off, because if the light day felt
 //     brutal the working weight is wrong no matter which day reported it
 //   - only `earnsOnDay` can raise it, so an easy light day can't drive the heavy day
-const nextWorking = (anchor, { day, met, effort, streak = 1 }, exerciseMeta = {}) => {
+// `achievedTop` is what they actually lifted on the completed occurrence, and `slotPercent`
+// is that occurrence's share of the anchor. The anchor TRACKS reality on its earning day:
+// dividing the achieved load by the slot's percentage gives the working weight it implies,
+// and the rule then decides whether to add to it. Without this the anchor only ever
+// incremented its own stored number, so a brand-new anchor (0, because program days carry no
+// loads) would read 5 lb after a session at 185 instead of adopting it.
+const nextWorking = (
+  anchor,
+  { day, met, effort, streak = 1, achievedTop = 0, slotPercent = 100 },
+  exerciseMeta = {}
+) => {
   const family = familyOf(exerciseMeta.equipment);
-  const current = num(anchor.working);
+  const stored = num(anchor.working);
+  const pct = Number(slotPercent) > 0 ? Number(slotPercent) : 100;
+  const earnsDay = anchor.earnsOnDay == null || Number(anchor.earnsOnDay) === Number(day);
+  // Only the earning day re-anchors: an 80% light day finishing at 160 must not redefine the
+  // working weight, it just reports how 80% felt.
+  const implied = earnsDay && num(achievedTop) > 0
+    ? Math.round((num(achievedTop) * 100) / pct * 2) / 2
+    : stored;
+  const current = implied;
   const inc =
     anchor.unit === "weight"
       ? weightIncrement(family, exerciseMeta.movementComplexity, current)
@@ -123,9 +141,8 @@ const nextWorking = (anchor, { day, met, effort, streak = 1 }, exerciseMeta = {}
       ? { working: back, reason: `backed off after a "too hard" report on day ${day}` }
       : { working: current, reason: `held — reps missed on day ${day}` };
   }
-  if (anchor.rule === "hold") return { working: current, reason: "held (rule: hold)" };
-  const earns = anchor.earnsOnDay == null || Number(anchor.earnsOnDay) === Number(day);
-  if (!earns) return { working: current, reason: `day ${day} does not earn raises` };
+  if (anchor.rule === "hold") return { working: stored, reason: "held (rule: hold)" };
+  if (!earnsDay) return { working: stored, reason: `day ${day} does not earn raises` };
 
   if (anchor.rule === "weekly") {
     const bump = num(anchor.step) || inc;

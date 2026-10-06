@@ -168,3 +168,43 @@ test("resolving an anchor survives a workout containing a blank-exercise warm-up
     await mongoose.disconnect();
   }
 });
+
+// --- the anchor has to TRACK reality on its earning day, not just increment itself ---
+
+test("a brand-new anchor adopts what was actually lifted instead of inching up from zero", () => {
+  // Program days carry no loads, so a fresh anchor is 0. Before this it read 5 lb after a
+  // session at 185.
+  const fresh = { working: 0, unit: "weight", rule: "feedback", step: 0, earnsOnDay: 1 };
+  const r = nextWorking(fresh, { day: 1, met: true, effort: "easy", achievedTop: 185, slotPercent: 100 }, BB);
+  assert.ok(r.working >= 185, `expected it to adopt 185 and then add, got ${r.working}`);
+});
+
+test("the earning day's load is divided by its own percentage to imply the working weight", () => {
+  // If the earning day is itself an 80% slot, 160 lb there means a 200 lb working weight.
+  const a = { working: 0, unit: "weight", rule: "hold", step: 0, earnsOnDay: 2 };
+  const held = nextWorking(a, { day: 2, met: true, effort: "neutral", achievedTop: 160, slotPercent: 80 }, BB);
+  assert.equal(held.working, 0, "a hold rule must not move the stored number at all");
+  const live = { working: 0, unit: "weight", rule: "feedback", step: 0, earnsOnDay: 2 };
+  const r = nextWorking(live, { day: 2, met: true, effort: "neutral", achievedTop: 160, slotPercent: 80 }, BB);
+  assert.ok(r.working >= 200, `160 at 80% implies 200, got ${r.working}`);
+});
+
+test("a NON-earning day's result never redefines the working weight", () => {
+  const a = { working: 225, unit: "weight", rule: "feedback", step: 0, earnsOnDay: 1 };
+  // the 80% day finished at 160 and felt fine — the anchor must stay 225
+  const r = nextWorking(a, { day: 3, met: true, effort: "neutral", achievedTop: 160, slotPercent: 80 }, BB);
+  assert.equal(r.working, 225);
+  assert.match(r.reason, /does not earn/);
+});
+
+test("a non-earning day reporting TOO HARD still backs the anchor off from its stored value", () => {
+  const a = { working: 225, unit: "weight", rule: "feedback", step: 0, earnsOnDay: 1 };
+  const r = nextWorking(a, { day: 3, met: true, effort: "hard", achievedTop: 160, slotPercent: 80 }, BB);
+  assert.ok(r.working < 225 && r.working > 200, `expected a step down from 225, got ${r.working}`);
+});
+
+test("with no achieved load it falls back to the stored number, as before", () => {
+  const a = { working: 225, unit: "weight", rule: "weekly", step: 5, earnsOnDay: 1 };
+  const r = nextWorking(a, { day: 1, met: true, effort: "neutral", achievedTop: 0, slotPercent: 100 }, BB);
+  assert.equal(r.working, 230);
+});

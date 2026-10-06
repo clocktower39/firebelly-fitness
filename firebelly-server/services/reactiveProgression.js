@@ -443,9 +443,19 @@ const applyResultsToFutureProgram = async (completed) => {
       signalByExercise.delete(id);
       const meta = metaById.get(id) || {};
       const met = signal.repResult === "MET" || signal.repResult === "BEAT";
+      // the share of the anchor that the just-completed occurrence represents
+      let slotPercent = 100;
+      (completed.training || []).forEach((circuit) =>
+        (circuit || []).forEach((entry) => {
+          if (exIdOf(entry) !== id) return;
+          const pct = entry.progression?.percentOfAnchor;
+          if (pct !== null && pct !== undefined) slotPercent = Number(pct);
+        })
+      );
       const { working, reason } = nextWorking(
         anchor,
-        { day: completed.programDay, met, effort: signal.effort, streak: signal.streak || 1 },
+        { day: completed.programDay, met, effort: signal.effort, streak: signal.streak || 1,
+          achievedTop: num(signal.topWeight), slotPercent },
         meta
       );
       const capped = capWorking(working, anchor.ceiling);
