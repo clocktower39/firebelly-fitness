@@ -16,14 +16,25 @@ const ensureTrainerOf = async (user, clientId) => {
 };
 
 // Describe the exercise's occurrences in the client's week, so the panel can show the whole
-// group at once. Shape comes from ONE doc per program day (the most recent), which both
-// survives duplicate week/day docs and reflects edits made after assignment.
+// group at once.
+//
+// One doc per program day, preferring the NEXT upcoming one — that is the session the trainer
+// is reasoning about, and it avoids a trap: "most recent by date" lands on the final week,
+// which in a program with a deload at the end reports the deload's halved scheme (2x5) as if
+// it were the normal week (4x5). Falls back to the latest completed day for a finished
+// program, so the panel still describes the group rather than showing nothing.
 const currentSlots = async (clientId, programId, exerciseId) => {
   const docs = (await Training.find({
     user: clientId, programId, isTemplate: { $ne: true },
   }).select("programDay date complete training").lean()).filter((d) => d.programDay && d.date);
   const perDay = new Map();
-  docs.sort((a, b) => b.date - a.date).forEach((d) => { if (!perDay.has(d.programDay)) perDay.set(d.programDay, d); });
+  docs
+    .filter((d) => !d.complete)
+    .sort((a, b) => a.date - b.date)
+    .forEach((d) => { if (!perDay.has(d.programDay)) perDay.set(d.programDay, d); });
+  docs
+    .sort((a, b) => b.date - a.date)
+    .forEach((d) => { if (!perDay.has(d.programDay)) perDay.set(d.programDay, d); });
 
   const slots = [];
   [...perDay.entries()].sort((a, b) => a[0] - b[0]).forEach(([day, d]) =>

@@ -127,3 +127,30 @@ test("clearing removes the anchor and unlinks the days", async () => {
   assert.ok(day3.training[0][0].goals.weight.every((w) => Number(w) === 200),
     "the last rendered loads stay — clearing stops future linkage, it doesn't rewind history");
 });
+
+// A program whose LAST week is a deload must not report the deload's halved scheme as the
+// week's normal shape — "most recent by date" landed on exactly that.
+test("the panel describes the next upcoming day, not the final deload week", async () => {
+  const deloadDay = {
+    title: "ANCHOREP deload", date: new Date(Date.now() + 90 * 864e5),
+    user: client._id, programId: program._id, programWeek: 12, programDay: 1,
+    complete: false, isTemplate: false, category: ["Strength"],
+    training: [[{
+      exercise: lift._id, customName: "", exerciseType: "Reps", isWarmup: false,
+      goals: { sets: 2, minReps: [0, 0], maxReps: [0, 0], exactReps: ["5", "5"],
+        weight: ["225", "225"], percent: [0, 0], seconds: [0, 0], rpe: [0, 0], oneRepMax: 0 },
+      achieved: { sets: 0, reps: [0, 0], weight: [0, 0], percent: [0, 0], seconds: [0, 0] },
+      feedback: { difficulty: null, comments: [] }, techniques: [], coachNote: "",
+    }]],
+  };
+  const r = await Training.collection.insertOne(deloadDay);
+  made.push(r.insertedId);
+  try {
+    const { payload } = await call(anchor_for_exercise, ids(), trainer);
+    const d1 = payload.slots.find((s) => s.day === 1);
+    assert.equal(d1.scheme, "5x5/5/5/5/5",
+      `expected week 1's full scheme, got the later week's "${d1.scheme}"`);
+  } finally {
+    await Training.collection.deleteOne({ _id: r.insertedId });
+  }
+});
