@@ -3,7 +3,11 @@ import { programApi } from "../../api/programApi";
 import { workoutApi } from "../../api/workoutApi";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { upsertWorkout, getExerciseList } from "../../Redux/actions";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
+import AssignProgramDialog from "../../features/program/AssignProgramDialog";
+import { upsertWorkout, getExerciseList, requestClients } from "../../Redux/actions";
+import { compareRelationshipsByClientLastName } from "../../utils/clientRelationships";
 import {
   Box,
   Button,
@@ -257,6 +261,7 @@ const MacrocycleBar = ({ weekPlan, activeWeekIndex, onSelectWeek }) => (
 
 export default function ProgramBuilder() {
   const user = useSelector((state) => state.user);
+  const clients = useSelector((state) => state.clients);
   const dispatch = useDispatch();
   const { programId } = useParams();
   const location = useLocation();
@@ -306,6 +311,7 @@ export default function ProgramBuilder() {
   const [resyncConfirmOpen, setResyncConfirmOpen] = useState(false);
   const [resyncTarget, setResyncTarget] = useState({ dayIndexes: null, label: "all days" });
   const [isResyncing, setIsResyncing] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishVisibility, setPublishVisibility] = useState("private");
   // Small drag threshold so tapping the card's buttons never starts a drag.
@@ -323,6 +329,18 @@ export default function ProgramBuilder() {
     setSaveError(message);
     setSaveMessage("");
   }, []);
+
+  // The builder can be opened straight from a URL, so it fetches its own client list
+  // rather than relying on the Programs page having been visited first.
+  useEffect(() => {
+    if (!user?.isTrainer) return;
+    dispatch(requestClients());
+  }, [dispatch, user?.isTrainer]);
+
+  const acceptedClients = useMemo(
+    () => (clients || []).filter((rel) => rel.accepted).sort(compareRelationshipsByClientLastName),
+    [clients]
+  );
 
   const loadProgram = useCallback(
     async (id) => {
@@ -1003,7 +1021,32 @@ export default function ProgramBuilder() {
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
       <Stack spacing={3}>
-        <Typography variant="h4">Program Builder</Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", rowGap: 1 }}
+        >
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            {/* Clicking into a program was a one-way trip — the only way out was the browser
+                back button, which also loses any unsaved draft prompt. */}
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/programs")}
+            >
+              All programs
+            </Button>
+            <Typography variant="h4">Program Builder</Typography>
+          </Stack>
+          <Button
+            variant="outlined"
+            startIcon={<AssignmentIndIcon />}
+            onClick={() => setAssignDialogOpen(true)}
+            disabled={!program?._id || isSaving}
+          >
+            Assign
+          </Button>
+        </Stack>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }}>
           <Stack spacing={1} sx={{ flex: 1 }}>
             <TextField
@@ -2059,6 +2102,13 @@ export default function ProgramBuilder() {
         </DialogActions>
       </Dialog>
 
+      <AssignProgramDialog
+        open={assignDialogOpen}
+        program={program}
+        acceptedClients={acceptedClients}
+        onClose={() => setAssignDialogOpen(false)}
+        onAssigned={({ message }) => setSavedMessage(message)}
+      />
       <Dialog
         open={publishDialogOpen}
         onClose={() => !isSaving && setPublishDialogOpen(false)}

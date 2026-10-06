@@ -351,13 +351,19 @@ const assign_program = async (req, res, next) => {
       return res.status(404).json({ error: "Program not found." });
     }
 
-    const relationship = await Relationship.findOne({
-      trainer: trainerId,
-      client: clientId,
-      accepted: true,
-    });
-    if (!relationship) {
-      return res.status(403).json({ error: "Unauthorized access." });
+    // A trainer assigning to THEMSELVES needs no relationship — they are their own client
+    // here, and they already own the program. Without this, "assign to myself" 403s even
+    // though the trainer has every right to run their own programming.
+    const isSelf = String(clientId) === String(trainerId);
+    if (!isSelf) {
+      const relationship = await Relationship.findOne({
+        trainer: trainerId,
+        client: clientId,
+        accepted: true,
+      });
+      if (!relationship) {
+        return res.status(403).json({ error: "Unauthorized access." });
+      }
     }
 
     const baseDate = dayjs(startDate).utc().startOf("day");
@@ -416,13 +422,16 @@ const assign_program = async (req, res, next) => {
     }
 
     const inserted = await Training.insertMany(newWorkouts);
-    createNotification({
-      userId: clientId,
-      type: "PROGRAM_ASSIGNED",
-      title: "New program assigned",
-      body: `Your trainer assigned you "${program.title || "a program"}".`,
-      link: "/calendar",
-    }).catch(() => {});
+    // No "your trainer assigned you a program" ping when the trainer is the client.
+    if (!isSelf) {
+      createNotification({
+        userId: clientId,
+        type: "PROGRAM_ASSIGNED",
+        title: "New program assigned",
+        body: `Your trainer assigned you "${program.title || "a program"}".`,
+        link: "/calendar",
+      }).catch(() => {});
+    }
     await recordProgrammingSignal(program, { finalizedVia: "assign" }); // background signal; internally guarded, never throws
     return res.json({ status: "assigned", count: inserted.length });
   } catch (err) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { programApi } from "../../api/programApi";
+import AssignProgramDialog from "../../features/program/AssignProgramDialog";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
@@ -10,10 +11,6 @@ import {
   CardActions,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   Grid,
   InputLabel,
@@ -21,11 +18,10 @@ import {
   Select,
   Stack,
   Snackbar,
-  TextField,
   Typography,
 } from "@mui/material";
 import { requestClients } from "../../Redux/actions";
-import { compareRelationshipsByClientLastName, formatClientLastFirst } from "../../utils/clientRelationships";
+import { compareRelationshipsByClientLastName } from "../../utils/clientRelationships";
 import EmptyState from "../../Components/EmptyState";
 
 export default function Programs() {
@@ -39,46 +35,9 @@ export default function Programs() {
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [openAssignDialog, setOpenAssignDialog] = useState(false);
   const [assignProgram, setAssignProgram] = useState(null);
-  const [assignClientId, setAssignClientId] = useState("");
-  const [assignStartDate, setAssignStartDate] = useState("");
-  const [assignDayMap, setAssignDayMap] = useState([]);
-  const [assignDayMapTouched, setAssignDayMapTouched] = useState(false);
-  const [assignStatus, setAssignStatus] = useState("");
   const [assignSuccess, setAssignSuccess] = useState("");
 
-  const weekDayOptions = useMemo(
-    () => [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ],
-    []
-  );
 
-  useEffect(() => {
-    if (!assignProgram) return;
-    if (assignDayMapTouched) return;
-    const daysPerWeek = assignProgram.daysPerWeek || 0;
-    if (!daysPerWeek) {
-      setAssignDayMap([]);
-      return;
-    }
-    const startDateValue = assignStartDate
-      ? new Date(`${assignStartDate}T00:00:00`)
-      : null;
-    const startDay = startDateValue && !Number.isNaN(startDateValue.valueOf())
-      ? startDateValue.getDay()
-      : 0;
-    const nextMap = Array.from(
-      { length: daysPerWeek },
-      (_, index) => (startDay + index) % 7
-    );
-    setAssignDayMap(nextMap);
-  }, [assignProgram, assignStartDate, assignDayMapTouched]);
 
   useEffect(() => {
     const loadPrograms = async () => {
@@ -138,35 +97,9 @@ export default function Programs() {
 
   const handleOpenAssign = (program) => {
     setAssignProgram(program);
-    setAssignClientId("");
-    setAssignStartDate("");
-    setAssignDayMap([]);
-    setAssignDayMapTouched(false);
-    setAssignStatus("");
     setOpenAssignDialog(true);
   };
 
-  const handleAssignProgram = async () => {
-    if (!assignProgram?._id || !assignClientId || !assignStartDate) return;
-    try {
-      setAssignStatus("");
-      const payload = {
-        clientId: assignClientId,
-        startDate: assignStartDate,
-      };
-      if (assignDayMap.length) {
-        payload.dayMap = assignDayMap;
-      }
-      const data = await programApi.assignProgram(assignProgram._id, payload);
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-      setAssignSuccess(`Assigned ${data.count || 0} workouts to the client.`);
-      setOpenAssignDialog(false);
-    } catch (err) {
-      setAssignStatus(err.message || "Unable to assign program.");
-    }
-  };
 
   return (
     <>
@@ -297,90 +230,13 @@ export default function Programs() {
         </Grid>
         </Stack>
       </Box>
-      <Dialog
+      <AssignProgramDialog
         open={openAssignDialog}
+        program={assignProgram}
+        acceptedClients={acceptedClients}
         onClose={() => setOpenAssignDialog(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Assign Program</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Select a client and the start date for this program.
-            </Typography>
-            <FormControl fullWidth>
-              <InputLabel>Client</InputLabel>
-              <Select
-                label="Client"
-                value={assignClientId}
-                onChange={(event) => setAssignClientId(event.target.value)}
-              >
-                {acceptedClients.map((clientRel) => (
-                  <MenuItem key={clientRel.client._id} value={clientRel.client._id}>
-                    {formatClientLastFirst(clientRel.client)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Start date"
-              type="date"
-              value={assignStartDate}
-              onChange={(event) => setAssignStartDate(event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
-            />
-            {!!assignProgram?.daysPerWeek && (
-              <Stack spacing={1}>
-                <Typography variant="caption" color="text.secondary">
-                  Map program days to weekdays for the client schedule.
-                </Typography>
-                <Grid container spacing={1}>
-                  {Array.from({ length: assignProgram.daysPerWeek }, (_, index) => (
-                    <Grid key={`assign-day-${index}`} size={{ xs: 12, sm: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>{`Day ${index + 1}`}</InputLabel>
-                        <Select
-                          label={`Day ${index + 1}`}
-                          value={assignDayMap[index] ?? ""}
-                          onChange={(event) => {
-                            const nextMap = [...assignDayMap];
-                            nextMap[index] = event.target.value;
-                            setAssignDayMap(nextMap);
-                            setAssignDayMapTouched(true);
-                          }}
-                        >
-                          {weekDayOptions.map((label, dayIndex) => (
-                            <MenuItem key={`${label}-${dayIndex}`} value={dayIndex}>
-                              {label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Stack>
-            )}
-            {assignStatus && (
-              <Typography variant="caption" color="text.secondary">
-                {assignStatus}
-              </Typography>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenAssignDialog(false)}>Close</Button>
-          <Button
-            variant="contained"
-            onClick={handleAssignProgram}
-            disabled={!assignClientId || !assignStartDate}
-          >
-            Assign
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onAssigned={({ message }) => setAssignSuccess(message)}
+      />
       <Snackbar
         open={Boolean(assignSuccess)}
         autoHideDuration={3000}
