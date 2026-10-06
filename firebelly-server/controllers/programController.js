@@ -403,6 +403,14 @@ const assign_program = async (req, res, next) => {
           user: clientId,
           category: template.category || [],
           training: template.training || [],
+          // A cardio / sports / yoga / pilates day lives ENTIRELY in these fields — its
+          // prescription isn't in `training` at all. Without them a running day assigned as
+          // an empty "Strength" workout, so a marathon block arrived with its runs missing.
+          workoutType: template.workoutType || "Strength",
+          cardio: template.cardio || {},
+          sports: template.sports || {},
+          yoga: template.yoga || {},
+          pilates: template.pilates || {},
           workoutFeedback: { difficulty: 1, comments: [] },
           complete: false,
           // Link the assigned copy back to its program so per-client edits (e.g. cascading an
