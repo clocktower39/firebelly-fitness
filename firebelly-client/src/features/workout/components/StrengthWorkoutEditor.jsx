@@ -28,6 +28,7 @@ export default function StrengthWorkoutEditor({
   workoutUser,
   workoutDoc,
   weightsLocked,
+  workoutProgramId,
 }) {
   return (
     <>
@@ -37,6 +38,7 @@ export default function StrengthWorkoutEditor({
       {showSets && (
         <SwipeableSet
           workoutUser={workoutUser}
+          workoutProgramId={workoutProgramId}
           newExercise={newExercise}
           newWarmup={newWarmup}
           newSet={newSet}

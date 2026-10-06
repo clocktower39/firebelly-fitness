@@ -73,6 +73,7 @@ function SwipeableSet(props) {
     size,
     workoutCompleteStatus,
     setWorkoutCompleteStatus,
+    workoutProgramId,
     workoutFeedback,
     setWorkoutFeedback,
     activeStep,
@@ -322,6 +323,7 @@ function SwipeableSet(props) {
                     <Exercise
                       key={`exercise-${exercise._id}-${exerciseIndex}`}
                       workoutUser={workoutUser}
+                      workoutProgramId={workoutProgramId}
                       exercise={exercise}
                       setIndex={index}
                       exerciseIndex={exerciseIndex}

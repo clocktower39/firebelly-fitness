@@ -46,10 +46,12 @@ import {
 import TechniqueDrawer from "./TechniqueDrawer";
 import TechniqueLogger from "./TechniqueLogger";
 import SwapExerciseDialog from "./SwapExerciseDialog";
+import SetProgressionDialog from "./SetProgressionDialog";
 
 export default function Exercise(props) {
   const {
     workoutUser,
+    workoutProgramId,
     exercise,
     setLocalTraining,
     exerciseIndex,
@@ -178,35 +180,17 @@ export default function Exercise(props) {
     ex.coachNote = text;
   });
 
-  // Working ceiling: the load this exercise should climb to and then hold. Progression may
-  // approach it and never pass it, which is what stops a client being pushed past the weight
-  // they're already doing well at.
-  const [ceilingOpen, setCeilingOpen] = useState(false);
-  const currentCeiling = exercise.progression?.ceiling;
-  const [ceilingDraft, setCeilingDraft] = useState(
-    currentCeiling === null || currentCeiling === undefined ? "" : String(currentCeiling)
+  // Per-exercise progression within this program: the rule, the working weight, the ceiling,
+  // and — when the exercise appears more than once in the week — each day's share of that
+  // working weight. Only meaningful on a client's assigned copy, since the working weight is
+  // per client; a program-day template has no client to anchor to.
+  const [progressionOpen, setProgressionOpen] = useState(false);
+  const exerciseLibraryId = title?._id || exercise.exercise?._id || exercise.exercise;
+  const canSetProgression = Boolean(
+    user?.isTrainer && workoutProgramId && workoutUser && exerciseLibraryId
   );
-  const ceilingUnit = exercise.progression?.unit
-    || (exercise.exerciseType === "Time" ? "seconds" : "weight");
-  const ceilingUnitLabel =
-    ceilingUnit === "seconds" ? "seconds" : ceilingUnit === "reps" ? "reps" : weightUnit;
-  const openCeiling = () => {
-    setCeilingDraft(
-      currentCeiling === null || currentCeiling === undefined ? "" : String(currentCeiling)
-    );
-    setCeilingOpen(true);
-  };
-  const saveCeiling = () => {
-    const raw = String(ceilingDraft).trim();
-    // Empty clears the ceiling. `null` (not 0) is "no ceiling" — 0 is a real cap meaning
-    // bodyweight only.
-    const next = raw === "" ? null : Number(raw);
-    if (raw !== "" && (!Number.isFinite(next) || next < 0)) return;
-    updateEntry((ex) => {
-      ex.progression = { ...(ex.progression || {}), unit: ceilingUnit, ceiling: next };
-    });
-    setCeilingOpen(false);
-  };
+  const currentCeiling = exercise.progression?.ceiling;
+  const currentPercent = exercise.progression?.percentOfAnchor;
 
   const exerciseNoteCount = (exercise.feedback?.comments || []).filter((c) => !c.deletedAt).length;
 
@@ -715,11 +699,18 @@ export default function Exercise(props) {
                 </Grid>
               </Grid>
               {user?.isTrainer
-                && currentCeiling !== null
-                && currentCeiling !== undefined && (
+                && ((currentPercent !== null && currentPercent !== undefined)
+                  || (currentCeiling !== null && currentCeiling !== undefined)) && (
                 <Grid container size={12} sx={{ pl: 0.5, rowGap: 0 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
-                    Ceiling {currentCeiling} {ceilingUnitLabel} — holds here
+                    {[
+                      currentPercent !== null && currentPercent !== undefined
+                        ? `${currentPercent}% of the working weight`
+                        : "",
+                      currentCeiling !== null && currentCeiling !== undefined
+                        ? `ceiling ${currentCeiling} ${weightUnit}`
+                        : "",
+                    ].filter(Boolean).join(" · ")}
                   </Typography>
                 </Grid>
               )}
@@ -789,16 +780,14 @@ export default function Exercise(props) {
                 >
                   Swap exercise…
                 </MenuItem>
-                {user?.isTrainer && (
+                {canSetProgression && (
                   <MenuItem
                     onClick={() => {
-                      openCeiling();
+                      setProgressionOpen(true);
                       handleExerciseOptionsClose();
                     }}
                   >
-                    {currentCeiling === null || currentCeiling === undefined
-                      ? "Set working ceiling…"
-                      : `Working ceiling: ${currentCeiling} ${ceilingUnitLabel}`}
+                    Set progression…
                   </MenuItem>
                 )}
                 <MenuItem
@@ -834,47 +823,17 @@ export default function Exercise(props) {
                   })()}
                 </DialogContent>
               </Dialog>
-              <Dialog open={ceilingOpen} onClose={() => setCeilingOpen(false)} fullWidth maxWidth="xs">
-                <DialogTitle>Working ceiling</DialogTitle>
-                <DialogContent sx={{ pt: 1 }}>
-                  <Stack spacing={2} sx={{ mt: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      The {ceilingUnitLabel} {title?.exerciseTitle || "this exercise"} should build
-                      to and then hold. Progression can climb toward it but never past it — so a
-                      client who is already at the right {ceilingUnitLabel} stops being pushed.
-                    </Typography>
-                    <TextField
-                      id="exercise-working-ceiling"
-                      label={`Ceiling (${ceilingUnitLabel})`}
-                      type="number"
-                      value={ceilingDraft}
-                      onChange={(e) => setCeilingDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") saveCeiling(); }}
-                      slotProps={{ htmlInput: { min: 0, step: "0.5" } }}
-                      helperText="Leave blank for no ceiling. 0 pins it to bodyweight."
-                      autoFocus
-                      fullWidth
-                    />
-                  </Stack>
-                </DialogContent>
-                <DialogActions>
-                  {currentCeiling !== null && currentCeiling !== undefined && (
-                    <Button
-                      color="error"
-                      onClick={() => {
-                        updateEntry((ex) => {
-                          ex.progression = { ...(ex.progression || {}), ceiling: null };
-                        });
-                        setCeilingOpen(false);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                  <Button onClick={() => setCeilingOpen(false)}>Cancel</Button>
-                  <Button variant="contained" onClick={saveCeiling}>Save</Button>
-                </DialogActions>
-              </Dialog>
+              {canSetProgression && (
+                <SetProgressionDialog
+                  open={progressionOpen}
+                  onClose={() => setProgressionOpen(false)}
+                  clientId={String(workoutUser?._id || workoutUser)}
+                  programId={String(workoutProgramId)}
+                  exerciseId={String(exerciseLibraryId)}
+                  exerciseTitle={title?.exerciseTitle || "Exercise"}
+                  weightUnit={weightUnit}
+                />
+              )}
               <ExerciseCommentDialog
                 open={notesOpen}
                 onClose={() => setNotesOpen(false)}
