@@ -143,6 +143,26 @@ const LoggedField = (props) => {
       ? Number(parentProps.exercise.goals.oneRepMax) *
         (Number(parentProps.exercise.goals.percent[exerciseSetIndex]) / 100)
       : parentProps.exercise.goals[field.goalAttribute][exerciseSetIndex];
+  // A Rep Range's logged reps field points at `exactReps` — one working target — so an 8-12
+  // prescription showed only "/8" and nothing told the client the top of the range existed.
+  // Show the whole span, so it reads as "get at least 8, push for 12".
+  const isRepRangeReps =
+    exercise.exerciseType === "Rep Range" && field.goalAttribute === "exactReps";
+  const repRangeText = (() => {
+    if (!isRepRangeReps) return null;
+    const g = parentProps.exercise.goals || {};
+    const lo = Number((g.minReps || [])[exerciseSetIndex]) || 0;
+    const hi = Number((g.maxReps || [])[exerciseSetIndex]) || 0;
+    if (!hi) return null; // no upper bound stored — leave the old single-number behaviour
+    if (!lo || lo === hi) return String(hi);
+    return `${lo}-${hi}`;
+  })();
+  // Tapping still fills a single number. Legacy rep-range entries can carry exactReps 0 with
+  // a range set, which used to fill in a 0 — fall back to the bottom of the range.
+  const goalFillValue =
+    isRepRangeReps && !(Number(goalAdornmentValue) > 0)
+      ? Number((parentProps.exercise.goals.minReps || [])[exerciseSetIndex]) || goalAdornmentValue
+      : goalAdornmentValue;
   const rpeTarget = isWeightField
     ? Number(parentProps.exercise.goals?.rpe?.[exerciseSetIndex]) || 0
     : 0;
@@ -178,7 +198,11 @@ const LoggedField = (props) => {
                   </Typography>
                 ) : (
                   <Button
-                    title="Tap to fill in the planned value"
+                    title={
+                      repRangeText
+                        ? `Aim for ${repRangeText} reps — tap to fill in ${toDisplayValue(goalFillValue)}`
+                        : "Tap to fill in the planned value"
+                    }
                     sx={{
                       color: "primary.main",
                       display: "inline-block",
@@ -189,10 +213,10 @@ const LoggedField = (props) => {
                       bgcolor: "action.hover",
                       "&:hover": { bgcolor: "action.selected" },
                     }}
-                    onClick={(e) => handleGoalAdornmentClick(e, goalAdornmentValue)}
+                    onClick={(e) => handleGoalAdornmentClick(e, goalFillValue)}
                   >
                     <Typography variant="body2" noWrap>
-                      {`/${toDisplayValue(goalAdornmentValue)}`}
+                      {`/${repRangeText ?? toDisplayValue(goalAdornmentValue)}`}
                     </Typography>
                   </Button>
                 )}
