@@ -42,6 +42,7 @@ const WorkoutTemplates = lazy(() => import("./Pages/AppPages/WorkoutTemplates"))
 const WorkoutHistory = lazy(() => import("./Pages/AppPages/WorkoutHistory"));
 const Exercises = lazy(() => import("./Pages/AppPages/Exercises"));
 const ExerciseLibrary = lazy(() => import("./Pages/AppPages/ExerciseLibrary"));
+const MyLifts = lazy(() => import("./Pages/AppPages/MyLifts"));
 const ExerciseDetail = lazy(() => import("./Pages/AppPages/ExerciseDetail"));
 const Clients = lazy(() => import("./Pages/AppPages/Clients"));
 const Groups = lazy(() => import("./Pages/AppPages/Groups"));
@@ -313,6 +314,7 @@ function App({ }) {
                     <Route exact path="/feedback" element={<Feedback />} />
                     <Route exact path="/admin/feedback" element={<FeedbackInbox />} />
                     <Route exact path="/exercises" element={<Exercises />} />
+                    <Route exact path="/my-lifts" element={<MyLifts />} />
                     <Route exact path="/exercise-library" element={<ExerciseLibrary />} />
                     <Route exact path="/exercise-library/:id" element={<ExerciseDetail />} />
                     <Route exact path="/invoices" element={<Invoices />} />
