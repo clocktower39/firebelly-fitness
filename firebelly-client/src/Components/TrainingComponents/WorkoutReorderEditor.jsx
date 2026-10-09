@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { describePrescription, describeAchieved } from "../../features/workout/utils/exerciseTypes";
 import { createPortal } from "react-dom";
 import { Box, Grid, Paper, Typography } from "@mui/material";
 import { DragHandle as DragHandleIcon } from "@mui/icons-material";
@@ -343,53 +344,29 @@ const renderExerciseSummary = (exercise, weightUnit = "lbs") => {
   const achieved = exercise?.achieved || {};
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
 
-  switch (exerciseType) {
-    case "Reps":
-      return (
-        <Typography variant="body2" color="text.secondary">
-          {(goals.exactReps || []).length} sets: {(goals.exactReps || []).join(", ")} reps
-        </Typography>
-      );
-    case "Time":
-      return (
-        <Typography variant="body2" color="text.secondary">
-          {(goals.seconds || []).length} sets: {(goals.seconds || []).join(", ")} seconds
-        </Typography>
-      );
-    case "Rep Range":
-      // Without this the default branch reported "N achieved sets" — the logged count rather
-      // than the prescription, which is what the reorder list is there to show.
-      return (
-        <Typography variant="body2" color="text.secondary">
-          {goals.sets || (goals.minReps || []).length} sets:{" "}
-          {(goals.minReps || []).map((min, i) => {
-            const max = (goals.maxReps || [])[i];
-            return Number(max) > Number(min) ? `${min}-${max}` : `${min}`;
-          }).join(", ")}{" "}
-          reps
-        </Typography>
-      );
-    case "Reps with %":
-      return (
-        <Typography variant="body2" color="text.secondary">
-          {(goals.percent || []).length} sets: {(goals.exactReps || []).join(", ")} reps
-          {goals.oneRepMax ? ` • 1RM ${formatWeightWithUnit(goals.oneRepMax, normalizedWeightUnit)}` : ""}
-        </Typography>
-      );
-    default:
-      if ((achieved.reps || []).length > 0) {
-        return (
-          <Typography variant="body2" color="text.secondary">
-            {(achieved.reps || []).length} achieved sets
-          </Typography>
-        );
-      }
-      return (
-        <Typography variant="body2" color="text.secondary">
-          Drag to reorder
-        </Typography>
-      );
+  // One summary source, shared with the overview and the log view
+  // (features/workout/utils/exerciseTypes).
+  const planned = describePrescription(exerciseType, goals || {});
+  if (planned) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {planned.text}
+        {planned.oneRepMax
+          ? ` • 1RM ${formatWeightWithUnit(planned.oneRepMax, normalizedWeightUnit)}`
+          : ""}
+      </Typography>
+    );
   }
+  // No recognised type: fall back to whatever was logged, so the row still says something.
+  const logged = describeAchieved(exerciseType, achieved || {});
+  if (logged.sets > 0) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {logged.text}
+      </Typography>
+    );
+  }
+  return null;
 };
 
 function SortableExercise({ id, data, children }) {

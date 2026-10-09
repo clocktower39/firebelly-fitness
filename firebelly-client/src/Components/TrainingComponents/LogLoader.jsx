@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { goalAdornment } from "../../features/workout/utils/exerciseTypes";
 import { Button, Grid, InputAdornment, TextField, Typography } from "@mui/material";
 import RpeSelect from "./RpeSelect";
 import {
@@ -136,45 +137,18 @@ const LoggedField = (props) => {
     );
   }
 
-  // The goal shown in the weight field's "/x" adornment; when the program set no load but did
-  // set a target effort, the guidance becomes "@RPE n" instead of a meaningless "/0".
-  const goalAdornmentValue =
-    exercise.exerciseType === "Reps with %" && field.goalAttribute === "weight"
-      ? Number(parentProps.exercise.goals.oneRepMax) *
-        (Number(parentProps.exercise.goals.percent[exerciseSetIndex]) / 100)
-      : parentProps.exercise.goals[field.goalAttribute][exerciseSetIndex];
-  // A Rep Range's logged reps field points at `exactReps` — one working target — so an 8-12
-  // prescription showed only "/8" and nothing told the client the top of the range existed.
-  // Show the whole span, so it reads as "get at least 8, push for 12".
-  const isRepRangeReps =
-    exercise.exerciseType === "Rep Range" && field.goalAttribute === "exactReps";
-  const repRangeText = (() => {
-    if (!isRepRangeReps) return null;
-    const g = parentProps.exercise.goals || {};
-    const lo = Number((g.minReps || [])[exerciseSetIndex]) || 0;
-    const hi = Number((g.maxReps || [])[exerciseSetIndex]) || 0;
-    const target = Number((g.exactReps || [])[exerciseSetIndex]) || 0;
-    if (!hi) return null; // no upper bound stored — leave the old single-number behaviour
-    if (!lo || lo === hi) return String(hi);
-    // Double progression walks the target up through the range, so a set can be "do 12, out of
-    // 8-12". Both numbers have to be on screen: the target cannot live in the tooltip, because
-    // `title` never fires on a touch screen, which is where clients actually log.
-    if (target > lo && target <= hi) return `${target} of ${lo}-${hi}`;
-    return `${lo}-${hi}`;
-  })();
-  // Tapping still fills a single number. Legacy rep-range entries can carry exactReps 0 with
-  // a range set, which used to fill in a 0 — fall back to the bottom of the range.
-  const goalFillValue =
-    isRepRangeReps && !(Number(goalAdornmentValue) > 0)
-      ? Number((parentProps.exercise.goals.minReps || [])[exerciseSetIndex]) || goalAdornmentValue
-      : goalAdornmentValue;
+  // What the goal chip shows, and the single number tapping it inserts. The rules live in
+  // features/workout/utils/exerciseTypes so the overview and reorder list agree with this.
+  const { text: goalAdornmentText, fillValue: goalFillValue, isRange: goalIsRange } =
+    goalAdornment(exercise.exerciseType, parentProps.exercise.goals || {}, field, exerciseSetIndex);
+  const goalAdornmentValue = goalFillValue;
   const rpeTarget = isWeightField
     ? Number(parentProps.exercise.goals?.rpe?.[exerciseSetIndex]) || 0
     : 0;
-  const showRpeHint = isWeightField && rpeTarget > 0 && !(Number(goalAdornmentValue) > 0);
-  // Nothing prescribed for this field: a bodyweight exercise's weight, or a Time entry with no
-  // seconds set. It used to render a tappable "/0" whose only effect was to fill in a zero.
-  const hasGoalToShow = repRangeText ? true : Number(goalAdornmentValue) > 0;
+  const showRpeHint = isWeightField && rpeTarget > 0 && goalAdornmentText === "";
+  // An empty text means nothing is prescribed for this field — a bodyweight exercise's weight,
+  // or a Time entry with no seconds. It used to render a tappable "/0" that filled in a zero.
+  const hasGoalToShow = goalAdornmentText !== "";
 
   return (
     <Grid size={5}>
@@ -207,8 +181,8 @@ const LoggedField = (props) => {
                 ) : (
                   <Button
                     title={
-                      repRangeText
-                        ? `Aim for ${repRangeText} reps — tap to fill in ${toDisplayValue(goalFillValue)}`
+                      goalIsRange
+                        ? `Aim for ${goalAdornmentText} reps — tap to fill in ${toDisplayValue(goalFillValue)}`
                         : "Tap to fill in the planned value"
                     }
                     sx={{
@@ -224,7 +198,7 @@ const LoggedField = (props) => {
                     onClick={(e) => handleGoalAdornmentClick(e, goalFillValue)}
                   >
                     <Typography variant="body2" noWrap>
-                      {`/${repRangeText ?? toDisplayValue(goalAdornmentValue)}`}
+                      {`/${goalIsRange ? goalAdornmentText : toDisplayValue(goalAdornmentValue)}`}
                     </Typography>
                   </Button>
                 )}

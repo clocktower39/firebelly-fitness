@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { describePrescription, describeAchieved } from "../../features/workout/utils/exerciseTypes";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import {
@@ -1707,109 +1708,28 @@ const WorkoutSet = (props) => {
   } = props;
   const normalizedWeightUnit = normalizeWeightUnit(weightUnit);
 
+  // Both halves read from one descriptor (features/workout/utils/exerciseTypes), which is
+  // what stops a type from rendering correctly here and wrongly in the log view.
   const renderType = (exercise) => {
     const { exerciseType, goals, achieved } = exercise;
-
-    switch (exerciseType) {
-      case "Reps":
-        return viewMode === "goals" ? (
-          <Typography variant="body1">
-            {goals.exactReps.length} sets: {goals.exactReps.join(", ")} reps
-          </Typography>
-        ) : (
-          <Typography variant="body1">
-            {achieved.reps.length} sets: {achieved.reps.join(", ")} reps
-          </Typography>
-        );
-      case "Time":
-        return viewMode === "goals" ? (
-          <Typography variant="body1">
-            {goals.seconds.length} sets: {goals.seconds.join(", ")} seconds
-          </Typography>
-        ) : (
-          <Typography variant="body1">
-            {achieved.seconds.length} sets: {achieved.seconds.join(", ")} seconds
-          </Typography>
-        );
-      case "Rep Range":
-        // Double progression: each set carries a min and a max. Without this case the switch
-        // fell through to `default: break`, which returned undefined — so every rep-range
-        // exercise showed its name on the overview with no sets or reps underneath.
-        return viewMode === "goals" ? (
-          <Typography variant="body1">
-            {goals.sets || (goals.minReps || []).length} sets:{" "}
-            {(goals.minReps || []).map((min, i) => {
-              const max = (goals.maxReps || [])[i];
-              return Number(max) > Number(min) ? `${min}-${max}` : `${min}`;
-            }).join(", ")}{" "}
-            reps
-          </Typography>
-        ) : (
-          <Typography variant="body1">
-            {achieved.reps.length} sets: {achieved.reps.join(", ")} reps
-          </Typography>
-        );
-      case "Reps with %":
-        return viewMode === "goals" ? (
-          <>
-            <Grid container>
-              <Typography variant="body1">
-                One Rep Max: {formatWeightWithUnit(goals.oneRepMax, normalizedWeightUnit)}
-              </Typography>
-            </Grid>
-            <Grid container>
-              <Typography variant="body1">
-                {goals.percent.length} sets: {goals.exactReps.join(", ")} reps
-              </Typography>
-            </Grid>
-          </>
-        ) : (
-          <>
-            <Grid container>
-              <Typography variant="body1">
-                One Rep Max: {formatWeightWithUnit(goals.oneRepMax, normalizedWeightUnit)}
-              </Typography>
-            </Grid>
-            <Grid container>
-              <Typography variant="body1">
-                {achieved.percent.length} sets: {achieved.reps.join(", ")} reps
-              </Typography>
-            </Grid>
-          </>
-        );
-      default: {
-        // Anything else — including the handful of entries with no exerciseType at all —
-        // still shows something rather than a bare exercise name. Reads whichever goal
-        // actually carries numbers.
-        const reps = goals?.exactReps || [];
-        const secs = goals?.seconds || [];
-        if (viewMode === "goals") {
-          if (reps.some((r) => Number(r) > 0)) {
-            return (
-              <Typography variant="body1">
-                {reps.length} sets: {reps.join(", ")} reps
-              </Typography>
-            );
-          }
-          if (secs.some((s) => Number(s) > 0)) {
-            return (
-              <Typography variant="body1">
-                {secs.length} sets: {secs.join(", ")} seconds
-              </Typography>
-            );
-          }
-          return goals?.sets ? (
-            <Typography variant="body1">{goals.sets} sets</Typography>
-          ) : null;
-        }
-        const did = achieved?.reps || [];
-        return did.length ? (
-          <Typography variant="body1">
-            {did.length} sets: {did.join(", ")} reps
-          </Typography>
-        ) : null;
-      }
-    }
+    const planned = describePrescription(exerciseType, goals || {});
+    const logged = describeAchieved(exerciseType, achieved || {});
+    const summary = viewMode === "goals" ? planned?.text : logged.text;
+    if (!summary) return null;
+    // A percentage prescription shows the max it is built on, in the viewer's own unit.
+    const oneRepMax = exerciseType === "Reps with %" ? goals?.oneRepMax : null;
+    return (
+      <>
+        {oneRepMax ? (
+          <Grid container>
+            <Typography variant="body1">
+              One Rep Max: {formatWeightWithUnit(oneRepMax, normalizedWeightUnit)}
+            </Typography>
+          </Grid>
+        ) : null}
+        <Typography variant="body1">{summary}</Typography>
+      </>
+    );
   };
 
   return (

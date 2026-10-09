@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { editFieldsFor, loggedFieldsFor } from "../../features/workout/utils/exerciseTypes";
 import {
   Autocomplete,
   Box,
@@ -280,127 +281,15 @@ export default function Exercise(props) {
     });
   };
 
+  // Field layouts live in features/workout/utils/exerciseTypes — one descriptor per type,
+  // shared with the log view, the overview and the reorder list.
   const EditFields = () => {
-    switch (exerciseType) {
-      case "Rep Range":
-        return {
-          repeating: [
-            {
-              goalAttribute: "weight",
-              label: "Weight",
-            },
-            {
-              goalAttribute: "minReps",
-              label: "Min Reps",
-            },
-            {
-              goalAttribute: "maxReps",
-              label: "Max Reps",
-            },
-          ],
-          nonRepeating: [],
-        };
-      case "Reps":
-        return {
-          repeating: [
-            {
-              goalAttribute: "weight",
-              label: "Weight",
-            },
-            {
-              goalAttribute: "exactReps",
-              label: "Reps",
-            },
-          ],
-          nonRepeating: [],
-        };
-      case "Reps with %":
-        return {
-          repeating: [
-            {
-              goalAttribute: "percent",
-              label: "Percent",
-            },
-            {
-              goalAttribute: "exactReps",
-              label: "Reps",
-            },
-          ],
-          nonRepeating: [
-            {
-              goalAttribute: "maxWeight",
-              label: "One Rep Max",
-            },
-          ],
-        };
-      case "Time":
-        return {
-          repeating: [
-            {
-              goalAttribute: "seconds",
-              label: "Seconds",
-            },
-          ],
-          nonRepeating: [],
-        };
-      default:
-        return <Typography color="text.primary">Type Error</Typography>;
-    }
+    const fields = editFieldsFor(exerciseType);
+    if (!fields) return <Typography color="text.primary">Type Error</Typography>;
+    return fields;
   };
 
-  const LoggedFields = () => {
-    switch (exerciseType) {
-      case "Rep Range":
-        return [
-          {
-            achievedAttribute: "weight",
-            goalAttribute: "weight",
-            label: "Weight",
-          },
-          {
-            achievedAttribute: "reps",
-            goalAttribute: "exactReps",
-            label: "Reps",
-          },
-        ];
-      case "Reps":
-        return [
-          {
-            achievedAttribute: "weight",
-            goalAttribute: "weight",
-            label: "Weight",
-          },
-          {
-            achievedAttribute: "reps",
-            goalAttribute: "exactReps",
-            label: "Reps",
-          },
-        ];
-      case "Reps with %":
-        return [
-          {
-            achievedAttribute: "weight",
-            goalAttribute: "weight",
-            label: "Weight",
-          },
-          {
-            achievedAttribute: "reps",
-            goalAttribute: "exactReps",
-            label: "Reps",
-          },
-        ];
-      case "Time":
-        return [
-          {
-            achievedAttribute: "seconds",
-            goalAttribute: "seconds",
-            label: "Seconds",
-          },
-        ];
-      default:
-        return <Typography color="text.primary">Type Error</Typography>;
-    }
-  };
+  const LoggedFields = () => loggedFieldsFor(exerciseType) || [];
 
   const handleEditToggle = () => {
     setEditMode((prev) => !prev);
