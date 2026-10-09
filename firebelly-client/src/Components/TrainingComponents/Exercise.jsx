@@ -609,7 +609,9 @@ export default function Exercise(props) {
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ width: "100%", fontStyle: "italic" }}
+                      // Cues are authored one instruction per line. Without pre-line the whole
+                      // block collapses into a single run-on paragraph.
+                      sx={{ width: "100%", fontStyle: "italic", whiteSpace: "pre-line" }}
                     >
                       Coach: {exercise.coachNote}
                     </Typography>

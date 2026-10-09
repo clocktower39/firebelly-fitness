@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, Fragment, useMemo } from "react";
+import { describePrescription } from "../../features/workout/utils/exerciseTypes";
 import { useSelector } from "react-redux";
 import { serverURL } from "../../Redux/actions";
 import {
@@ -787,10 +788,18 @@ const WarmupRow = ({ entry, setIndex, exerciseIndex, removeExercise, setLocalTra
   const name = entry.customName || libName || "Warm-up";
 
   const g = entry.goals || {};
+  const sets = Math.max(1, Number(g.sets) || 1);
   const secs = Number((g.seconds || [])[0]) || 0;
   const reps = Number((g.exactReps || [])[0]) || 0;
   const measure = entry.exerciseType === "Time" || secs > 0 ? "time" : reps > 0 ? "reps" : "none";
   const amount = measure === "time" ? Math.round(secs / 60) : measure === "reps" ? reps : "";
+
+  // A warm-up added in the app is always one set of reps or minutes, which the compact editor
+  // below handles. A warm-up that came from a PROGRAM can be richer — "2 x 8", or a rep range
+  // like "2 x 8-10" — and the single-number editor would quietly flatten it to exactReps[0]
+  // with sets forced to 1. So anything richer is shown as the prescription it is.
+  const prescription = describePrescription(entry.exerciseType, g);
+  const isProgrammed = sets > 1 || entry.exerciseType === "Rep Range";
 
   const ach = entry.achieved || {};
   const achVal =
@@ -798,9 +807,7 @@ const WarmupRow = ({ entry, setIndex, exerciseIndex, removeExercise, setLocalTra
       ? Number((ach.seconds || [])[0])
         ? Math.round(Number(ach.seconds[0]) / 60)
         : ""
-      : measure === "reps"
-      ? Number((ach.reps || [])[0]) || ""
-      : "";
+      : Number((ach.reps || [])[0]) || "";
 
   const patchEntry = (fn) =>
     setLocalTraining((prev) =>
@@ -808,35 +815,39 @@ const WarmupRow = ({ entry, setIndex, exerciseIndex, removeExercise, setLocalTra
         ci !== setIndex ? circuit : circuit.map((e, ei) => (ei !== exerciseIndex ? e : fn({ ...e })))
       )
     );
+  const fillTo = (n, value) => Array.from({ length: n }, () => value);
 
   const setMeasure = (m) =>
     patchEntry((e) => {
-      const goals = { ...(e.goals || {}), sets: 1, minReps: [0], maxReps: [0], exactReps: [0], weight: [0], percent: [0], seconds: [0] };
+      // Keep the prescribed set count — only the measure is changing.
+      const n = Math.max(1, Number(e.goals?.sets) || 1);
+      const goals = { ...(e.goals || {}), sets: n, minReps: fillTo(n, 0), maxReps: fillTo(n, 0),
+        exactReps: fillTo(n, 0), weight: fillTo(n, 0), percent: fillTo(n, 0), seconds: fillTo(n, 0) };
       let exerciseType = "Reps";
-      if (m === "time") {
-        exerciseType = "Time";
-        goals.seconds = ["300"];
-      } else if (m === "reps") {
-        goals.exactReps = ["10"];
-      }
+      if (m === "time") { exerciseType = "Time"; goals.seconds = fillTo(n, "300"); }
+      else if (m === "reps") { goals.exactReps = fillTo(n, "10"); }
       return { ...e, exerciseType, goals };
     });
 
   const setAmount = (v) =>
     patchEntry((e) => {
-      const n = Math.max(0, Number(v) || 0);
-      const goals = { ...(e.goals || {}), sets: 1 };
-      if (measure === "time") goals.seconds = [String(n * 60)];
-      else if (measure === "reps") goals.exactReps = [String(n)];
+      const num = Math.max(0, Number(v) || 0);
+      const n = Math.max(1, Number(e.goals?.sets) || 1);
+      const goals = { ...(e.goals || {}), sets: n };
+      if (measure === "time") goals.seconds = fillTo(n, String(num * 60));
+      else if (measure === "reps") goals.exactReps = fillTo(n, String(num));
       return { ...e, goals };
     });
 
+  // One number for a multi-set warm-up means "that much on every set", which is how prep work
+  // is actually done — so it fills every slot rather than leaving the rest at zero.
   const setAchieved = (v) =>
     patchEntry((e) => {
-      const n = Math.max(0, Number(v) || 0);
-      const achieved = { ...(e.achieved || {}), sets: 1 };
-      if (measure === "time") achieved.seconds = [String(n * 60)];
-      else if (measure === "reps") achieved.reps = [String(n)];
+      const num = Math.max(0, Number(v) || 0);
+      const n = Math.max(1, Number(e.goals?.sets) || 1);
+      const achieved = { ...(e.achieved || {}), sets: n };
+      if (measure === "time") achieved.seconds = fillTo(n, String(num * 60));
+      else achieved.reps = fillTo(n, String(num));
       return { ...e, achieved };
     });
 
@@ -846,37 +857,47 @@ const WarmupRow = ({ entry, setIndex, exerciseIndex, removeExercise, setLocalTra
         <Typography variant="subtitle2" sx={{ flex: "1 1 140px" }}>
           {name}
         </Typography>
-        <TextField
-          select
-          size="small"
-          label="Target"
-          value={measure}
-          onChange={(e) => setMeasure(e.target.value)}
-          sx={{ minWidth: 110 }}
-        >
-          <MenuItem value="time">Minutes</MenuItem>
-          <MenuItem value="reps">Reps</MenuItem>
-          <MenuItem value="none">As needed</MenuItem>
-        </TextField>
-        {measure !== "none" && (
-          <TextField
-            size="small"
-            type="number"
-            label={measure === "time" ? "Min" : "Reps"}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            sx={{ width: 80 }}
-            slotProps={{ htmlInput: { min: 0 } }}
-          />
+
+        {isProgrammed ? (
+          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>
+            {prescription?.text || ""}
+          </Typography>
+        ) : (
+          <>
+            <TextField
+              select
+              size="small"
+              label="Target"
+              value={measure}
+              onChange={(e) => setMeasure(e.target.value)}
+              sx={{ minWidth: 110 }}
+            >
+              <MenuItem value="time">Minutes</MenuItem>
+              <MenuItem value="reps">Reps</MenuItem>
+              <MenuItem value="none">As needed</MenuItem>
+            </TextField>
+            {measure !== "none" && (
+              <TextField
+                size="small"
+                type="number"
+                label={measure === "time" ? "Min" : "Reps"}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                sx={{ width: 80 }}
+                slotProps={{ htmlInput: { min: 0 } }}
+              />
+            )}
+          </>
         )}
+
         {measure !== "none" && (
           <TextField
             size="small"
             type="number"
-            label="Done"
+            label={measure === "time" ? "Done (min)" : "Done"}
             value={achVal}
             onChange={(e) => setAchieved(e.target.value)}
-            sx={{ width: 80 }}
+            sx={{ width: 90 }}
             slotProps={{ htmlInput: { min: 0 } }}
           />
         )}
@@ -886,6 +907,18 @@ const WarmupRow = ({ entry, setIndex, exerciseIndex, removeExercise, setLocalTra
           </IconButton>
         </Tooltip>
       </Stack>
+
+      {/* A programmed warm-up carries real coaching cues. They used to be stored and never
+          shown, because this row never read coachNote at all. */}
+      {entry.coachNote ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mt: 0.75, fontStyle: "italic", whiteSpace: "pre-line" }}
+        >
+          Coach: {entry.coachNote}
+        </Typography>
+      ) : null}
     </Paper>
   );
 };
