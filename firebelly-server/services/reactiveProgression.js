@@ -26,6 +26,7 @@
 const Training = require("../models/training");
 const Exercise = require("../models/exercise");
 const ExerciseAnchor = require("../models/exerciseAnchor");
+const { maxesForUser } = require("./exerciseMaxResolver");
 const {
   nextWorking,
   capWorking,
@@ -81,7 +82,7 @@ const effortOf = (difficulty) => {
 // Turn one completed exercise entry into a "signal" describing how future goals should be set.
 // `workoutEffort` is the workout-level rating, used as a fallback when the exercise wasn't
 // rated. Returns null when there's nothing to learn (e.g. bodyweight move with no logged load).
-const analyzeEntry = (entry, workoutEffort = null) => {
+const analyzeEntry = (entry, workoutEffort = null, storedMax = 0) => {
   const goals = entry.goals || {};
   const ach = entry.achieved || {};
   const sets = setCount(goals, ach);
@@ -158,7 +159,10 @@ const analyzeEntry = (entry, workoutEffort = null) => {
 
   if (percentBased && topPct > 0) {
     const derived = Math.round(topW / (topPct / 100));
-    const prev = num(goals.oneRepMax);
+    // The entry's own oneRepMax is normally 0 now — the number lives in the lifter's
+    // ExerciseMax row and is stripped from anything the client posts back. Fall back to the
+    // stored max so a hard session is still capped against a real previous value.
+    const prev = num(goals.oneRepMax) || num(storedMax);
     // A hard or badly-missed session never raises the stored 1RM.
     const oneRepMax =
       effort === "hard" || repResult === "MISS_BAD" ? Math.min(derived, prev || derived) : derived;
@@ -254,13 +258,20 @@ const seedEntryFromSignal = (entry, signal, ctx, { sameDay = true } = {}) => {
 
   if (signal.kind === "percent") {
     if (!sameDay && num(goals.oneRepMax) > 0) return false;
-    goals.oneRepMax = signal.oneRepMax;
+    // Once the lifter has a max on record, seeding must not stamp a copy of it into every
+    // future workout — that is precisely the duplication ExerciseMax exists to end, and it
+    // would also mean a per-entry value shadowing the store forever afterwards. Drive the
+    // loads from the stored max and leave the field at 0, so the row stays the single source
+    // and stays the trainer's to change (recent work shows up as a suggestion on My Lifts).
+    const stored = num(ctx.storedMax);
+    const basis = stored > 0 ? stored : signal.oneRepMax;
+    if (!(stored > 0)) goals.oneRepMax = signal.oneRepMax;
     const pct = goals.percent || [];
     const weight = Array.isArray(goals.weight) ? goals.weight.slice(0, sets) : [];
     for (let i = 0; i < sets; i += 1) {
       // Only sets with a prescribed % re-derive; others keep their existing load.
       if (num(pct[i]) > 0) {
-        weight[i] = String(roundToLoadable((signal.oneRepMax * num(pct[i])) / 100, family));
+        weight[i] = String(roundToLoadable((basis * num(pct[i])) / 100, family));
       } else if (weight[i] == null) {
         weight[i] = "0";
       }
@@ -370,6 +381,7 @@ const applyResultsToFutureProgram = async (completed) => {
   if (!programId || !clientId || !Array.isArray(completed.training)) return [];
   const workoutEffort = effortOf(completed.workoutFeedback?.difficulty);
   const completedKey = dayKeyOf(completed);
+  const storedMaxes = await maxesForUser(clientId);
 
   // Build one signal per exercise from the completed session (last occurrence wins).
   const signalByExercise = new Map();
@@ -378,7 +390,7 @@ const applyResultsToFutureProgram = async (completed) => {
       if (entry.isWarmup) return; // warm-ups don't seed future loads
       const id = exIdOf(entry);
       if (!id) return;
-      const signal = analyzeEntry(entry, workoutEffort);
+      const signal = analyzeEntry(entry, workoutEffort, storedMaxes.get(id));
       if (signal) signalByExercise.set(id, signal);
     })
   );
@@ -512,7 +524,9 @@ const applyResultsToFutureProgram = async (completed) => {
         if (entry.isWarmup) return; // never overwrite a warm-up's loads
         const signal = signalByExercise.get(exIdOf(entry));
         if (!signal) return;
-        if (applySignalToEntry(entry, signal, ctxById.get(exIdOf(entry)) || {}, { sameDay })) {
+        const exId = exIdOf(entry);
+        const ctx = { ...(ctxById.get(exId) || {}), storedMax: storedMaxes.get(exId) || 0 };
+        if (applySignalToEntry(entry, signal, ctx, { sameDay })) {
           changed = true;
         }
       })

@@ -16,6 +16,7 @@ const {
 const { createNotification } = require("../../services/notificationService");
 const { bridgeWorkoutComment } = require("../../services/messagingBridge");
 const { sanitizeTrainingTechniques } = require("../../services/techniqueValidation");
+const { hydrateForUser, stripForUser } = require("../../services/exerciseMaxResolver");
 const { applyResultsToFutureProgram } = require("../../services/reactiveProgression");
 
 const create_training = async (req, res, next) => {
@@ -96,6 +97,10 @@ const update_training = async (req, res, next) => {
 
     if (req.body.training && Array.isArray(req.body.training.training)) {
       req.body.training.training = sanitizeTrainingTechniques(req.body.training.training);
+      // The client was handed resolved one-rep maxes and posts the whole workout back. Echoes
+      // of the stored max are removed here so the ExerciseMax row stays the only copy; a value
+      // the trainer actually changed differs from the store and survives as an override.
+      await stripForUser(existing.user, req.body.training.training);
     }
     const updates = pick(req.body.training, TRAINING_UPDATE_FIELDS);
     const training = await Training.findByIdAndUpdate(
@@ -280,7 +285,10 @@ const update_training = async (req, res, next) => {
       });
     });
 
-    return res.send({ training, reactiveUpdates });
+    return res.send({
+      training: await hydrateForUser(existing.user, training),
+      reactiveUpdates: await hydrateForUser(existing.user, reactiveUpdates),
+    });
   } catch (err) {
     return next(err);
   }
@@ -298,21 +306,23 @@ const get_training_by_id = (req, res, next) => {
       model: "User",
       select: "_id firstName lastName profilePicture",
     })
-    .then((data) => {
+    .then(async (data) => {
       if (!data) {
         return res.status(404).json({ error: "Training not found." });
       }
 
+      // Percentage sets resolve the OWNER's maxes, not the viewer's — a trainer looking at a
+      // client's workout has to see the client's numbers.
       if (data.user._id.toString() === res.locals.user._id) {
-        return res.send(data);
+        return res.send(await hydrateForUser(data.user._id, data));
       }
 
       Relationship.findOne({ trainer: res.locals.user._id, client: data.user._id })
-        .then((relationship) => {
+        .then(async (relationship) => {
           if (!relationship || !relationship.accepted) {
             return res.status(403).json({ error: "Unauthorized access." });
           }
-          res.send(data);
+          res.send(await hydrateForUser(data.user._id, data));
         })
         .catch((err) => next(err));
     })
@@ -364,7 +374,16 @@ const get_training_by_ids = async (req, res, next) => {
     }
 
     const workouts = docs.filter((d) => allowed.has(String(d.user?._id || d.user)));
-    return res.send({ workouts });
+    // A batch can span owners, so resolve per owner rather than once for the caller.
+    const byOwner = new Map();
+    workouts.forEach((w) => {
+      const k = String(w.user?._id || w.user);
+      if (!byOwner.has(k)) byOwner.set(k, []);
+      byOwner.get(k).push(w);
+    });
+    const hydrated = [];
+    for (const [ownerId, list] of byOwner) hydrated.push(...(await hydrateForUser(ownerId, list)));
+    return res.send({ workouts: hydrated });
   } catch (err) {
     return next(err);
   }
@@ -470,7 +489,7 @@ const get_workout_queue = async (req, res, next) => {
       (workout) => !scheduledSet.has(String(workout._id))
     );
 
-    return res.send(filteredWorkouts);
+    return res.send(await hydrateForUser(targetUserId, filteredWorkouts));
   } catch (err) {
     return next(err);
   }
@@ -527,8 +546,8 @@ const get_workouts_by_date = async (req, res, next) => {
       model: "User",
       select: "_id firstName lastName profilePicture",
     })
-    .then((data) => {
-      return res.send({ workouts: data, user: targetUser });
+    .then(async (data) => {
+      return res.send({ workouts: await hydrateForUser(targetUser?._id || targetUser, data), user: targetUser });
     })
     .catch((err) => next(err));
 };
@@ -575,7 +594,10 @@ const get_weekly_training = async (req, res, next) => {
         select: "_id exerciseTitle mediaUrl",
       });
 
-    return res.json({ workouts, user: targetUser });
+    return res.json({
+      workouts: await hydrateForUser(targetUser?._id || targetUser, workouts),
+      user: targetUser,
+    });
   } catch (err) {
     return next(err);
   }
