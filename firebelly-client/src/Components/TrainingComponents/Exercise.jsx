@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { editFieldsFor, loggedFieldsFor } from "../../features/workout/utils/exerciseTypes";
+import {
+  autofillRepsFor,
+  autofillSecondsFor,
+  autofillWeightFor,
+  editFieldsFor,
+  isKnownType,
+  loggedFieldsFor,
+} from "../../features/workout/utils/exerciseTypes";
 import {
   Autocomplete,
   Box,
@@ -241,36 +248,21 @@ export default function Exercise(props) {
         if (setIndex === sIndex) {
           set.map((exercise, eIndex) => {
             if (eIndex === exerciseIndex) {
-              switch (exercise.exerciseType) {
-                case "Reps":
-                  exercise.achieved.reps = exercise.achieved.reps.map(
-                    (rep, repIndex) => (rep = Number(rep) || exercise.goals.exactReps[repIndex])
-                  );
-                  exercise.achieved.weight = exercise.achieved.weight.map(
-                    (weight, weightIndex) =>
-                      (weight = Number(weight) || exercise.goals.weight[weightIndex])
-                  );
-                  break;
-                case "Time":
-                  exercise.achieved.seconds = exercise.achieved.seconds.map(
-                    (second, secondIndex) =>
-                      (second = Number(second) || exercise.goals.seconds[secondIndex])
-                  );
-                  break;
-                case "Reps with %":
-                  exercise.achieved.reps = exercise.achieved.reps.map(
-                    (rep, repIndex) => (rep = Number(rep) || exercise.goals.exactReps[repIndex])
-                  );
-                  exercise.achieved.weight = exercise.achieved.weight.map(
-                    (weight, weightIndex) =>
-                      (weight =
-                        Number(weight) ||
-                        (Number(exercise.goals.percent[weightIndex]) / 100) *
-                          exercise.goals.oneRepMax)
-                  );
-                  break;
-                default:
-                  break;
+              // Shared with the per-set and whole-workout fills. Rep Range used to have no
+              // case here at all, so filling a range exercise did nothing; it now fills the
+              // top of the range, same as everywhere else.
+              const { exerciseType, goals } = exercise;
+              if (exerciseType === "Time") {
+                exercise.achieved.seconds = exercise.achieved.seconds.map(
+                  (second, i) => Number(second) || autofillSecondsFor(goals, i)
+                );
+              } else if (isKnownType(exerciseType)) {
+                exercise.achieved.reps = exercise.achieved.reps.map(
+                  (rep, i) => Number(rep) || autofillRepsFor(exerciseType, goals, i)
+                );
+                exercise.achieved.weight = exercise.achieved.weight.map(
+                  (weight, i) => Number(weight) || autofillWeightFor(exerciseType, goals, i)
+                );
               }
             }
             return exercise;

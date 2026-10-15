@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { goalAdornment } from "../../features/workout/utils/exerciseTypes";
+import {
+  autofillRepsFor,
+  autofillSecondsFor,
+  autofillWeightFor,
+  goalAdornment,
+  isKnownType,
+} from "../../features/workout/utils/exerciseTypes";
 import { Button, Grid, InputAdornment, TextField, Typography } from "@mui/material";
 import RpeSelect from "./RpeSelect";
 import {
@@ -230,42 +236,19 @@ export default function LogLoader(props) {
             if (eIndex === exerciseIndex) {
               exercise.achieved.reps.map((exerciseSet, esIndex) => {
                 if (esIndex === exerciseSetIndex) {
-                  switch (exercise.exerciseType) {
-                    case "Reps":
-                      exercise.achieved.reps[exerciseSetIndex] =
-                        Number(exercise.achieved.reps[exerciseSetIndex]) ||
-                        exercise.goals.exactReps[exerciseSetIndex];
-                      exercise.achieved.weight[exerciseSetIndex] =
-                        Number(exercise.achieved.weight[exerciseSetIndex]) ||
-                        exercise.goals.weight[exerciseSetIndex];
-                      break;
-                    case "Time":
-                      exercise.achieved.seconds[exerciseSetIndex] =
-                        Number(exercise.achieved.seconds[exerciseSetIndex]) ||
-                        exercise.goals.seconds[exerciseSetIndex];
-                      break;
-                    case "Rep Range":
-                      // Same as Reps: exactReps carries the working target inside the range
-                      // (double progression climbs it toward maxReps). Without this case the
-                      // switch fell through and tap-to-fill silently did nothing.
-                      exercise.achieved.reps[exerciseSetIndex] =
-                        Number(exercise.achieved.reps[exerciseSetIndex]) ||
-                        exercise.goals.exactReps[exerciseSetIndex];
-                      exercise.achieved.weight[exerciseSetIndex] =
-                        Number(exercise.achieved.weight[exerciseSetIndex]) ||
-                        exercise.goals.weight[exerciseSetIndex];
-                      break;
-                    case "Reps with %":
-                      exercise.achieved.reps[exerciseSetIndex] =
-                        Number(exercise.achieved.reps[exerciseSetIndex]) ||
-                        exercise.goals.exactReps[exerciseSetIndex];
-                      exercise.achieved.weight[exerciseSetIndex] =
-                        Number(exercise.achieved.weight[exerciseSetIndex]) ||
-                        (Number(exercise.goals.percent[exerciseSetIndex]) / 100) *
-                          exercise.goals.oneRepMax;
-                      break;
-                    default:
-                      break;
+                  const { exerciseType, goals } = exercise;
+                  const i = exerciseSetIndex;
+                  // One rule per type, shared with the other fill paths. A rep range fills
+                  // its top number, so "8-12" logs 12.
+                  if (exerciseType === "Time") {
+                    exercise.achieved.seconds[i] =
+                      Number(exercise.achieved.seconds[i]) || autofillSecondsFor(goals, i);
+                  } else if (isKnownType(exerciseType)) {
+                    exercise.achieved.reps[i] =
+                      Number(exercise.achieved.reps[i]) || autofillRepsFor(exerciseType, goals, i);
+                    exercise.achieved.weight[i] =
+                      Number(exercise.achieved.weight[i]) ||
+                      autofillWeightFor(exerciseType, goals, i);
                   }
                 }
                 return exerciseSet;

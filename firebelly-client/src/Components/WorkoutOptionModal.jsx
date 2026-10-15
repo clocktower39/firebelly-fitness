@@ -1,4 +1,10 @@
 import React, { useCallback, useState, useEffect, useRef } from "react";
+import {
+  autofillRepsFor,
+  autofillSecondsFor,
+  autofillWeightFor,
+  setCountFor,
+} from "../features/workout/utils/exerciseTypes";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -499,14 +505,19 @@ export function ModalAction(props) {
       setLocalTraining((prev) => {
         return prev.map((set, sIndex) => {
           set.map((exercise, eIndex) => {
-            exercise.achieved.reps = [...exercise.goals.exactReps];
-            exercise.achieved.weight = [...exercise.goals.weight];
-            exercise.achieved.seconds = [...exercise.goals.seconds];
-            if (exercise.exerciseType === "Reps with %") {
-              exercise.achieved.weight = [...exercise.goals.percent].map(
-                (goal) => (goal / 100) * Number(exercise.goals.oneRepMax)
-              );
-            }
+            // Same fill rules as the per-set and per-exercise buttons: a rep range fills its
+            // top number, so an 8-12 prescription records 12 and the client edits down.
+            //
+            // Length comes from setCountFor, not from goals.exactReps as it used to: a rep
+            // range can carry min and max with exactReps unset, and copying that empty array
+            // over achieved.reps would have left the exercise with no logged set rows at all
+            // (achieved.reps.length is what draws them).
+            const { exerciseType, goals } = exercise;
+            const count = setCountFor(exerciseType, goals) || exercise.achieved.reps.length;
+            const fill = (fn) => Array.from({ length: count }, (_, i) => fn(i));
+            exercise.achieved.reps = fill((i) => autofillRepsFor(exerciseType, goals, i));
+            exercise.achieved.weight = fill((i) => autofillWeightFor(exerciseType, goals, i));
+            exercise.achieved.seconds = fill((i) => autofillSecondsFor(goals, i));
             return exercise;
           });
           return set;

@@ -148,6 +148,37 @@ export const describeAchieved = (exerciseType, achieved = {}) => {
 };
 
 // ---------------------------------------------------------------------------
+// What a fill action writes into the logged fields
+// ---------------------------------------------------------------------------
+
+// Four separate things fill a logged field from its goal: tapping the "/x" adornment, the
+// per-set autofill, the per-exercise autofill and the whole-workout autofill. Each used to
+// read goals.exactReps directly, which is wrong for a rep range twice over — Exercise.jsx had
+// no Rep Range case at all and silently filled nothing, and a range built in the program
+// builder carries min and max with exactReps left at 0, so the others filled a zero.
+//
+// A range is a target to REACH, so a fill writes its ceiling: 8-12 fills 12, and the client
+// edits down if they fell short. Falling short is the rarer case and the easier correction.
+export const autofillRepsFor = (exerciseType, goals = {}, i = 0) => {
+  if (exerciseType === "Rep Range") {
+    // exactReps is the double-progression working target; it only wins when there is no
+    // ceiling to aim at, and minReps is the last resort for a half-written prescription.
+    return num(at(goals.maxReps, i)) || num(at(goals.exactReps, i)) || num(at(goals.minReps, i));
+  }
+  return num(at(goals.exactReps, i));
+};
+
+// "Reps with %" stores no weight — its load is the percentage of the lifter's max.
+export const autofillWeightFor = (exerciseType, goals = {}, i = 0) => {
+  if (exerciseType === "Reps with %") {
+    return (num(goals.oneRepMax) * num(at(goals.percent, i))) / 100;
+  }
+  return num(at(goals.weight, i));
+};
+
+export const autofillSecondsFor = (goals = {}, i = 0) => num(at(goals.seconds, i));
+
+// ---------------------------------------------------------------------------
 // The "/x" goal adornment in the logging field
 // ---------------------------------------------------------------------------
 
@@ -160,9 +191,8 @@ export const goalAdornment = (exerciseType, goals = {}, field = {}, i = 0) => {
 
   if (exerciseType === "Rep Range" && isRepsField) {
     const text = repRangeSet(goals, i);
-    const target = num(at(goals.exactReps, i));
-    const fillValue = target > 0 ? target : num(at(goals.minReps, i));
-    return { text, fillValue, isRange: text.includes("-") };
+    // The text shows the whole span; tapping it fills the top of that span.
+    return { text, fillValue: autofillRepsFor(exerciseType, goals, i), isRange: text.includes("-") };
   }
 
   if (exerciseType === "Reps with %" && field.achievedAttribute === "weight") {

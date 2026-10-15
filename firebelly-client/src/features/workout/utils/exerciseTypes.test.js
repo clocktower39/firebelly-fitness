@@ -6,6 +6,7 @@ import assert from "node:assert";
 import {
   EXERCISE_TYPES, isKnownType, editFieldsFor, loggedFieldsFor, setCountFor,
   describeSet, describePrescription, describeAchieved, goalAdornment,
+  autofillRepsFor, autofillWeightFor, autofillSecondsFor,
 } from "./exerciseTypes.js";
 
 const REPS_FIELD = { achievedAttribute: "reps", goalAttribute: "exactReps" };
@@ -75,7 +76,9 @@ test("set count prefers goals.sets but survives legacy entries without it", () =
 test("the goal chip fills one number even when it shows a span", () => {
   const a = goalAdornment("Rep Range", { minReps: [8], maxReps: [12], exactReps: [8] }, REPS_FIELD, 0);
   assert.equal(a.text, "8-12");
-  assert.equal(a.fillValue, 8, "tapping a range inserts today's target, not the text");
+  // This used to insert the working target (8). A range is a target to REACH, so tapping it
+  // now fills the ceiling and the client edits down if they fell short.
+  assert.equal(a.fillValue, 12, "tapping a range inserts the top of the range");
   assert.equal(a.isRange, true);
 
   const climbed = goalAdornment("Rep Range", { minReps: [8], maxReps: [12], exactReps: [12] }, REPS_FIELD, 0);
@@ -83,10 +86,11 @@ test("the goal chip fills one number even when it shows a span", () => {
   assert.equal(climbed.fillValue, 12);
 });
 
-test("a rep range with no target falls back to the floor rather than filling a zero", () => {
+test("a rep range with no target fills its ceiling rather than a zero", () => {
   const a = goalAdornment("Rep Range", { minReps: [2], maxReps: [5], exactReps: [0] }, REPS_FIELD, 0);
   assert.equal(a.text, "2-5");
-  assert.equal(a.fillValue, 2, "used to fill in 0");
+  // Filled 0 originally, then the floor (2); now the ceiling.
+  assert.equal(a.fillValue, 5, "used to fill in 0, then the floor");
 });
 
 test("a percentage weight field resolves its load from the 1RM", () => {
@@ -139,4 +143,59 @@ test("set counts read grammatically, and no sets means no prescription", () => {
   assert.equal(describeAchieved("Reps", { reps: [9] }).text, "1 set: 9 reps");
   // 5 live entries declare 0 sets; there is nothing to describe.
   assert.equal(describePrescription("Reps", { sets: 0, exactReps: [] }).text, "");
+});
+
+// --- what a fill action writes -------------------------------------------------------------
+
+test("a rep range fills its TOP number, not its bottom", () => {
+  const goals = { sets: 1, minReps: [8], maxReps: [12], exactReps: [0] };
+  assert.equal(autofillRepsFor("Rep Range", goals, 0), 12,
+    "8-12 must autofill 12 — the range is a target to reach");
+});
+
+test("a rep range built in the program builder still fills, though exactReps is unset", () => {
+  // This is the shape the builder produces: min and max, no working target.
+  assert.equal(autofillRepsFor("Rep Range", { sets: 1, minReps: [10], maxReps: [12] }, 0), 12);
+  // ...and the shape that used to fill a zero, because exactReps was all the fills read.
+  assert.equal(autofillRepsFor("Rep Range", { minReps: [8], maxReps: [10], exactReps: [0] }, 0), 10);
+});
+
+test("a rep range with no ceiling falls back to its target, then its floor", () => {
+  assert.equal(autofillRepsFor("Rep Range", { exactReps: [9], minReps: [8], maxReps: [0] }, 0), 9);
+  assert.equal(autofillRepsFor("Rep Range", { exactReps: [0], minReps: [8], maxReps: [0] }, 0), 8);
+  assert.equal(autofillRepsFor("Rep Range", {}, 0), 0, "an empty prescription fills nothing");
+});
+
+test("the other types keep filling their exact prescription", () => {
+  assert.equal(autofillRepsFor("Reps", { exactReps: [5, 4, 3] }, 1), 4);
+  assert.equal(autofillRepsFor("Reps with %", { exactReps: [3] }, 0), 3);
+  assert.equal(autofillSecondsFor({ seconds: [45, 30] }, 1), 30);
+});
+
+test("per-set values are read per set, not from set one", () => {
+  const goals = { sets: 3, minReps: [8, 8, 8], maxReps: [12, 10, 8], exactReps: [0, 0, 0] };
+  assert.deepEqual([0, 1, 2].map((i) => autofillRepsFor("Rep Range", goals, i)), [12, 10, 8]);
+});
+
+test("weight fills from the stored load, except a %-based lift which derives it", () => {
+  assert.equal(autofillWeightFor("Reps", { weight: [135, 145] }, 1), 145);
+  assert.equal(autofillWeightFor("Rep Range", { weight: [50] }, 0), 50);
+  assert.equal(autofillWeightFor("Reps with %", { oneRepMax: 300, percent: ["80"] }, 0), 240);
+  assert.equal(autofillWeightFor("Reps with %", { oneRepMax: 0, percent: ["80"] }, 0), 0,
+    "no stored max means no derived load, rather than NaN");
+});
+
+test("tapping the goal chip on a range inserts the top of the span it shows", () => {
+  const goals = { sets: 1, minReps: [8], maxReps: [12], exactReps: [0] };
+  const a = goalAdornment("Rep Range", goals, { achievedAttribute: "reps" }, 0);
+  assert.equal(a.text, "8-12", "the chip still shows the whole range");
+  assert.equal(a.fillValue, 12, "but tapping it fills the top");
+  assert.equal(a.isRange, true);
+});
+
+test("a range whose working target sits inside it shows the target but still fills the top", () => {
+  const goals = { sets: 1, minReps: [8], maxReps: [12], exactReps: [10] };
+  const a = goalAdornment("Rep Range", goals, { achievedAttribute: "reps" }, 0);
+  assert.equal(a.text, "10 of 8-12");
+  assert.equal(a.fillValue, 12);
 });
